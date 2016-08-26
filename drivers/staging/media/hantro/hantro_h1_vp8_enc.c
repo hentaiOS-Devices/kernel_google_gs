@@ -46,7 +46,7 @@ int hantro_vp8_enc_init(struct hantro_ctx *ctx)
 	if (ret)
 		return ret;
 
-	mv_size = MB_WIDTH(width) * MB_HEIGHT(height) / 4;
+	mv_size = MB_WIDTH(width) * MB_HEIGHT(height) * 4;
 	ret = hantro_aux_buf_alloc(vpu, &ctx->vp8_enc.mv_buf, mv_size);
 	if (ret)
 		goto err_ctrl_buf;
