@@ -20,9 +20,13 @@
 #include <linux/regulator/consumer.h>
 #include <linux/rwsem.h>
 #include <linux/suspend.h>
+#include <linux/workqueue.h>
 
 #include <soc/rockchip/rk3399_grf.h>
 #include <soc/rockchip/rockchip_sip.h>
+
+#include "event/rockchip-dfi.h"
+#include "governor.h"
 
 #define NS_TO_CYCLE(NS, MHz)				(((NS) * (MHz)) / NSEC_PER_USEC)
 
@@ -35,11 +39,14 @@
 
 #define RK3399_SET_ODT_PD_2_ODT_ENABLE			BIT(0)
 
+#define DFI_DEFAULT_TARGET_LOAD		15
+#define DFI_DEFAULT_HYSTERESIS		3
+#define DFI_DEFAULT_DOWN_THROTTLE_MS	200
+
 struct rk3399_dmcfreq {
 	struct device *dev;
 	struct devfreq *devfreq;
 	struct devfreq_dev_profile profile;
-	struct devfreq_simple_ondemand_data ondemand_data;
 	struct clk *dmc_clk;
 	struct devfreq_event_dev *edev;
 	struct mutex lock;
@@ -63,13 +70,178 @@ struct rk3399_dmcfreq {
 	unsigned int sr_mc_gate_idle_dis_freq;
 	unsigned int srpd_lite_idle_dis_freq;
 	unsigned int standby_idle_dis_freq;
+
+	struct delayed_work throttle_work;
+	unsigned int target_load;
+	unsigned int hysteresis;
+	unsigned int down_throttle_ms;
 };
+
+static int rk3399_dfi_get_target(struct devfreq *devfreq, unsigned long *freq)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	struct devfreq_dev_status *stat;
+	unsigned long long a;
+	int err;
+
+	if (devfreq->stop_polling) {
+		*freq = devfreq->suspend_freq;
+		return 0;
+	}
+
+	err = devfreq_update_stats(devfreq);
+	if (err)
+		return err;
+
+	stat = &devfreq->last_status;
+
+	if (stat->total_time == 0) {
+		*freq = DEVFREQ_MAX_FREQ;
+		return 0;
+	}
+
+	if (stat->busy_time >= (1 << 24) || stat->total_time >= (1 << 24)) {
+		stat->busy_time >>= 7;
+		stat->total_time >>= 7;
+	}
+
+	a = stat->busy_time * stat->current_frequency;
+	a = div_u64(a, stat->total_time);
+	a *= 100;
+	a = div_u64(a, dmcfreq->target_load);
+	*freq = (unsigned long)a;
+
+	return 0;
+}
+
+static void rk3399_dfi_calc_top_threshold(struct devfreq *devfreq)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	unsigned int percent;
+
+	if (devfreq->scaling_max_freq && dmcfreq->rate >= devfreq->scaling_max_freq)
+		percent = 100;
+	else
+		percent = dmcfreq->target_load + dmcfreq->hysteresis;
+	rockchip_dfi_calc_top_threshold(dmcfreq->edev, dmcfreq->rate, percent);
+}
+
+static void rk3399_dfi_calc_floor_threshold(struct devfreq *devfreq)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	struct dev_pm_opp *opp;
+	unsigned long rate;
+	unsigned int percent;
+
+	if (dmcfreq->rate <= devfreq->scaling_min_freq)
+		percent = 0;
+	else
+		percent = dmcfreq->target_load - dmcfreq->hysteresis;
+
+	rate = dmcfreq->rate - 1;
+	opp = devfreq_recommended_opp(devfreq->dev.parent, &rate,
+				      DEVFREQ_FLAG_LEAST_UPPER_BOUND);
+	rate = dev_pm_opp_get_freq(opp);
+	dev_pm_opp_put(opp);
+	rockchip_dfi_calc_floor_threshold(dmcfreq->edev, rate, percent);
+}
+
+static int rk3399_dfi_event_handler(struct devfreq *devfreq, unsigned int event,
+				    void *data)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	struct devfreq_event_dev *edev = dmcfreq->edev;
+	int ret;
+
+	switch (event) {
+	case DEVFREQ_GOV_START:
+		ret = devfreq_event_enable_edev(edev);
+		if (ret < 0) {
+			dev_err(&devfreq->dev, "Unable to enable DFI edev\n");
+			return ret;
+		}
+
+		devfreq->data = dmcfreq;
+		rk3399_dfi_calc_top_threshold(devfreq);
+		rk3399_dfi_calc_floor_threshold(devfreq);
+		ret = devfreq_event_set_event(edev);
+		if (ret < 0) {
+			dev_err(&devfreq->dev, "Unable to set DFI event\n");
+			devfreq->data = NULL;
+			devfreq_event_disable_edev(edev);
+			return ret;
+		}
+
+		break;
+	case DEVFREQ_GOV_STOP:
+		ret = devfreq_event_disable_edev(edev);
+		if (ret < 0) {
+			dev_err(&devfreq->dev, "Unable to disable DFI edev\n");
+			return ret;
+		}
+
+		devfreq->data = NULL;
+		break;
+	case DEVFREQ_GOV_SUSPEND:
+		ret = devfreq_event_disable_edev(edev);
+		if (ret < 0) {
+			dev_err(&devfreq->dev, "Unable to disable DFI edev\n");
+			return ret;
+		}
+
+		devfreq_monitor_suspend(devfreq);
+		break;
+	case DEVFREQ_GOV_RESUME:
+		ret = devfreq_event_enable_edev(edev);
+		if (ret < 0) {
+			dev_err(&devfreq->dev, "Unable to enable DFI edev\n");
+			return ret;
+		}
+
+		devfreq_monitor_resume(devfreq);
+		rk3399_dfi_calc_top_threshold(devfreq);
+		rk3399_dfi_calc_floor_threshold(devfreq);
+		ret = devfreq_event_set_event(edev);
+		if (ret < 0) {
+			dev_err(&devfreq->dev, "Unable to set DFI event\n");
+			devfreq->data = NULL;
+			devfreq_event_disable_edev(edev);
+			return ret;
+		}
+
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+static struct devfreq_governor rk3399_dfi_governor = {
+	.name = "rk3399-dfi",
+	.get_target_freq = rk3399_dfi_get_target,
+	.event_handler = rk3399_dfi_event_handler,
+	.flags = DEVFREQ_GOV_FLAG_IRQ_DRIVEN,
+};
+
+static void rk3399_dmcfreq_throttle_work(struct work_struct *work)
+{
+	struct delayed_work *dwork = container_of(work, struct delayed_work,
+						  work);
+	struct rk3399_dmcfreq *dmcfreq = container_of(dwork,
+						      struct rk3399_dmcfreq,
+						      throttle_work);
+
+	rk3399_dfi_calc_floor_threshold(dmcfreq->devfreq);
+	devfreq_event_set_event(dmcfreq->edev);
+}
 
 static int rk3399_dmcfreq_target(struct device *dev, unsigned long *freq,
 				 u32 flags)
 {
 	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(dev);
 	struct dev_pm_opp *opp;
+	struct devfreq_event_dev *edev;
 	unsigned long old_clk_rate = dmcfreq->rate;
 	unsigned long target_volt, target_rate;
 	unsigned int ddrcon_mhz;
@@ -197,6 +369,18 @@ static int rk3399_dmcfreq_target(struct device *dev, unsigned long *freq,
 	dmcfreq->rate = target_rate;
 	dmcfreq->volt = target_volt;
 
+	edev = dmcfreq->edev;
+	if (old_clk_rate < target_rate) {
+		cancel_delayed_work_sync(&dmcfreq->throttle_work);
+		rockchip_dfi_calc_floor_threshold(edev, 0, 0);
+		schedule_delayed_work(&dmcfreq->throttle_work,
+				msecs_to_jiffies(dmcfreq->down_throttle_ms));
+	} else {
+		rk3399_dfi_calc_floor_threshold(dmcfreq->devfreq);
+	}
+
+	rk3399_dfi_calc_top_threshold(dmcfreq->devfreq);
+	devfreq_event_set_event(dmcfreq->edev);
 out:
 	mutex_unlock(&dmcfreq->lock);
 	return err;
@@ -232,13 +416,7 @@ static int rk3399_dmcfreq_get_cur_freq(struct device *dev, unsigned long *freq)
 static __maybe_unused int rk3399_dmcfreq_suspend(struct device *dev)
 {
 	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(dev);
-	int ret = 0;
-
-	ret = devfreq_event_disable_edev(dmcfreq->edev);
-	if (ret < 0) {
-		dev_err(dev, "failed to disable the devfreq-event devices\n");
-		return ret;
-	}
+	int ret;
 
 	ret = devfreq_suspend_device(dmcfreq->devfreq);
 	if (ret < 0) {
@@ -252,19 +430,14 @@ static __maybe_unused int rk3399_dmcfreq_suspend(struct device *dev)
 static __maybe_unused int rk3399_dmcfreq_resume(struct device *dev)
 {
 	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(dev);
-	int ret = 0;
-
-	ret = devfreq_event_enable_edev(dmcfreq->edev);
-	if (ret < 0) {
-		dev_err(dev, "failed to enable the devfreq-event devices\n");
-		return ret;
-	}
+	int ret;
 
 	ret = devfreq_resume_device(dmcfreq->devfreq);
 	if (ret < 0) {
 		dev_err(dev, "failed to resume the devfreq devices\n");
 		return ret;
 	}
+
 	return ret;
 }
 
@@ -348,12 +521,6 @@ static int rk3399_dmcfreq_probe(struct platform_device *pdev)
 	if (IS_ERR(data->edev))
 		return -EPROBE_DEFER;
 
-	ret = devfreq_event_enable_edev(data->edev);
-	if (ret < 0) {
-		dev_err(dev, "failed to enable devfreq-event devices\n");
-		return ret;
-	}
-
 	rk3399_dmcfreq_of_props(data, np);
 
 	node = of_parse_phandle(np, "rockchip,pmu", 0);
@@ -364,7 +531,7 @@ static int rk3399_dmcfreq_probe(struct platform_device *pdev)
 	of_node_put(node);
 	if (IS_ERR(data->regmap_pmu)) {
 		ret = PTR_ERR(data->regmap_pmu);
-		goto err_edev;
+		goto out;
 	}
 
 	regmap_read(data->regmap_pmu, RK3399_PMUGRF_OS_REG2, &val);
@@ -383,7 +550,7 @@ static int rk3399_dmcfreq_probe(struct platform_device *pdev)
 		break;
 	default:
 		ret = -EINVAL;
-		goto err_edev;
+		goto out;
 	}
 
 no_pmu:
@@ -398,18 +565,20 @@ no_pmu:
 	if (devm_pm_opp_of_add_table(dev)) {
 		dev_err(dev, "Invalid operating-points in device tree.\n");
 		ret = -EINVAL;
-		goto err_edev;
+		goto out;
 	}
 
-	data->ondemand_data.upthreshold = 25;
-	data->ondemand_data.downdifferential = 15;
+	data->target_load = DFI_DEFAULT_TARGET_LOAD;
+	data->hysteresis = DFI_DEFAULT_HYSTERESIS;
+	data->down_throttle_ms = DFI_DEFAULT_DOWN_THROTTLE_MS;
+	INIT_DELAYED_WORK(&data->throttle_work, rk3399_dmcfreq_throttle_work);
 
 	data->rate = clk_get_rate(data->dmc_clk);
 
 	opp = devfreq_recommended_opp(dev, &data->rate, 0);
 	if (IS_ERR(opp)) {
 		ret = PTR_ERR(opp);
-		goto err_edev;
+		goto out;
 	}
 
 	data->rate = dev_pm_opp_get_freq(opp);
@@ -417,42 +586,44 @@ no_pmu:
 	dev_pm_opp_put(opp);
 
 	data->profile = (struct devfreq_dev_profile) {
-		.polling_ms	= 200,
+		.polling_ms	= 0,
 		.target		= rk3399_dmcfreq_target,
 		.get_dev_status	= rk3399_dmcfreq_get_dev_status,
 		.get_cur_freq	= rk3399_dmcfreq_get_cur_freq,
 		.initial_freq	= data->rate,
 	};
 
+	ret = devfreq_add_governor(&rk3399_dfi_governor);
+	if (ret < 0) {
+		dev_err(dev, "Failed to add dfi governor\n");
+		goto out;
+	}
+
+	data->dev = dev;
+	platform_set_drvdata(pdev, data);
 	data->devfreq = devm_devfreq_add_device(dev,
 					   &data->profile,
-					   DEVFREQ_GOV_SIMPLE_ONDEMAND,
-					   &data->ondemand_data);
+					   "rk3399-dfi",
+					   NULL);
 	if (IS_ERR(data->devfreq)) {
 		ret = PTR_ERR(data->devfreq);
-		goto err_edev;
+		goto out;
 	}
 
 	devm_devfreq_register_opp_notifier(dev, data->devfreq);
 
-	data->dev = dev;
-	platform_set_drvdata(pdev, data);
+	/* The dfi irq won't trigger a frequency update until this is done. */
+	dev_set_drvdata(&data->edev->dev, data->devfreq);
 
 	return 0;
 
-err_edev:
-	devfreq_event_disable_edev(data->edev);
-
+out:
 	return ret;
 }
 
 static int rk3399_dmcfreq_remove(struct platform_device *pdev)
 {
-	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(&pdev->dev);
-
-	devfreq_event_disable_edev(dmcfreq->edev);
-
-	return 0;
+	return devfreq_remove_governor(&rk3399_dfi_governor);
 }
 
 static const struct of_device_id rk3399dmc_devfreq_of_match[] = {
