@@ -7,6 +7,8 @@
 #include <linux/arm-smccc.h>
 #include <linux/bitfield.h>
 #include <linux/clk.h>
+#include <linux/cpufreq.h>
+#include <linux/cpumask.h>
 #include <linux/delay.h>
 #include <linux/devfreq.h>
 #include <linux/devfreq-event.h>
@@ -40,8 +42,12 @@
 #define RK3399_SET_ODT_PD_2_ODT_ENABLE			BIT(0)
 
 #define DFI_DEFAULT_TARGET_LOAD		15
+#define DFI_DEFAULT_BOOSTED_TARGET_LOAD	5
 #define DFI_DEFAULT_HYSTERESIS		3
 #define DFI_DEFAULT_DOWN_THROTTLE_MS	200
+
+static DEFINE_PER_CPU(unsigned int, cpufreq_max);
+static DEFINE_PER_CPU(unsigned int, cpufreq_cur);
 
 struct rk3399_dmcfreq {
 	struct device *dev;
@@ -75,7 +81,66 @@ struct rk3399_dmcfreq {
 	unsigned int target_load;
 	unsigned int hysteresis;
 	unsigned int down_throttle_ms;
+
+	unsigned int boosted_target_load;
+	struct work_struct boost_work;
+	struct notifier_block cpufreq_policy_nb;
+	struct notifier_block cpufreq_trans_nb;
+	bool was_boosted;
 };
+
+static bool rk3399_need_boost(void)
+{
+	unsigned int cpu;
+	bool boosted = false;
+
+	for_each_online_cpu(cpu) {
+		unsigned int max = per_cpu(cpufreq_max, cpu);
+
+		if (max && max == per_cpu(cpufreq_cur, cpu))
+			boosted = true;
+	}
+
+	return boosted;
+}
+
+static int rk3399_cpufreq_trans_notify(struct notifier_block *nb,
+				       unsigned long val, void *data)
+{
+	struct cpufreq_freqs *freq = data;
+	struct rk3399_dmcfreq *dmcfreq = container_of(nb, struct rk3399_dmcfreq,
+						      cpufreq_trans_nb);
+
+	if (val != CPUFREQ_POSTCHANGE)
+		return NOTIFY_OK;
+
+	per_cpu(cpufreq_cur, freq->policy->cpu) = freq->new;
+	if (rk3399_need_boost() != dmcfreq->was_boosted)
+		queue_work(system_highpri_wq, &dmcfreq->boost_work);
+
+	return NOTIFY_OK;
+}
+
+static int rk3399_cpufreq_policy_notify(struct notifier_block *nb,
+					unsigned long val, void *data)
+{
+	struct cpufreq_policy *policy = data;
+	struct rk3399_dmcfreq *dmcfreq = container_of(nb, struct rk3399_dmcfreq,
+						      cpufreq_policy_nb);
+
+	if (val != CPUFREQ_POSTCHANGE)
+		return NOTIFY_OK;
+
+	/* If the max doesn't change, we don't care. */
+	if (policy->max == per_cpu(cpufreq_max, policy->cpu))
+		return NOTIFY_OK;
+
+	per_cpu(cpufreq_max, policy->cpu) = policy->max;
+	if (rk3399_need_boost() != dmcfreq->was_boosted)
+		queue_work(system_highpri_wq, &dmcfreq->boost_work);
+
+	return NOTIFY_OK;
+}
 
 static int rk3399_dfi_get_target(struct devfreq *devfreq, unsigned long *freq)
 {
@@ -108,7 +173,8 @@ static int rk3399_dfi_get_target(struct devfreq *devfreq, unsigned long *freq)
 	a = stat->busy_time * stat->current_frequency;
 	a = div_u64(a, stat->total_time);
 	a *= 100;
-	a = div_u64(a, dmcfreq->target_load);
+	a = div_u64(a, rk3399_need_boost() ? dmcfreq->boosted_target_load :
+					  dmcfreq->target_load);
 	*freq = (unsigned long)a;
 
 	return 0;
@@ -122,7 +188,9 @@ static void rk3399_dfi_calc_top_threshold(struct devfreq *devfreq)
 	if (devfreq->scaling_max_freq && dmcfreq->rate >= devfreq->scaling_max_freq)
 		percent = 100;
 	else
-		percent = dmcfreq->target_load + dmcfreq->hysteresis;
+		percent = (rk3399_need_boost() ? dmcfreq->boosted_target_load :
+			   dmcfreq->target_load) + dmcfreq->hysteresis;
+
 	rockchip_dfi_calc_top_threshold(dmcfreq->edev, dmcfreq->rate, percent);
 }
 
@@ -136,7 +204,8 @@ static void rk3399_dfi_calc_floor_threshold(struct devfreq *devfreq)
 	if (dmcfreq->rate <= devfreq->scaling_min_freq)
 		percent = 0;
 	else
-		percent = dmcfreq->target_load - dmcfreq->hysteresis;
+		percent = (rk3399_need_boost() ? dmcfreq->boosted_target_load :
+			   dmcfreq->target_load) - dmcfreq->hysteresis;
 
 	rate = dmcfreq->rate - 1;
 	opp = devfreq_recommended_opp(devfreq->dev.parent, &rate,
@@ -490,12 +559,30 @@ static int rk3399_dmcfreq_of_props(struct rk3399_dmcfreq *data,
 	return ret;
 }
 
+static void rk3399_dmcfreq_boost_work(struct work_struct *work)
+{
+	struct rk3399_dmcfreq *dmcfreq =
+		container_of(work, struct rk3399_dmcfreq, boost_work);
+	struct devfreq *devfreq = dmcfreq->devfreq;
+	bool need_boost = rk3399_need_boost();
+
+	if (dmcfreq->was_boosted == need_boost)
+		return;
+
+	dmcfreq->was_boosted = need_boost;
+	mutex_lock(&devfreq->lock);
+	update_devfreq(devfreq);
+	mutex_unlock(&devfreq->lock);
+}
+
 static int rk3399_dmcfreq_probe(struct platform_device *pdev)
 {
 	struct arm_smccc_res res;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node, *node;
 	struct rk3399_dmcfreq *data;
+	struct cpufreq_policy policy;
+	unsigned int cpu_tmp;
 	int ret;
 	struct dev_pm_opp *opp;
 	u32 ddr_type;
@@ -569,9 +656,11 @@ no_pmu:
 	}
 
 	data->target_load = DFI_DEFAULT_TARGET_LOAD;
+	data->boosted_target_load = DFI_DEFAULT_BOOSTED_TARGET_LOAD;
 	data->hysteresis = DFI_DEFAULT_HYSTERESIS;
 	data->down_throttle_ms = DFI_DEFAULT_DOWN_THROTTLE_MS;
 	INIT_DELAYED_WORK(&data->throttle_work, rk3399_dmcfreq_throttle_work);
+	INIT_WORK(&data->boost_work, rk3399_dmcfreq_boost_work);
 
 	data->rate = clk_get_rate(data->dmc_clk);
 
@@ -612,10 +701,36 @@ no_pmu:
 
 	devm_devfreq_register_opp_notifier(dev, data->devfreq);
 
+	data->cpufreq_policy_nb.notifier_call = rk3399_cpufreq_policy_notify;
+	data->cpufreq_trans_nb.notifier_call = rk3399_cpufreq_trans_notify;
+	ret = cpufreq_register_notifier(&data->cpufreq_policy_nb,
+					CPUFREQ_POLICY_NOTIFIER);
+	if (ret < 0)
+		goto out;
+
+	ret = cpufreq_register_notifier(&data->cpufreq_trans_nb,
+					CPUFREQ_TRANSITION_NOTIFIER);
+	if (ret < 0)
+		goto policy_unregister;
+
+	for_each_possible_cpu(cpu_tmp) {
+		ret = cpufreq_get_policy(&policy, cpu_tmp);
+		if (ret < 0)
+			continue;
+
+		per_cpu(cpufreq_max, cpu_tmp) = policy.max;
+		per_cpu(cpufreq_cur, cpu_tmp) = policy.cur;
+	}
+
 	/* The dfi irq won't trigger a frequency update until this is done. */
 	dev_set_drvdata(&data->edev->dev, data->devfreq);
 
 	return 0;
+
+policy_unregister:
+	cpufreq_unregister_notifier(&data->cpufreq_policy_nb,
+				    CPUFREQ_POLICY_NOTIFIER);
+	cancel_work_sync(&data->boost_work);
 
 out:
 	return ret;
@@ -623,6 +738,14 @@ out:
 
 static int rk3399_dmcfreq_remove(struct platform_device *pdev)
 {
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(&pdev->dev);
+
+	WARN_ON(cpufreq_unregister_notifier(&dmcfreq->cpufreq_trans_nb,
+					    CPUFREQ_TRANSITION_NOTIFIER));
+	WARN_ON(cpufreq_unregister_notifier(&dmcfreq->cpufreq_policy_nb,
+					    CPUFREQ_POLICY_NOTIFIER));
+	cancel_work_sync(&dmcfreq->boost_work);
+
 	return devfreq_remove_governor(&rk3399_dfi_governor);
 }
 
