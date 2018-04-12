@@ -3842,6 +3842,40 @@ static int reset_chelsio_generic_dev(struct pci_dev *dev, int probe)
 	return 0;
 }
 
+/*
+ * Some Marvell Wifi devices may utilize FLR for reset/recovery when their
+ * firmware crashes. However, Marvell firmware can have trouble reinitializing
+ * the device correctly after just a single reset, so we instead perform 2
+ * resets, allowing the driver to reinitialize the driver in between.
+ *
+ * Lifted partially from pci_reset_function(), but done entirely under
+ * pci_dev_lock().
+ */
+static int reset_marvell_wifi_double_flr(struct pci_dev *dev, int probe)
+{
+	int ret;
+
+	/* Just checking for support. */
+	if (probe)
+		return 0;
+
+	/* Perform first reset. */
+	ret = pcie_flr(dev);
+	if (ret)
+		return ret;
+
+	/*
+	 * Notify and restore any driver in between resets, to give it a chance
+	 * to reload firmware. Without this, the device may not come up
+	 * completely correctly.
+	 */
+	pci_dev_restore(dev);
+	pci_dev_save_and_disable(dev);
+
+	/* Perform second reset. */
+	return pcie_flr(dev);
+}
+
 #define PCI_DEVICE_ID_INTEL_82599_SFP_VF   0x10ed
 #define PCI_DEVICE_ID_INTEL_IVB_M_VGA      0x0156
 #define PCI_DEVICE_ID_INTEL_IVB_M2_VGA     0x0166
@@ -4011,6 +4045,8 @@ reset_complete:
 	return 0;
 }
 
+#define PCIE_DEVICE_ID_MARVELL_88W8997     0x2b42
+
 static const struct pci_dev_reset_methods pci_dev_reset_methods[] = {
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82599_SFP_VF,
 		 reset_intel_82599_sfp_virtfn },
@@ -4024,6 +4060,10 @@ static const struct pci_dev_reset_methods pci_dev_reset_methods[] = {
 		reset_chelsio_generic_dev },
 	{ PCI_VENDOR_ID_HUAWEI, PCI_DEVICE_ID_HINIC_VF,
 		reset_hinic_vf_dev },
+	{ PCI_VENDOR_ID_MARVELL, PCIE_DEVICE_ID_MARVELL_88W8997,
+		reset_marvell_wifi_double_flr },
+	{ PCI_VENDOR_ID_MARVELL_EXT, PCIE_DEVICE_ID_MARVELL_88W8997,
+		reset_marvell_wifi_double_flr },
 	{ 0 }
 };
 

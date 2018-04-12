@@ -5016,7 +5016,7 @@ static void pci_dev_unlock(struct pci_dev *dev)
 	pci_cfg_access_unlock(dev);
 }
 
-static void pci_dev_save_and_disable(struct pci_dev *dev)
+void pci_dev_save_and_disable(struct pci_dev *dev)
 {
 	const struct pci_error_handlers *err_handler =
 			dev->driver ? dev->driver->err_handler : NULL;
@@ -5047,7 +5047,7 @@ static void pci_dev_save_and_disable(struct pci_dev *dev)
 	pci_write_config_word(dev, PCI_COMMAND, PCI_COMMAND_INTX_DISABLE);
 }
 
-static void pci_dev_restore(struct pci_dev *dev)
+void pci_dev_restore(struct pci_dev *dev)
 {
 	const struct pci_error_handlers *err_handler =
 			dev->driver ? dev->driver->err_handler : NULL;
