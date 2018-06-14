@@ -117,6 +117,7 @@ static const struct mfd_cell cros_ec_platform_cells[] = {
 	{ .name = "cros-ec-sysfs", },
 	{ .name = "cros-ec-pd-update", },
 	{ .name = "cros-ec-pchg", },
+	{ .name = "cros-ec-throttler" },
 };
 
 static const struct mfd_cell cros_ec_vbc_cells[] = {
