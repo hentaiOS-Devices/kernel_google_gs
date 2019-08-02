@@ -30,11 +30,27 @@ struct hantro_ctx;
 struct hantro_codec_ops;
 
 #define HANTRO_JPEG_ENCODER	BIT(0)
+#define HANTRO_VP8_ENCODER	BIT(1)
 #define HANTRO_ENCODERS		0x0000ffff
 #define HANTRO_MPEG2_DECODER	BIT(16)
 #define HANTRO_VP8_DECODER	BIT(17)
 #define HANTRO_H264_DECODER	BIT(18)
 #define HANTRO_DECODERS		0xffff0000
+
+/**
+ * enum hantro_plane - indices of planes inside a VB2 buffer.
+ * @PLANE_Y:		Plane containing luminance data (also denoted as Y).
+ * @PLANE_CB_CR:	Plane containing interleaved chrominance data (also
+ *			denoted as CbCr).
+ * @PLANE_CB:		Plane containing CB part of chrominance data.
+ * @PLANE_CR:		Plane containing CR part of chrominance data.
+ */
+enum hantro_plane {
+	PLANE_Y		= 0,
+	PLANE_CB_CR	= 1,
+	PLANE_CB	= 1,
+	PLANE_CR	= 2,
+};
 
 /**
  * struct hantro_irq - irq handler and name
@@ -96,6 +112,7 @@ struct hantro_variant {
  * enum hantro_codec_mode - codec operating mode.
  * @HANTRO_MODE_NONE:  No operating mode. Used for RAW video formats.
  * @HANTRO_MODE_JPEG_ENC: JPEG encoder.
+ * @HANTRO_MODE_VP8_ENC: VP8 encoder.
  * @HANTRO_MODE_H264_DEC: H264 decoder.
  * @HANTRO_MODE_MPEG2_DEC: MPEG-2 decoder.
  * @HANTRO_MODE_VP8_DEC: VP8 decoder.
@@ -103,6 +120,7 @@ struct hantro_variant {
 enum hantro_codec_mode {
 	HANTRO_MODE_NONE = -1,
 	HANTRO_MODE_JPEG_ENC,
+	HANTRO_MODE_VP8_ENC,
 	HANTRO_MODE_H264_DEC,
 	HANTRO_MODE_MPEG2_DEC,
 	HANTRO_MODE_VP8_DEC,
@@ -217,6 +235,7 @@ struct hantro_dev {
  * @jpeg_enc:		JPEG-encoding context.
  * @mpeg2_dec:		MPEG-2-decoding context.
  * @vp8_dec:		VP8-decoding context.
+ * @vp8_enc:		VP8-encoding context.
  */
 struct hantro_ctx {
 	struct hantro_dev *dev;
@@ -243,6 +262,7 @@ struct hantro_ctx {
 		struct hantro_jpeg_enc_hw_ctx jpeg_enc;
 		struct hantro_mpeg2_dec_hw_ctx mpeg2_dec;
 		struct hantro_vp8_dec_hw_ctx vp8_dec;
+		struct hantro_vp8_enc_hw_ctx vp8_enc;
 	};
 };
 
@@ -318,6 +338,12 @@ extern int hantro_debug;
 
 #define vpu_err(fmt, args...)					\
 	pr_err("%s:%d: " fmt, __func__, __LINE__, ##args)
+
+static inline unsigned int hantro_rounded_luma_size(unsigned int w,
+						    unsigned int h)
+{
+	return round_up(w, MB_DIM) * round_up(h, MB_DIM);
+}
 
 /* Structure access helpers. */
 static inline struct hantro_ctx *fh_to_ctx(struct v4l2_fh *fh)

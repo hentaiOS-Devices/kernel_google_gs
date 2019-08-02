@@ -20,10 +20,61 @@
 #define MB_WIDTH(w)		DIV_ROUND_UP(w, MB_DIM)
 #define MB_HEIGHT(h)		DIV_ROUND_UP(h, MB_DIM)
 
+#define HANTRO_VP8_HEADER_SIZE		1280
+#define HANTRO_VP8_HW_PARAMS_SIZE	5487
+#define HANTRO_VP8_RET_PARAMS_SIZE	488
+
 struct hantro_dev;
 struct hantro_ctx;
 struct hantro_buf;
 struct hantro_variant;
+
+/**
+ * struct hantro_h1_vp8_enc_reg_params - low level encoding parameters
+ * TODO: Create abstract structures for more generic controls or just
+ *       remove unused fields.
+ */
+struct hantro_h1_vp8_enc_reg_params {
+	u32 unused_00[5];
+	u32 hdr_len;
+	u32 unused_18[8];
+	u32 enc_ctrl;
+	u32 unused_3c;
+	u32 enc_ctrl0;
+	u32 enc_ctrl1;
+	u32 enc_ctrl2;
+	u32 enc_ctrl3;
+	u32 enc_ctrl5;
+	u32 enc_ctrl4;
+	u32 str_hdr_rem_msb;
+	u32 str_hdr_rem_lsb;
+	u32 unused_60;
+	u32 mad_ctrl;
+	u32 unused_68;
+	u32 qp_val[8];
+	u32 bool_enc;
+	u32 vp8_ctrl0;
+	u32 rlc_ctrl;
+	u32 mb_ctrl;
+	u32 unused_9c[14];
+	u32 rgb_yuv_coeff[2];
+	u32 rgb_mask_msb;
+	u32 intra_area_ctrl;
+	u32 cir_intra_ctrl;
+	u32 unused_e8[2];
+	u32 first_roi_area;
+	u32 second_roi_area;
+	u32 mvc_ctrl;
+	u32 unused_fc;
+	u32 intra_penalty[7];
+	u32 unused_11c;
+	u32 seg_qp[24];
+	u32 dmv_4p_1p_penalty[32];
+	u32 dmv_qpel_penalty[32];
+	u32 vp8_ctrl1;
+	u32 bit_cost_golden;
+	u32 loop_flt_delta[2];
+};
 
 /**
  * struct hantro_aux_buf - auxiliary DMA buffer for hardware data
@@ -45,6 +96,44 @@ struct hantro_aux_buf {
  */
 struct hantro_jpeg_enc_hw_ctx {
 	struct hantro_aux_buf bounce_buffer;
+};
+
+/**
+ * struct hantro_vp8_enc_buf_data - mode-specific per-buffer data
+ * @dct_offset:		Offset inside the buffer to DCT partition.
+ * @hdr_size:		Size of header data in the buffer.
+ * @ext_hdr_size:	Size of ext header data in the buffer.
+ * @dct_size:		Size of DCT partition in the buffer.
+ * @header:		Frame header to copy to destination buffer.
+ */
+struct hantro_vp8_enc_buf_data {
+	size_t dct_offset;
+	size_t hdr_size;
+	size_t ext_hdr_size;
+	size_t dct_size;
+	u8 header[HANTRO_VP8_HEADER_SIZE];
+};
+
+/**
+ * struct hantro_vp8_enc_hw_ctx - Context private data specific to codec mode.
+ * @ctrl_buf:		VP8 control buffer.
+ * @ext_buf:		VP8 ext data buffer.
+ * @mv_buf:			VP8 motion vector buffer.
+ * @ref_rec_ptr:	Bit flag for swapping ref and rec buffers every frame.
+ */
+struct hantro_vp8_enc_hw_ctx {
+	struct hantro_aux_buf ctrl_buf;
+	struct hantro_aux_buf ext_buf;
+	struct hantro_aux_buf mv_buf;
+
+	struct hantro_aux_buf priv_src;
+	struct hantro_aux_buf priv_dst;
+
+	struct hantro_vp8_enc_buf_data buf_data;
+
+	struct v4l2_rect src_crop;
+
+	u8 ref_rec_ptr:1;
 };
 
 /* Max. number of entries in the DPB (HW limitation). */
@@ -170,6 +259,13 @@ int hantro_jpeg_enc_init(struct hantro_ctx *ctx);
 void hantro_jpeg_enc_exit(struct hantro_ctx *ctx);
 void hantro_h1_jpeg_enc_done(struct hantro_ctx *ctx);
 void rk3399_vpu_jpeg_enc_done(struct hantro_ctx *ctx);
+
+void hantro_h1_vp8_enc_run(struct hantro_ctx *ctx);
+int hantro_vp8_enc_init(struct hantro_ctx *ctx);
+void hantro_vp8_enc_assemble_bitstream(struct hantro_ctx *ctx,
+				       struct vb2_buffer *vb);
+void hantro_vp8_enc_exit(struct hantro_ctx *ctx);
+void hantro_vp8_enc_done(struct hantro_ctx *ctx);
 
 dma_addr_t hantro_h264_get_ref_buf(struct hantro_ctx *ctx,
 				   unsigned int dpb_idx);
