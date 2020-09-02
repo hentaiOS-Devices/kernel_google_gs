@@ -7378,6 +7378,13 @@ M:	Richard Yeh <rcy@google.com>
 S:	Maintained
 F:	drivers/staging/gasket/
 
+GALAXYCORE GC5035 SENSOR DRIVER
+M:      Tomasz Figa <tfiga@chromium.org>
+L:      linux-media@vger.kernel.org
+S:      Maintained
+T:      git git://linuxtv.org/media_tree.git
+F:      drivers/media/i2c/gc5035.c
+
 GCC PLUGINS
 M:	Kees Cook <keescook@chromium.org>
 R:	Emese Revfy <re.emese@gmail.com>
