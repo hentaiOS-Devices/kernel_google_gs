@@ -2533,6 +2533,11 @@ enum nl80211_commands {
  *	override mask. Used with NL80211_ATTR_S1G_CAPABILITY in
  *	NL80211_CMD_ASSOCIATE or NL80211_CMD_CONNECT.
  *
+ * @NL80211_ATTR_SAE_PWE: Indicates the mechanism(s) allowed for SAE PWE
+ *	derivation in WPA3-Personal networks which are using SAE authentication.
+ *	This is a u8 attribute that encapsulates one of the values from
+ *	&enum nl80211_sae_pwe_mechanism.
+ *
  * @NL80211_ATTR_SAR_SPEC: SAR power limitation specification when
  *	used with %NL80211_CMD_SET_SAR_SPECS. The message contains fields
  *	of %nl80211_sar_attrs which specifies the sar type and related
@@ -3030,6 +3035,8 @@ enum nl80211_attrs {
 
 	NL80211_ATTR_S1G_CAPABILITY,
 	NL80211_ATTR_S1G_CAPABILITY_MASK,
+
+	NL80211_ATTR_SAE_PWE,
 
 	NL80211_ATTR_SAR_SPEC = 300 /* this is the upstream number */,
 
@@ -7151,6 +7158,25 @@ enum nl80211_unsol_bcast_probe_resp_attributes {
 	__NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_LAST,
 	NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_MAX =
 		__NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_LAST - 1
+};
+
+/**
+ * enum nl80211_sae_pwe_mechanism - The mechanism(s) allowed for SAE PWE
+ *	derivation. Applicable only when WPA3-Personal SAE authentication is
+ *	used.
+ *
+ * @NL80211_SAE_PWE_UNSPECIFIED: not specified, used internally to indicate that
+ *	attribute is not present from userspace.
+ * @NL80211_SAE_PWE_HUNT_AND_PECK: hunting-and-pecking loop only
+ * @NL80211_SAE_PWE_HASH_TO_ELEMENT: hash-to-element only
+ * @NL80211_SAE_PWE_BOTH: both hunting-and-pecking loop and hash-to-element
+ *	can be used.
+ */
+enum nl80211_sae_pwe_mechanism {
+	NL80211_SAE_PWE_UNSPECIFIED,
+	NL80211_SAE_PWE_HUNT_AND_PECK,
+	NL80211_SAE_PWE_HASH_TO_ELEMENT,
+	NL80211_SAE_PWE_BOTH,
 };
 
 /**
