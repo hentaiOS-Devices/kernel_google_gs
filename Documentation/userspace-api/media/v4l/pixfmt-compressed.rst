@@ -7,7 +7,13 @@ Compressed Formats
 
 .. _compressed-formats:
 
-.. tabularcolumns:: |p{6.6cm}|p{2.2cm}|p{8.7cm}|
+.. raw:: latex
+
+    \small
+
+.. tabularcolumns:: |p{5.8cm}|p{1.2cm}|p{10.3cm}|
+
+.. cssclass:: longtable
 
 .. flat-table:: Compressed Image Formats
     :header-rows:  1
@@ -247,3 +253,6 @@ Compressed Formats
         of macroblocks to decode a full corresponding frame to the matching
         capture buffer.
 
+.. raw:: latex
+
+    \normalsize
