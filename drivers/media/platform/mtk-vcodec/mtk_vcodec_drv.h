@@ -34,6 +34,7 @@
 #define MTK_VCODEC_MAX_PLANES	3
 #define MTK_V4L2_BENCHMARK	0
 #define WAIT_INTR_TIMEOUT_MS	1000
+#define VDEC_LAT_ARCH(hw_arch) ((hw_arch) >= MTK_VDEC_LAT_SINGLE_CORE)
 
 /**
  * enum mtk_hw_reg_idx - MTK hw register base index
@@ -516,6 +517,7 @@ struct mtk_vcodec_dev {
 	struct device_node *component_node[MTK_VDEC_HW_MAX];
 	int comp_idx;
 
+	struct task_struct *kthread_core;
 	wait_queue_head_t core_read;
 	struct list_head core_queue;
 	spinlock_t core_lock;
