@@ -316,6 +316,9 @@ static void ufshcd_add_cmd_upiu_trace(struct ufs_hba *hba, unsigned int tag,
 {
 	struct utp_upiu_req *rq = hba->lrb[tag].ucd_req_ptr;
 
+	if (!trace_ufshcd_upiu_enabled())
+		return;
+
 	trace_ufshcd_upiu(dev_name(hba->dev), str_t, &rq->header, &rq->sc.cdb);
 }
 
@@ -324,6 +327,9 @@ static void ufshcd_add_query_upiu_trace(struct ufs_hba *hba, unsigned int tag,
 {
 	struct utp_upiu_req *rq = hba->lrb[tag].ucd_req_ptr;
 
+	if (!trace_ufshcd_upiu_enabled())
+		return;
+
 	trace_ufshcd_upiu(dev_name(hba->dev), str_t, &rq->header, &rq->qr);
 }
 
@@ -331,6 +337,9 @@ static void ufshcd_add_tm_upiu_trace(struct ufs_hba *hba, unsigned int tag,
 				     enum ufs_trace_str_t str_t)
 {
 	struct utp_task_req_desc *descp = &hba->utmrdl_base_addr[tag];
+
+	if (!trace_ufshcd_upiu_enabled())
+		return;
 
 	trace_ufshcd_upiu(dev_name(hba->dev), str_t, &descp->req_header,
 			&descp->input_param1);
