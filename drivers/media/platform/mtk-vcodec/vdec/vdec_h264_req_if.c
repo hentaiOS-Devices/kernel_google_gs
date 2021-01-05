@@ -333,6 +333,9 @@ static int vdec_h264_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 		mtk_vdec_h264_get_ctrl_ptr(inst->ctx,
 		V4L2_CID_STATELESS_H264_DECODE_PARAMS);
 	struct vdec_vpu_inst *vpu = &inst->vpu;
+	struct mtk_video_dec_buf *src_buf_info;
+	struct mtk_video_dec_buf *dst_buf_info;
+	struct vdec_fb *fb;
 	uint32_t data[2];
 	uint64_t y_fb_dma;
 	uint64_t c_fb_dma;
