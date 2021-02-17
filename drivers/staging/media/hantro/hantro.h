@@ -424,6 +424,30 @@ hantro_get_dec_buf_addr(struct hantro_ctx *ctx, struct vb2_buffer *vb)
 	return vb2_dma_contig_plane_dma_addr(vb, 0);
 }
 
+static inline int
+hantro_aux_buf_alloc(struct hantro_dev *vpu,
+		     struct hantro_aux_buf *buf, size_t size)
+{
+	buf->cpu = dma_alloc_coherent(vpu->dev, size, &buf->dma, GFP_KERNEL);
+	if (!buf->cpu)
+		return -ENOMEM;
+
+	buf->size = size;
+	return 0;
+}
+
+static inline void
+hantro_aux_buf_free(struct hantro_dev *vpu,
+		    struct hantro_aux_buf *buf)
+{
+	if (buf->cpu)
+		dma_free_coherent(vpu->dev, buf->size, buf->cpu, buf->dma);
+
+	buf->cpu = NULL;
+	buf->dma = 0;
+	buf->size = 0;
+}
+
 void hantro_postproc_disable(struct hantro_ctx *ctx);
 void hantro_postproc_enable(struct hantro_ctx *ctx);
 void hantro_postproc_free(struct hantro_ctx *ctx);
