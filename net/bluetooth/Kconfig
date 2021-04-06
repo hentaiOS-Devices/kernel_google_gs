@@ -107,6 +107,13 @@ config BT_DEBUGFS
 	  Provide extensive information about internal Bluetooth states
 	  in debugfs.
 
+config BT_AOSPEXT
+	bool "Enable Android Open Source Project extensions"
+	depends on BT
+	help
+	  This options enables support for the Android Open Source
+	  Project defined HCI vendor extensions.
+
 config BT_SELFTEST
 	bool "Bluetooth self testing support"
 	depends on BT && DEBUG_KERNEL
