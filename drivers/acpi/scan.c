@@ -1741,15 +1741,18 @@ void acpi_device_add_finalize(struct acpi_device *device)
 }
 
 static int acpi_add_single_object(struct acpi_device **child,
-				  acpi_handle handle, int type,
-				  unsigned long long sta)
+				  acpi_handle handle, int type)
 {
 	struct acpi_device_info *info = NULL;
+	unsigned long long sta = ACPI_STA_DEFAULT;
 	struct acpi_device *device;
 	int result;
 
-	if (handle != ACPI_ROOT_OBJECT && type == ACPI_BUS_TYPE_DEVICE)
+	if (type == ACPI_BUS_TYPE_DEVICE && handle != ACPI_ROOT_OBJECT)
 		acpi_get_object_info(handle, &info);
+	else if (type == ACPI_BUS_TYPE_PROCESSOR &&
+		 ACPI_FAILURE(acpi_bus_get_status_handle(handle, &sta)))
+		return -ENODEV;
 
 	device = kzalloc(sizeof(struct acpi_device), GFP_KERNEL);
 	if (!device) {
@@ -1976,7 +1979,6 @@ static acpi_status acpi_bus_check_add(acpi_handle handle, bool check_dep,
 				      struct acpi_device **adev_p)
 {
 	struct acpi_device *device = NULL;
-	unsigned long long sta = ACPI_STA_DEFAULT;
 	acpi_object_type acpi_type;
 	int type;
 
@@ -2004,9 +2006,6 @@ static acpi_status acpi_bus_check_add(acpi_handle handle, bool check_dep,
 		break;
 
 	case ACPI_TYPE_PROCESSOR:
-		if (ACPI_FAILURE(acpi_bus_get_status_handle(handle, &sta)))
-			return AE_OK;
-
 		type = ACPI_BUS_TYPE_PROCESSOR;
 		break;
 
@@ -2021,7 +2020,7 @@ static acpi_status acpi_bus_check_add(acpi_handle handle, bool check_dep,
 		return AE_OK;
 	}
 
-	acpi_add_single_object(&device, handle, type, sta);
+	acpi_add_single_object(&device, handle, type);
 	if (!device)
 		return AE_CTRL_DEPTH;
 
@@ -2295,8 +2294,7 @@ int acpi_bus_register_early_device(int type)
 	struct acpi_device *device = NULL;
 	int result;
 
-	result = acpi_add_single_object(&device, NULL,
-					type, ACPI_STA_DEFAULT);
+	result = acpi_add_single_object(&device, NULL, type);
 	if (result)
 		return result;
 
@@ -2316,8 +2314,7 @@ static int acpi_bus_scan_fixed(void)
 		struct acpi_device *device = NULL;
 
 		result = acpi_add_single_object(&device, NULL,
-						ACPI_BUS_TYPE_POWER_BUTTON,
-						ACPI_STA_DEFAULT);
+						ACPI_BUS_TYPE_POWER_BUTTON);
 		if (result)
 			return result;
 
@@ -2333,8 +2330,7 @@ static int acpi_bus_scan_fixed(void)
 		struct acpi_device *device = NULL;
 
 		result = acpi_add_single_object(&device, NULL,
-						ACPI_BUS_TYPE_SLEEP_BUTTON,
-						ACPI_STA_DEFAULT);
+						ACPI_BUS_TYPE_SLEEP_BUTTON);
 		if (result)
 			return result;
 
