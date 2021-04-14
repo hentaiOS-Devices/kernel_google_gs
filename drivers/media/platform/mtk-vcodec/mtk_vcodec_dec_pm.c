@@ -12,20 +12,14 @@
 #include "mtk_vcodec_dec_pm.h"
 #include "mtk_vcodec_util.h"
 
-int mtk_vcodec_init_dec_pm(struct mtk_vcodec_dev *mtkdev)
+int mtk_vcodec_init_dec_pm(struct platform_device *pdev,
+	struct mtk_vcodec_pm *pm)
 {
-	struct platform_device *pdev;
-	struct mtk_vcodec_pm *pm;
 	struct mtk_vcodec_clk *dec_clk;
 	struct mtk_vcodec_clk_info *clk_info;
 	int i = 0, ret = 0;
 
-	pdev = mtkdev->plat_dev;
-	pm = &mtkdev->pm;
-	pm->mtkdev = mtkdev;
 	dec_clk = &pm->vdec_clk;
-
-	pdev = mtkdev->plat_dev;
 	pm->dev = &pdev->dev;
 
 	dec_clk->clk_num =
@@ -59,12 +53,13 @@ int mtk_vcodec_init_dec_pm(struct mtk_vcodec_dev *mtkdev)
 	}
 
 	pm_runtime_enable(&pdev->dev);
-	return 0;
+
+	return ret;
 }
 
-void mtk_vcodec_release_dec_pm(struct mtk_vcodec_dev *dev)
+void mtk_vcodec_release_dec_pm(struct mtk_vcodec_pm *pm)
 {
-	pm_runtime_disable(dev->pm.dev);
+	pm_runtime_disable(pm->dev);
 }
 
 int mtk_vcodec_dec_pw_on(struct mtk_vcodec_pm *pm)
@@ -102,7 +97,6 @@ void mtk_vcodec_dec_clock_on(struct mtk_vcodec_pm *pm)
 	}
 
 	return;
-
 error:
 	for (i -= 1; i >= 0; i--)
 		clk_disable_unprepare(dec_clk->clk_info[i].vcodec_clk);
