@@ -8,6 +8,8 @@
 #ifndef _MTK_VCODEC_DRV_H_
 #define _MTK_VCODEC_DRV_H_
 
+#include <linux/component.h>
+#include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
@@ -16,6 +18,11 @@
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-core.h>
 #include "mtk_vcodec_util.h"
+
+#define VDEC_HW_ACTIVE	0x10
+#define VDEC_IRQ_CFG	0x11
+#define VDEC_IRQ_CLR	0x10
+#define VDEC_IRQ_CFG_REG	0xa4
 
 #define MTK_VCODEC_DRV_NAME	"mtk_vcodec_drv"
 #define MTK_VCODEC_DEC_NAME	"mtk-vcodec-dec"
@@ -91,6 +98,17 @@ enum mtk_fmt_type {
 	MTK_FMT_DEC = 0,
 	MTK_FMT_ENC = 1,
 	MTK_FMT_FRAME = 2,
+};
+
+/**
+ * struct mtk_vdec_hw_id - Hardware index used to separate
+ *                         different hardware
+ */
+enum mtk_vdec_hw_id {
+	MTK_VDEC_CORE,
+	MTK_VDEC_LAT0,
+	MTK_VDEC_LAT1,
+	MTK_VDEC_HW_MAX,
 };
 
 /**
@@ -400,6 +418,7 @@ struct mtk_vcodec_enc_pdata {
  *
  * @fw_handler: used to communicate with the firmware.
  * @id_counter: used to identify current opened instance
+ * @is_support_comp: 1: using compoent framework, 0: not support
  *
  * @encode_workqueue: encode work queue
  *
@@ -417,6 +436,10 @@ struct mtk_vcodec_enc_pdata {
  * @pm: power management control
  * @dec_capability: used to identify decode capability, ex: 4k
  * @enc_capability: used to identify encode capability
+ *
+ * comp_dev: component hardware device
+ * component_node: component node
+ * comp_idx: component index
  */
 struct mtk_vcodec_dev {
 	struct v4l2_device v4l2_dev;
@@ -437,6 +460,7 @@ struct mtk_vcodec_dev {
 	struct mtk_vcodec_fw *fw_handler;
 
 	unsigned long id_counter;
+	bool is_support_comp;
 
 	struct workqueue_struct *decode_workqueue;
 	struct workqueue_struct *encode_workqueue;
@@ -454,6 +478,10 @@ struct mtk_vcodec_dev {
 	struct mtk_vcodec_pm pm;
 	unsigned int dec_capability;
 	unsigned int enc_capability;
+
+	void *comp_dev[MTK_VDEC_HW_MAX];
+	struct device_node *component_node[MTK_VDEC_HW_MAX];
+	int comp_idx;
 };
 
 static inline struct mtk_vcodec_ctx *fh_to_ctx(struct v4l2_fh *fh)
