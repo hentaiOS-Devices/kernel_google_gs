@@ -17,7 +17,9 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-core.h>
+
 #include "mtk_vcodec_util.h"
+#include "vdec_msg_queue.h"
 
 #define VDEC_HW_ACTIVE	0x10
 #define VDEC_IRQ_CFG	0x11
@@ -280,6 +282,8 @@ struct vdec_pic_info {
  * @xfer_func: enum v4l2_xfer_func, colorspace transfer function
  * @lock: protect variables accessed by V4L2 threads and worker thread such as
  *	  mtk_video_dec_buf.
+ *
+ * @msg_queue: msg queue used to store lat buffer information
  */
 struct mtk_vcodec_ctx {
 	enum mtk_instance_type type;
@@ -327,6 +331,7 @@ struct mtk_vcodec_ctx {
 	int decoded_frame_cnt;
 	struct mutex lock;
 
+	struct vdec_msg_queue msg_queue;
 };
 
 enum mtk_chip {
@@ -459,6 +464,11 @@ struct mtk_vcodec_enc_pdata {
  * comp_dev: component hardware device
  * component_node: component node
  * comp_idx: component index
+ *
+ * core_read: Wait queue used to signalize when core get useful lat buffer
+ * core_queue: List of V4L2 lat_buf
+ * core_lock: spin lock to protect the struct usage
+ * num_core: number of buffers ready to be processed
  */
 struct mtk_vcodec_dev {
 	struct v4l2_device v4l2_dev;
@@ -501,6 +511,11 @@ struct mtk_vcodec_dev {
 	void *comp_dev[MTK_VDEC_HW_MAX];
 	struct device_node *component_node[MTK_VDEC_HW_MAX];
 	int comp_idx;
+
+	wait_queue_head_t core_read;
+	struct list_head core_queue;
+	spinlock_t core_lock;
+	int num_core;
 };
 
 static inline struct mtk_vcodec_ctx *fh_to_ctx(struct v4l2_fh *fh)
