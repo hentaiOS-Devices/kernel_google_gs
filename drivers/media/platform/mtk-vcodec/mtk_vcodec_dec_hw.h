@@ -29,6 +29,8 @@ enum mtk_comp_hw_reg_idx {
  * @irqlock: protect data access by irq handler and work thread
  * @reg_base: Mapped address of MTK Vcodec registers.
  *
+ * @curr_ctx: The context that is waiting for codec hardware
+ *
  * @dec_irq: decoder irq resource
  * @pm: power management control
  * @comp_idx: component index
@@ -38,6 +40,8 @@ struct mtk_vdec_comp_dev {
 	struct mtk_vcodec_dev *master_dev;
 	spinlock_t irqlock;
 	void __iomem *reg_base[NUM_MAX_COMP_VCODEC_REG_BASE];
+
+	struct mtk_vcodec_ctx *curr_ctx;
 
 	int dec_irq;
 	struct mtk_vcodec_pm pm;
