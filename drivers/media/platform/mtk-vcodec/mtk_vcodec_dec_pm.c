@@ -64,30 +64,7 @@ void mtk_vcodec_release_dec_pm(struct mtk_vcodec_pm *pm)
 	pm_runtime_disable(pm->dev);
 }
 
-int mtk_vcodec_dec_pw_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
-{
-	struct mtk_vdec_comp_dev *comp_dev;
-	struct mtk_vcodec_pm *pm;
-	int ret;
-
-	if (vdec_dev->is_support_comp) {
-		comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
-		if (!comp_dev) {
-			mtk_v4l2_err("Failed to get hw dev\n");
-			return -EINVAL;
-		}
-		pm = &comp_dev->pm;
-	} else {
-		pm = &vdec_dev->pm;
-	}
-	ret = pm_runtime_resume_and_get(pm->dev);
-	if (ret)
-		mtk_v4l2_err("pm_runtime_resume_and_get fail %d", ret);
-
-	return ret;
-}
-
-void mtk_vcodec_dec_pw_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
+static void mtk_vcodec_dec_pw_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
 	struct mtk_vdec_comp_dev *comp_dev;
 	struct mtk_vcodec_pm *pm;
@@ -103,13 +80,31 @@ void mtk_vcodec_dec_pw_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 	} else {
 		pm = &vdec_dev->pm;
 	}
-
-	ret = pm_runtime_put_sync(pm->dev);
-	if (ret)
-		mtk_v4l2_err("pm_runtime_put_sync fail %d", ret);
+	ret = pm_runtime_resume_and_get(pm->dev);
+	if (ret < 0)
+		mtk_v4l2_err("pm_runtime_resume_and_get fail %d", ret);
 }
 
-void mtk_vcodec_dec_clock_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
+static void mtk_vcodec_dec_pw_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
+{
+	struct mtk_vdec_comp_dev *comp_dev;
+	struct mtk_vcodec_pm *pm;
+
+	if (vdec_dev->is_support_comp) {
+		comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+		if (!comp_dev) {
+			mtk_v4l2_err("Failed to get hw dev\n");
+			return;
+		}
+		pm = &comp_dev->pm;
+	} else {
+		pm = &vdec_dev->pm;
+	}
+
+	pm_runtime_put_sync(pm->dev);
+}
+
+static void mtk_vcodec_dec_clock_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
 	struct mtk_vdec_comp_dev *comp_dev;
 	struct mtk_vcodec_pm *pm;
@@ -123,10 +118,8 @@ void mtk_vcodec_dec_clock_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 			return;
 		}
 		pm = &comp_dev->pm;
-		enable_irq(comp_dev->dec_irq);
 	} else {
 		pm = &vdec_dev->pm;
-		enable_irq(vdec_dev->dec_irq);
 	}
 
 	dec_clk = &pm->vdec_clk;
@@ -145,7 +138,7 @@ error:
 		clk_disable_unprepare(dec_clk->clk_info[i].vcodec_clk);
 }
 
-void mtk_vcodec_dec_clock_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
+static void mtk_vcodec_dec_clock_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
 	struct mtk_vdec_comp_dev *comp_dev;
 	struct mtk_vcodec_pm *pm;
@@ -159,13 +152,73 @@ void mtk_vcodec_dec_clock_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 			return;
 		}
 		pm = &comp_dev->pm;
-		disable_irq(comp_dev->dec_irq);
 	} else {
 		pm = &vdec_dev->pm;
-		disable_irq(vdec_dev->dec_irq);
 	}
 
 	dec_clk = &pm->vdec_clk;
 	for (i = dec_clk->clk_num - 1; i >= 0; i--)
 		clk_disable_unprepare(dec_clk->clk_info[i].vcodec_clk);
+}
+
+static void mtk_vcodec_dec_enable_irq(struct mtk_vcodec_dev *vdec_dev,
+	int comp_idx)
+{
+	struct mtk_vdec_comp_dev *comp_dev;
+
+	if (vdec_dev->is_support_comp) {
+		comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+		if (!comp_dev) {
+			mtk_v4l2_err("Failed to get hw dev\n");
+			return;
+		}
+		enable_irq(comp_dev->dec_irq);
+	} else {
+		enable_irq(vdec_dev->dec_irq);
+	}
+}
+
+static void mtk_vcodec_dec_disable_irq(struct mtk_vcodec_dev *vdec_dev,
+	int comp_idx)
+{
+	struct mtk_vdec_comp_dev *comp_dev;
+
+	if (vdec_dev->is_support_comp) {
+		comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+		if (!comp_dev) {
+			mtk_v4l2_err("Failed to get hw dev\n");
+			return;
+		}
+		disable_irq(comp_dev->dec_irq);
+	} else {
+		disable_irq(vdec_dev->dec_irq);
+	}
+}
+
+void mtk_vcodec_dec_enable_hardware(struct mtk_vcodec_ctx *ctx,
+	int comp_idx)
+{
+	mutex_lock(&ctx->dev->dec_mutex[comp_idx]);
+	if (VDEC_LAT_ARCH(ctx->dev->vdec_pdata->hw_arch) &&
+		comp_idx == MTK_VDEC_CORE) {
+		mtk_vcodec_dec_pw_on(ctx->dev, MTK_VDEC_LAT0);
+		mtk_vcodec_dec_clock_on(ctx->dev, MTK_VDEC_LAT0);
+	}
+	mtk_vcodec_dec_pw_on(ctx->dev, comp_idx);
+	mtk_vcodec_dec_clock_on(ctx->dev, comp_idx);
+	mtk_vcodec_dec_enable_irq(ctx->dev, comp_idx);
+}
+
+void mtk_vcodec_dec_disable_hardware(struct mtk_vcodec_ctx *ctx,
+	int comp_idx)
+{
+	mtk_vcodec_dec_disable_irq(ctx->dev, comp_idx);
+	mtk_vcodec_dec_clock_off(ctx->dev, comp_idx);
+	mtk_vcodec_dec_pw_off(ctx->dev, comp_idx);
+	if (VDEC_LAT_ARCH(ctx->dev->vdec_pdata->hw_arch) &&
+		comp_idx == MTK_VDEC_CORE) {
+		mtk_vcodec_dec_clock_off(ctx->dev, MTK_VDEC_LAT0);
+		mtk_vcodec_dec_pw_off(ctx->dev, MTK_VDEC_LAT0);
+	}
+	mutex_unlock(&ctx->dev->dec_mutex[comp_idx]);
 }

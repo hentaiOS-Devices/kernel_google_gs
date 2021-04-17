@@ -250,6 +250,7 @@ int vdec_msg_queue_core_thead(void *data)
 			continue;
 
 		ctx = lat_buf->ctx;
+		mtk_vcodec_dec_enable_hardware(ctx, MTK_VDEC_CORE);
 		mtk_vcodec_set_curr_ctx(dev, ctx, MTK_VDEC_CORE);
 
 		if (!lat_buf->core_decode)
@@ -258,6 +259,7 @@ int vdec_msg_queue_core_thead(void *data)
 			lat_buf->core_decode(lat_buf);
 
 		mtk_vcodec_set_curr_ctx(dev, NULL, MTK_VDEC_CORE);
+		mtk_vcodec_dec_disable_hardware(ctx, MTK_VDEC_CORE);
 		vdec_msg_queue_buf_to_lat(lat_buf);
 	}
 
