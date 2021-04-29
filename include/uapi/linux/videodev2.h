@@ -1801,6 +1801,9 @@ struct v4l2_ext_control {
 		struct v4l2_ctrl_h264_decode_params __user *p_h264_decode_params;
 		struct v4l2_ctrl_fwht_params __user *p_fwht_params;
 		struct v4l2_ctrl_vp8_frame __user *p_vp8_frame;
+		struct v4l2_ctrl_mpeg2_sequence __user *p_mpeg2_sequence;
+		struct v4l2_ctrl_mpeg2_picture __user *p_mpeg2_picture;
+		struct v4l2_ctrl_mpeg2_quantisation __user *p_mpeg2_quantisation;
 		struct v4l2_ctrl_vp9_compressed_hdr __user *p_vp9_compressed_hdr_probs;
 		struct v4l2_ctrl_vp9_frame __user *p_vp9_frame;
 		struct v4l2_ctrl_av1_sequence __user *p_av1_sequence;
