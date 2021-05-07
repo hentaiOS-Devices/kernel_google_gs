@@ -83,6 +83,28 @@
 	status = "okay";
 };
 
+&dp_intf0 {
+	status = "okay";
+	ports {
+		port {
+			edpout: endpoint {
+				remote-endpoint = <&edp_in>;
+			};
+		};
+	};
+};
+
+&edp_tx {
+	pinctrl-names = "default";
+	pinctrl-0 = <&edp_panel_pin>;
+	status = "okay";
+	port {
+		edp_in: endpoint {
+			remote-endpoint = <&edpout>;
+		};
+	};
+};
+
 &gpu {
 	supply-names = "mali","mali_sram";
 	mali-supply = <&mt6315_7_vbuck1>;
@@ -386,11 +408,30 @@
 		};
 	};
 
+	dptx_pin: dptx_pin_default {
+		pins_cmd_dat1 {
+			pinmux = <PINMUX_GPIO18__FUNC_DP_TX_HPD>;
+		};
+	};
+
 	ec_ap_int_odl: ec_ap_int_odl {
 		pins1 {
 			pinmux = <PINMUX_GPIO4__FUNC_GPIO4>;
 			input-enable;
 			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+	};
+
+	edp_panel_pin: edp_panel_pin_default {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO82__FUNC_GPIO82>,
+				 <PINMUX_GPIO55__FUNC_GPIO55>,
+				 <PINMUX_GPIO97__FUNC_GPIO97>;
+			output-high;
+		};
+		pins_cmd_dat1 {
+			pinmux = <PINMUX_GPIO7__FUNC_EDP_TX_HPD>;
+			bias-pull-up;
 		};
 	};
 
