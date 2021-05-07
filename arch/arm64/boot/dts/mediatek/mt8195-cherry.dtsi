@@ -919,3 +919,5 @@
 	mediatek,frame-cnt;
 	status = "okay";
 };
+
+#include <arm/cros-ec-keyboard.dtsi>
