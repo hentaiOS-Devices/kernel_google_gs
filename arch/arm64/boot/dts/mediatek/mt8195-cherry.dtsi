@@ -28,6 +28,42 @@
 		device_type = "memory";
 		reg = <0 0x40000000 0 0x80000000>;
 	};
+
+	usb_p0_vbus: regulator@2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vbus0";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	usb_p1_vbus: regulator@3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vbus1";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	usb_p2_vbus: regulator@4 {
+		compatible = "regulator-fixed";
+		regulator-name = "vbus2";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	usb_p3_vbus: regulator@5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vbus3";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		regulator-always-on;
+	};
 };
 
 &i2c0 {
@@ -251,6 +287,69 @@
 	};
 };
 
+&u2port0 {
+	status = "okay";
+};
+
+&u2port1 {
+	status = "okay";
+};
+
+&u2port2 {
+	status = "okay";
+};
+
+&u2port3 {
+	status = "okay";
+};
+
+&u3port0 {
+	status = "okay";
+};
+
+&u3phy0 {
+	status="okay";
+};
+
+&u3phy1 {
+	status = "okay";
+};
+
+&u3phy2 {
+	status="okay";
+};
+
+&u3phy3 {
+	status="okay";
+};
+
 &uart0 {
+	status = "okay";
+};
+
+&xhci0 {
+	vusb33-supply = <&mt6359_vusb_ldo_reg>;
+	vbus-supply = <&usb_p0_vbus>;
+	status = "okay";
+};
+
+&xhci1 {
+	vusb33-supply = <&mt6359_vusb_ldo_reg>;
+	vbus-supply = <&usb_p1_vbus>;
+	mediatek,frame-cnt;
+	status = "okay";
+};
+
+&xhci2 {
+	vusb33-supply = <&mt6359_vusb_ldo_reg>;
+	vbus-supply = <&usb_p2_vbus>;
+	mediatek,frame-cnt;
+	status = "okay";
+};
+
+&xhci3 {
+	vusb33-supply = <&mt6359_vusb_ldo_reg>;
+	vbus-supply = <&usb_p3_vbus>;
+	mediatek,frame-cnt;
 	status = "okay";
 };
