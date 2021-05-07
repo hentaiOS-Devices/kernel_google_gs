@@ -94,6 +94,15 @@
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c3_pin>;
+
+	cr50@50 {
+		compatible = "google,cr50";
+		reg = <0x50>;
+		interrupt-parent = <&pio>;
+		interrupts = <88 IRQ_TYPE_EDGE_RISING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cr50_irq>;
+	};
 };
 
 &i2c4 {
@@ -194,6 +203,13 @@
 };
 
 &pio {
+	cr50_irq: cr50_irq {
+		pins_bus {
+			pinmux = <PINMUX_GPIO88__FUNC_GPIO88>;
+			input-enable;
+		};
+	};
+
 	i2c0_pin: i2c0_pin {
 		pins_bus {
 			pinmux = <PINMUX_GPIO8__FUNC_SDA0>,
