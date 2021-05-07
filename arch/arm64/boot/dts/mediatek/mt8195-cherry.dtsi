@@ -107,6 +107,18 @@
 	regulator-always-on;
 };
 
+&pcie0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie0_pins_default>;
+	status = "okay";
+};
+
+&pcie1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie1_pins_default>;
+	status = "okay";
+};
+
 &pio {
 	i2c0_pin: i2c0_pin {
 		pins_bus {
@@ -171,6 +183,24 @@
 			pinmux = <PINMUX_GPIO27__FUNC_SCL7>,
 				 <PINMUX_GPIO28__FUNC_SDA7>;
 			bias-disable;
+		};
+	};
+
+	pcie0_pins_default: pcie0default {
+		pins {
+			pinmux = <PINMUX_GPIO19__FUNC_WAKEN>,
+				 <PINMUX_GPIO20__FUNC_PERSTN>,
+				 <PINMUX_GPIO21__FUNC_CLKREQN>;
+				 bias-pull-up;
+		};
+	};
+
+	pcie1_pins_default: pcie1default {
+		pins {
+			pinmux = <PINMUX_GPIO22__FUNC_PERSTN_1>,
+				 <PINMUX_GPIO23__FUNC_CLKREQN_1>,
+				 <PINMUX_GPIO24__FUNC_WAKEN_1>;
+				 bias-pull-up;
 		};
 	};
 };
