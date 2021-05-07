@@ -30,6 +30,15 @@
 		reg = <0 0x40000000 0 0x80000000>;
 	};
 
+	rt1019p: rt1019p {
+		compatible = "realtek,rt1019p";
+		pinctrl-names = "default";
+		pinctrl-0 = <&rt1019p_pins_default>;
+		sdb-gpios = <&pio 100 GPIO_ACTIVE_HIGH>;
+		status = "disabled";
+	};
+
+
 	usb_p0_vbus: regulator@2 {
 		compatible = "regulator-fixed";
 		regulator-name = "vbus0";
@@ -65,6 +74,12 @@
 		enable-active-high;
 		regulator-always-on;
 	};
+};
+
+&afe {
+	mediatek,etdm-in2-cowork-source = <2>;
+	mediatek,etdm-out2-cowork-source = <0>;
+	status = "okay";
 };
 
 &gpu {
@@ -105,6 +120,16 @@
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_pin>;
+
+	rt5682: rt5682@1a {
+               compatible = "realtek,rt5682i";
+               reg = <0x1a>;
+               interrupt-parent = <&pio>;
+               interrupts = <89 IRQ_TYPE_EDGE_BOTH>;
+               realtek,jd-src = <1>;
+               realtek,btndet-delay = <16>;
+               status = "disabled";
+	};
 };
 
 &i2c3 {
@@ -194,6 +219,11 @@
 	regulator-always-on;
 };
 
+&mt6359codec {
+	mediatek,dmic-mode = <1>; /* one-wire */
+	mediatek,mic-type-0 = <2>; /* DMIC */
+};
+
 &nor_flash {
 	status = "okay";
 	pinctrl-names = "default";
@@ -225,6 +255,34 @@
 };
 
 &pio {
+	aud_pins_default: audiodefault {
+		pins_cmd_dat {
+		    pinmux = <PINMUX_GPIO69__FUNC_AUD_CLK_MOSI>,
+			     <PINMUX_GPIO70__FUNC_AUD_SYNC_MOSI>,
+			     <PINMUX_GPIO71__FUNC_AUD_DAT_MOSI0>,
+			     <PINMUX_GPIO72__FUNC_AUD_DAT_MOSI1>,
+			     <PINMUX_GPIO73__FUNC_AUD_DAT_MISO0>,
+			     <PINMUX_GPIO74__FUNC_AUD_DAT_MISO1>,
+			     <PINMUX_GPIO75__FUNC_AUD_DAT_MISO2>,
+			     <PINMUX_GPIO0__FUNC_TDMIN_MCK>,
+			     <PINMUX_GPIO1__FUNC_TDMIN_DI>,
+			     <PINMUX_GPIO2__FUNC_TDMIN_LRCK>,
+			     <PINMUX_GPIO3__FUNC_TDMIN_BCK>,
+			     <PINMUX_GPIO60__FUNC_I2SO2_D0>,
+			     <PINMUX_GPIO49__FUNC_I2SIN_D0>,
+			     <PINMUX_GPIO50__FUNC_I2SO1_MCK>,
+			     <PINMUX_GPIO51__FUNC_I2SO1_BCK>,
+			     <PINMUX_GPIO52__FUNC_I2SO1_WS>,
+			     <PINMUX_GPIO53__FUNC_I2SO1_D0>;
+		};
+
+		pins_jack {
+			pinmux = <PINMUX_GPIO89__FUNC_GPIO89>;
+			input-enable;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+	};
+
 	cr50_irq: cr50_irq {
 		pins_bus {
 			pinmux = <PINMUX_GPIO88__FUNC_GPIO88>;
@@ -404,6 +462,13 @@
 		};
 	};
 
+	rt1019p_pins_default: rt1019p_pins {
+		pins {
+			pinmux = <PINMUX_GPIO100__FUNC_GPIO100>;
+			output-low;
+		};
+	};
+
 	spi_pins_0: spi0@0 {
 		pins_spi {
 			pinmux = <PINMUX_GPIO132__FUNC_SPIM0_CSB>,
@@ -421,6 +486,12 @@
 &pmic {
 	interrupt-parent = <&pio>;
 	interrupts = <222 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&sound {
+	pinctrl-names = "default";
+	pinctrl-0 = <&aud_pins_default>;
+	status = "okay";
 };
 
 &spi0 {
