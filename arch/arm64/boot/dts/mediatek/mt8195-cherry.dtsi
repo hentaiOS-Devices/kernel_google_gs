@@ -131,6 +131,14 @@
 	status = "okay";
 };
 
+&disp_dpi1 {
+	port {
+		dpi1_out: endpoint@0 {
+			remote-endpoint = <&hdmi0_in>;
+		};
+	};
+};
+
 &disp_pwm0 {
 	status = "okay";
 	pinctrl-names = "default";
@@ -214,6 +222,21 @@
 	power_model@1 {
 		compatible = "arm,mali-tnax-power-model";
 		scale = <5>;
+	};
+};
+
+&hdmi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&hdmi_pin>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+			hdmi0_in: endpoint {
+				remote-endpoint = <&dpi1_out>;
+			};
+		};
 	};
 };
 
@@ -566,6 +589,47 @@
 		pins_cmd_dat {
 			pinmux = <PINMUX_GPIO7__FUNC_EDP_TX_HPD>;
 			bias-pull-up;
+		};
+	};
+
+	hdmi_pin: hdmipinctrl {
+		hdmi_hotplug {
+			pinmux = <PINMUX_GPIO32__FUNC_HDMITX20_HTPLG>;
+			bias-disable;
+			input-enable;
+		};
+		hdmi_ddc {
+			pinmux = <PINMUX_GPIO34__FUNC_HDMITX20_SCL>,
+				 <PINMUX_GPIO35__FUNC_HDMITX20_SDA>;
+			mediatek,drive-strength-adv = <0>;
+			drive-strength = <MTK_DRIVE_10mA>;
+		};
+		hdmi_cec {
+			pinmux = <PINMUX_GPIO33__FUNC_HDMITX20_CEC>;
+			bias-disable;
+		};
+		hdmi_5vctrl {
+			pinmux = <PINMUX_GPIO31__FUNC_GPIO31>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+
+	hdmi0_pins_default: hdmi0default {
+		hdmirx_hpd {
+			pinmux = <PINMUX_GPIO27__FUNC_HDMIRX20_HTPLG>;
+		};
+		hdmirx_5v {
+			pinmux = <PINMUX_GPIO28__FUNC_HDMIRX20_PWR5V>;
+			bias-disable;
+		};
+		hdmirx_scl {
+			pinmux = <PINMUX_GPIO29__FUNC_HDMIRX20_SCL>;
+		};
+		hdmirx_sda {
+			pinmux = <PINMUX_GPIO30__FUNC_HDMIRX20_SDA>;
+			mediatek,drive-strength-adv = <0>;
+			drive-strength = <MTK_DRIVE_10mA>;
 		};
 	};
 
