@@ -119,6 +119,10 @@
 	status = "okay";
 };
 
+&pciephy {
+	status = "okay";
+};
+
 &pio {
 	i2c0_pin: i2c0_pin {
 		pins_bus {
