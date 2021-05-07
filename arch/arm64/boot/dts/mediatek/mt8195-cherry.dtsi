@@ -22,6 +22,16 @@
 		serial0 = &uart0;
 	};
 
+	backlight_lcd0: backlight_lcd0 {
+		compatible = "pwm-backlight";
+		pwms = <&disp_pwm0 0 500000>;
+		enable-gpios = <&pio 82 GPIO_ACTIVE_HIGH>;
+		brightness-levels = <0 1023>;
+		num-interpolated-steps = <1023>;
+		default-brightness-level = <576>;
+		status = "okay";
+	};
+
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
@@ -31,6 +41,29 @@
 		reg = <0 0x40000000 0 0x80000000>;
 	};
 
+	panel: panel {
+		compatible = "lg,lp120up1";
+		power-supply = <&panel_fixed_3v3>;
+		backlight = <&backlight_lcd0>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&edp_out>;
+			};
+		};
+	};
+
+	panel_fixed_3v3: regulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "PANEL_3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		gpio = <&pio 55 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&panel_fixed_pins>;
+	};
+
 	rt1019p: rt1019p {
 		compatible = "realtek,rt1019p";
 		pinctrl-names = "default";
@@ -38,7 +71,6 @@
 		sdb-gpios = <&pio 100 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
-
 
 	usb_p0_vbus: regulator@2 {
 		compatible = "regulator-fixed";
@@ -83,11 +115,17 @@
 	status = "okay";
 };
 
+&disp_pwm0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&disp_pwm0_pin_default>;
+};
+
 &dp_intf0 {
 	status = "okay";
 	ports {
 		port {
-			edpout: endpoint {
+			dp_intf0_out: endpoint {
 				remote-endpoint = <&edp_in>;
 			};
 		};
@@ -96,11 +134,23 @@
 
 &edp_tx {
 	pinctrl-names = "default";
-	pinctrl-0 = <&edp_panel_pin>;
+	pinctrl-0 = <&edp_pin>;
 	status = "okay";
-	port {
-		edp_in: endpoint {
-			remote-endpoint = <&edpout>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+			edp_in: endpoint {
+			remote-endpoint = <&dp_intf0_out>;
+			};
+		};
+		port@1 {
+			reg = <1>;
+			edp_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
 		};
 	};
 };
@@ -408,9 +458,19 @@
 		};
 	};
 
+	disp_pwm0_pin_default: disp_pwm0_pin_default {
+		pins1 {
+			pinmux = <PINMUX_GPIO82__FUNC_GPIO82>;
+		};
+		pins2 {
+			pinmux = <PINMUX_GPIO97__FUNC_DISP_PWM0>;
+		};
+	};
+
 	dptx_pin: dptx_pin_default {
 		pins_cmd_dat1 {
 			pinmux = <PINMUX_GPIO18__FUNC_DP_TX_HPD>;
+			bias-pull-up;
 		};
 	};
 
@@ -422,14 +482,8 @@
 		};
 	};
 
-	edp_panel_pin: edp_panel_pin_default {
+	edp_pin: edp_pin_default {
 		pins_cmd_dat {
-			pinmux = <PINMUX_GPIO82__FUNC_GPIO82>,
-				 <PINMUX_GPIO55__FUNC_GPIO55>,
-				 <PINMUX_GPIO97__FUNC_GPIO97>;
-			output-high;
-		};
-		pins_cmd_dat1 {
 			pinmux = <PINMUX_GPIO7__FUNC_EDP_TX_HPD>;
 			bias-pull-up;
 		};
@@ -621,6 +675,12 @@
 			pinmux = <PINMUX_GPIO140__FUNC_SPINOR_CS>;
 			drive-strength = <MTK_DRIVE_6mA>;
 			bias-pull-up;
+		};
+	};
+
+	panel_fixed_pins: panel_fixed_pins {
+		pins1 {
+			pinmux = <PINMUX_GPIO55__FUNC_GPIO55>;
 		};
 	};
 
