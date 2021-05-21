@@ -441,6 +441,12 @@
 	regulator-always-on;
 };
 
+&mt6359_vgpu11_sshub_buck_reg {
+	regulator-always-on;
+	regulator-min-microvolt = <550000>;
+	regulator-max-microvolt = <550000>;
+};
+
 /* for CORE SRAM */
 &mt6359_vpu_buck_reg {
 	regulator-always-on;
