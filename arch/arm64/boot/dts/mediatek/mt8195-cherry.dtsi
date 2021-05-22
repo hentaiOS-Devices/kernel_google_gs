@@ -64,6 +64,18 @@
 		pinctrl-0 = <&panel_fixed_pins>;
 	};
 
+	reserved_memory: reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		scp_mem_reserved: scp_mem_region {
+			compatible = "shared-dma-pool";
+			reg = <0 0x50000000 0 0x2900000>;
+			no-map;
+		};
+	};
+
 	rt1019p: rt1019p {
 		compatible = "realtek,rt1019p";
 		pinctrl-names = "default";
@@ -783,6 +795,14 @@
 		};
 	};
 
+	scp_pins: scp {
+		pins_scp_vreq {
+			pinmux = <PINMUX_GPIO76__FUNC_SCP_VREQ_VAO>;
+			bias-disable;
+			input-enable;
+		};
+	};
+
 	spi_pins_0: spi0@0 {
 		pins_spi {
 			pinmux = <PINMUX_GPIO132__FUNC_SPIM0_CSB>,
@@ -832,6 +852,18 @@
 &pmic {
 	interrupt-parent = <&pio>;
 	interrupts = <222 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&scp {
+	memory-region = <&scp_mem_reserved>;
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&scp_pins>;
+
+	cros_ec {
+		compatible = "google,cros-ec-rpmsg";
+		mediatek,rpmsg-name = "cros-ec-rpmsg";
+	};
 };
 
 &sound {
