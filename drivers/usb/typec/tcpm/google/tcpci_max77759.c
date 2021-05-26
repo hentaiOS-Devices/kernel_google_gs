@@ -2360,7 +2360,7 @@ static int max77759_probe(struct i2c_client *client,
 {
 	int ret, i;
 	struct max77759_plat *chip;
-	char *usb_psy_name;
+	char *usb_psy_name, *chg_psy_name;
 	struct device_node *dn, *ovp_dn, *conn;
 	u8 power_status;
 	u16 device_id;
@@ -2385,13 +2385,6 @@ static int max77759_probe(struct i2c_client *client,
 		return PTR_ERR(chip->data.regmap);
 	}
 
-	chip->charger_mode_votable = gvotable_election_get_handle(GBMS_MODE_VOTABLE);
-	if (IS_ERR_OR_NULL(chip->charger_mode_votable)) {
-		dev_err(&client->dev, "TCPCI: GBMS_MODE_VOTABLE get failed: %ld",
-			PTR_ERR(chip->charger_mode_votable));
-		return -EPROBE_DEFER;
-	}
-
 	kthread_init_work(&chip->reenable_auto_ultra_low_power_mode_work,
 			  reenable_auto_ultra_low_power_mode_work_item);
 	alarm_init(&chip->reenable_auto_ultra_low_power_mode_alarm, ALARM_BOOTTIME,
@@ -2400,6 +2393,18 @@ static int max77759_probe(struct i2c_client *client,
 	if (!dn) {
 		dev_err(&client->dev, "of node not found\n");
 		return -EINVAL;
+	}
+
+	chip->charger_mode_votable = gvotable_election_get_handle(GBMS_MODE_VOTABLE);
+	if (IS_ERR_OR_NULL(chip->charger_mode_votable)) {
+		dev_err(&client->dev, "TCPCI: GBMS_MODE_VOTABLE get failed: %ld\n",
+			PTR_ERR(chip->charger_mode_votable));
+		chg_psy_name = (char *)of_get_property(dn, "chg-psy-name", NULL);
+		/*
+		 * Defer when chg psy is set. This implies mode votable should be present as well.
+		 */
+		if (chg_psy_name)
+			return -EPROBE_DEFER;
 	}
 
 	chip->in_switch_gpio = -EINVAL;
