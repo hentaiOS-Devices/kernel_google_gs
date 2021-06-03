@@ -234,7 +234,7 @@ static void hantro_h1_vp8_enc_set_buffers(struct hantro_dev *vpu,
 	vepu_write_relaxed(vpu, enc_in_img_ctrl(ctx), H1_REG_IN_IMG_CTRL);
 }
 
-void hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
+int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 {
 	struct hantro_dev *vpu = ctx->dev;
 	struct vb2_v4l2_buffer *dst_buf;
@@ -290,4 +290,6 @@ void hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 	hantro_end_prepare_run(ctx);
 
 	vepu_write(vpu, reg, H1_REG_ENC_CTRL);
+
+	return 0;
 }

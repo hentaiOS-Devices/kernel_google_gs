@@ -640,7 +640,7 @@ static void rk3399_vpu_vp8_enc_set_params(struct hantro_dev *vpu,
 	}
 }
 
-void rk3399_vpu_vp8_enc_run(struct hantro_ctx *ctx)
+int rk3399_vpu_vp8_enc_run(struct hantro_ctx *ctx)
 {
 	const struct rk3399_vp8_enc_reg_params *params =
 		hantro_get_ctrl(ctx, V4L2_CID_PRIVATE_HANTRO_REG_PARAMS);
@@ -693,6 +693,8 @@ void rk3399_vpu_vp8_enc_run(struct hantro_ctx *ctx)
 	/* Kick the watchdog and start encoding */
 	hantro_end_prepare_run(ctx);
 	vepu_write(vpu, reg, VEPU_REG_ENCODE_START);
+
+	return 0;
 }
 
 void rk3399_vpu_vp8_enc_done(struct hantro_ctx *ctx)
