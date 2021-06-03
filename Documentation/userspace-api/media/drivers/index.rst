@@ -32,6 +32,7 @@ For more details see the file COPYING in the source distribution of Linux.
 	:numbered:
 
 	cx2341x-uapi
+        hantro
 	imx-uapi
 	max2175
 	meye-uapi
