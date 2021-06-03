@@ -152,7 +152,8 @@
 				 <PINMUX_GPIO17__FUNC_SCL4>;
 			bias-pull-up;
 			mediatek,rsel = <7>;
-			mediatek,drive-strength-adv = <7>;
+			mediatek,drive-strength-adv = <0>;
+			drive-strength = <MTK_DRIVE_4mA>;
 		};
 	};
 
