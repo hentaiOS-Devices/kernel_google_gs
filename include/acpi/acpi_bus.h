@@ -280,6 +280,12 @@ struct acpi_device_power {
 	u8 state_for_enumeration; /* Maximum power state for enumeration */
 };
 
+struct acpi_dep_data {
+	struct list_head node;
+	acpi_handle supplier;
+	acpi_handle consumer;
+};
+
 /* Performance Management */
 
 struct acpi_device_perf_flags {
@@ -690,6 +696,7 @@ static inline bool acpi_device_can_poweroff(struct acpi_device *adev)
 
 bool acpi_dev_hid_uid_match(struct acpi_device *adev, const char *hid2, const char *uid2);
 
+void acpi_dev_clear_dependencies(struct acpi_device *supplier);
 struct acpi_device *
 acpi_dev_get_first_match_dev(const char *hid, const char *uid, s64 hrv);
 
