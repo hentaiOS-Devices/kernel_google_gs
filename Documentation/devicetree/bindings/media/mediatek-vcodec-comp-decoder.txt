@@ -5,8 +5,9 @@ supports high resolution decoding functionalities. Required  master and
 component node properties:
 
 Master properties:
-- compatible :
+- compatible(must be one of the following string) :
   "mediatek,mt8192-vcodec-dec" for MT8192 decoder.
+  "mediatek,mt8195-vcodec-dec" for MT8192 decoder.
 - reg : Physical base address of the video decoder registers and length of
   memory mapped region.
 - iommus : should point to the respective IOMMU block with master port as
