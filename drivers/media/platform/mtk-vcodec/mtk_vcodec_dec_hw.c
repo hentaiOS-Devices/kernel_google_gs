@@ -58,11 +58,12 @@ static const struct component_ops mtk_vdec_hw_component_ops = {
 	.unbind = mtk_vdec_comp_unbind,
 };
 
-/* Wake up context wait_queue */
-static void mtk_vdec_comp_wake_up_ctx(struct mtk_vcodec_ctx *ctx)
+/* Wake up core context wait_queue */
+static void mtk_vdec_comp_wake_up_ctx(struct mtk_vcodec_ctx *ctx,
+	unsigned int hw_id)
 {
-	ctx->int_cond = 1;
-	wake_up_interruptible(&ctx->queue);
+	ctx->int_core_cond[hw_id] = 1;
+	wake_up_interruptible(&ctx->core_queue[hw_id]);
 }
 
 static irqreturn_t mtk_vdec_comp_irq_handler(int irq, void *priv)
@@ -93,7 +94,7 @@ static irqreturn_t mtk_vdec_comp_irq_handler(int irq, void *priv)
 	writel((readl(vdec_misc_addr) | VDEC_IRQ_CFG), vdec_misc_addr);
 	writel((readl(vdec_misc_addr) & ~VDEC_IRQ_CLR), vdec_misc_addr);
 
-	mtk_vdec_comp_wake_up_ctx(ctx);
+	mtk_vdec_comp_wake_up_ctx(ctx, dev->comp_idx);
 
 	mtk_v4l2_debug(3, "wake up ctx %d, dec_done_status=%x",
 		ctx->id, dec_done_status);
@@ -113,8 +114,7 @@ static int mtk_vdec_comp_init_irq(struct mtk_vdec_comp_dev *dev)
 	}
 
 	ret = devm_request_irq(&pdev->dev, dev->dec_irq,
-				mtk_vdec_comp_irq_handler,
-				0, pdev->name, dev);
+				mtk_vdec_comp_irq_handler, 0, pdev->name, dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to install dev->dec_irq %d (%d)",
 			dev->dec_irq, ret);
@@ -154,8 +154,10 @@ static int mtk_vdec_comp_probe(struct platform_device *pdev)
 		dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(34));
 
 	ret = mtk_vdec_comp_init_irq(dev);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to register irq handler.\n");
 		goto err;
+	}
 
 	platform_set_drvdata(pdev, dev);
 
