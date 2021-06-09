@@ -132,6 +132,34 @@
 	};
 };
 
+&dp_intf1 {
+	status = "okay";
+	ports {
+		port {
+			dp_intf1_out: endpoint {
+				remote-endpoint = <&dptx_in>;
+			};
+		};
+	};
+};
+
+&dp_tx {
+	pinctrl-names = "default";
+	pinctrl-0 = <&dptx_pin>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+			dptx_in: endpoint {
+			remote-endpoint = <&dp_intf1_out>;
+			};
+		};
+	};
+};
+
 &edp_tx {
 	pinctrl-names = "default";
 	pinctrl-0 = <&edp_pin>;
