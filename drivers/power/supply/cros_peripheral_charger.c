@@ -16,7 +16,7 @@
 #include <linux/types.h>
 
 #define DRV_NAME		"cros-ec-pchg"
-#define PCHG_DIR_PREFIX		"peripheral"
+#define PCHG_DIR_PREFIX		"PCHG"
 #define PCHG_DIR_NAME		PCHG_DIR_PREFIX "%d"
 #define PCHG_DIR_NAME_LENGTH \
 		sizeof(PCHG_DIR_PREFIX __stringify(EC_PCHG_MAX_PORTS))
