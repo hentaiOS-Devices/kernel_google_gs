@@ -127,6 +127,10 @@
 	status = "okay";
 };
 
+&auxadc {
+	status = "okay";
+};
+
 &disp_pwm0 {
 	status = "okay";
 	pinctrl-names = "default";
