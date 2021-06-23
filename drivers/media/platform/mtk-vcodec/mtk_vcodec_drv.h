@@ -111,6 +111,7 @@ enum mtk_vdec_hw_id {
 	MTK_VDEC_CORE,
 	MTK_VDEC_LAT0,
 	MTK_VDEC_LAT1,
+	MTK_VDEC_LAT_SOC,
 	MTK_VDEC_HW_MAX,
 };
 
@@ -494,6 +495,8 @@ struct mtk_vcodec_enc_pdata {
  * core_queue: List of V4L2 lat_buf
  * core_lock: spin lock to protect the struct usage
  * num_core: number of buffers ready to be processed
+ *
+ * @hardware_bitmap: used to record hardware is exist
  */
 struct mtk_vcodec_dev {
 	struct v4l2_device v4l2_dev;
@@ -542,6 +545,7 @@ struct mtk_vcodec_dev {
 	struct list_head core_queue;
 	spinlock_t core_lock;
 	int num_core;
+	DECLARE_BITMAP(hardware_bitmap, MTK_VDEC_HW_MAX);
 };
 
 static inline struct mtk_vcodec_ctx *fh_to_ctx(struct v4l2_fh *fh)
