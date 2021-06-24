@@ -194,6 +194,58 @@
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c7_pin>;
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	subpmic_mtk: mt6360_pmu@34 {
+		#interrupt-cells = <2>;
+		status = "ok";
+		compatible = "mediatek,mt6360";
+		reg = <0x34>;
+		wakeup-source;
+		interrupt-controller;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&subpmic_default>;
+
+		interrupt-parent = <&pio>;
+		interrupts = <130 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-names = "IRQB";
+
+		regulator {
+			compatible = "mediatek,mt6360_ldo";
+			mt_pmic_vfp_ldo_reg: ldo1 {
+				regulator-compatible = "LDO1";
+				regulator-name = "mt6360,ldo1";
+				regulator-min-microvolt = <3000000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-allowed-modes = <0 2>;
+				regulator-always-on;
+			};
+			mt_pmic_vtp_ldo_reg: ldo2 {
+				regulator-compatible = "LDO2";
+				regulator-name = "vtp";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-allowed-modes = <0 2>;
+			};
+			mt_pmic_vmc_ldo_reg: ldo3 {
+				regulator-compatible = "LDO3";
+				regulator-name = "mt6360,ldo3";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-allowed-modes = <0 2>;
+			};
+			mt_pmic_vmch_ldo_reg: ldo5 {
+				regulator-compatible = "LDO5";
+				regulator-name = "mt6360,ldo5";
+				regulator-min-microvolt = <2700000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-allowed-modes = <0 2>;
+			};
+		};
+	};
 };
 
 &mfg0 {
@@ -510,6 +562,14 @@
 		pins_spi_mi {
 			pinmux = <PINMUX_GPIO135__FUNC_SPIM0_MI>;
 			bias-pull-down;
+		};
+	};
+
+	subpmic_default: subpmicdefault {
+		subpmic_pin_irq: pin_irq {
+			pinmux = <PINMUX_GPIO130__FUNC_GPIO130>;
+			input-enable;
+			bias-pull-up;
 		};
 	};
 };
