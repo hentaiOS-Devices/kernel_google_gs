@@ -55,6 +55,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
+#include <linux/mmu_notifier.h>
 
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
@@ -3699,6 +3700,99 @@ static void walk_mm(struct lruvec *lruvec, struct mm_struct *mm, struct lru_gen_
 	} while (err == -EAGAIN);
 }
 
+static bool mmu_notifier_start_batch(struct mm_struct *mm, void *priv)
+{
+#ifdef CONFIG_MEMCG
+	struct lru_gen_mm_walk *walk = priv;
+	struct mem_cgroup *memcg = lruvec_memcg(walk->lruvec);
+
+	VM_BUG_ON(!rcu_read_lock_held());
+	if (memcg && atomic_read(&memcg->moving_account))
+		return false;
+#endif
+	VM_BUG_ON(!rcu_read_lock_held());
+	return !mm_is_oom_victim(mm);
+}
+
+static bool mmu_notifier_end_batch(void *priv, bool last)
+{
+	struct lru_gen_mm_walk *walk = priv;
+
+	VM_BUG_ON(!rcu_read_lock_held());
+
+	if (!last && walk->batched < MAX_LRU_BATCH)
+		return false;
+
+	reset_batch_size(walk->lruvec, walk);
+
+	return true;
+}
+
+static struct page *mmu_notifier_get_page(void *priv, unsigned long pfn, bool young)
+{
+	struct page *page;
+	struct lru_gen_mm_walk *walk = priv;
+	struct mem_cgroup *memcg = lruvec_memcg(walk->lruvec);
+	struct pglist_data *pgdat = lruvec_pgdat(walk->lruvec);
+	unsigned long start_pfn = pgdat->node_start_pfn;
+	unsigned long end_pfn = pgdat_end_pfn(pgdat);
+
+	if (pfn == -1 || is_zero_pfn(pfn))
+		return NULL;
+
+	if (!young) {
+		walk->mm_stats[MM_LEAF_OLD]++;
+		return NULL;
+	}
+
+	VM_BUG_ON(!pfn_valid(pfn));
+	if (pfn < start_pfn || pfn >= end_pfn)
+		return NULL;
+
+	page = compound_head(pfn_to_page(pfn));
+	if (page_to_nid(page) != pgdat->node_id)
+		return NULL;
+
+	if (page_memcg_rcu(page) != memcg)
+		return NULL;
+
+	if (!PageLRU(page))
+		return NULL;
+
+	return get_page_unless_zero(page) ? page : NULL;
+}
+
+static void mmu_notifier_update_page(void *priv, struct page *page)
+{
+	struct lru_gen_mm_walk *walk = priv;
+	struct mem_cgroup *memcg = lruvec_memcg(walk->lruvec);
+	int old_gen, new_gen = lru_gen_from_seq(walk->max_seq);
+
+	if (page_memcg_rcu(page) != memcg)
+		return;
+
+	if (!PageLRU(page))
+		return;
+
+	old_gen = page_update_gen(page, new_gen);
+	if (old_gen >= 0 && old_gen != new_gen)
+		update_batch_size(walk, page, old_gen, new_gen);
+	walk->mm_stats[MM_LEAF_YOUNG]++;
+}
+
+static void call_mmu_notifier(struct lru_gen_mm_walk *args, struct mm_struct *mm)
+{
+	struct mmu_notifier_walk walk = {
+		.start_batch = mmu_notifier_start_batch,
+		.end_batch = mmu_notifier_end_batch,
+		.get_page = mmu_notifier_get_page,
+		.update_page = mmu_notifier_update_page,
+		.private = args,
+	};
+
+	mmu_notifier_clear_young_walk(mm, &walk);
+}
+
 static struct lru_gen_mm_walk *set_mm_walk(struct pglist_data *pgdat)
 {
 	struct lru_gen_mm_walk *walk = current->reclaim_state->mm_walk;
@@ -3907,8 +4001,10 @@ static bool try_to_inc_max_seq(struct lruvec *lruvec, unsigned long max_seq,
 
 	do {
 		success = iterate_mm_list(lruvec, walk, &mm);
-		if (mm)
+		if (mm) {
 			walk_mm(lruvec, mm, walk);
+			call_mmu_notifier(walk, mm);
+		}
 
 		cond_resched();
 	} while (mm);
