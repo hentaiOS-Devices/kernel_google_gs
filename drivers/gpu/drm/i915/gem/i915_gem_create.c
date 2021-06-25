@@ -120,7 +120,7 @@ __i915_gem_object_create_user_ext(struct drm_i915_private *i915, u64 size,
 	 */
 	flags = I915_BO_ALLOC_USER;
 
-	ret = mr->ops->init_object(mr, obj, size, flags);
+	ret = mr->ops->init_object(mr, obj, size, 0, flags);
 	if (ret)
 		goto object_free;
 
