@@ -2665,7 +2665,11 @@
 		disp_dpi1: disp_dpi1@1c112000 {
 			compatible = "mediatek,mt8195-dpi";
 			reg = <0 0x1c112000 0 0x1000>;
-			interrupts = <GIC_SPI 512 IRQ_TYPE_LEVEL_HIGH>;
+			mediatek,vdosys1-dpi = <&vdosys1 0x0>;
+			interrupts = <GIC_SPI 512 IRQ_TYPE_LEVEL_HIGH 0>;
+			power-domains = <&spm MT8195_POWER_DOMAIN_VDOSYS1>;
+			clocks = <&vdosys1 CLK_VDO1_DPI1>,
+				 <&vdosys1 CLK_VDO1_DPI1_MM>;
 			clock-names = "pixel", "engine";
 			status = "disabled";
 		};
