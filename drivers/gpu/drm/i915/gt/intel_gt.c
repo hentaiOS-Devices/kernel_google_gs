@@ -869,13 +869,13 @@ void intel_gt_invalidate_tlbs(struct intel_gt *gt)
 	if (I915_SELFTEST_ONLY(gt->awake == -ENODEV))
 		return;
 
-	if (INTEL_GEN(i915) == 12) {
+	if (GRAPHICS_VER(i915) == 12) {
 		regs = gen12_regs;
 		num = ARRAY_SIZE(gen12_regs);
-	} else if (INTEL_GEN(i915) >= 8 && INTEL_GEN(i915) <= 11) {
+	} else if (GRAPHICS_VER(i915) >= 8 && GRAPHICS_VER(i915) <= 11) {
 		regs = gen8_regs;
 		num = ARRAY_SIZE(gen8_regs);
-	} else if (INTEL_GEN(i915) < 8) {
+	} else if (GRAPHICS_VER(i915) < 8) {
 		return;
 	}
 
