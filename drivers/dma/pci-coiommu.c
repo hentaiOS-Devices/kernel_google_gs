@@ -55,19 +55,38 @@ static void sync_notify(struct coiommu_dev *cidev, u64 data)
 {
 	unsigned long flags;
 	struct coiommu_notify_info *info;
-	u64 id;
+	unsigned long timeout;
+	u64 id, busy;
 
 	local_irq_save(flags);
 
 	id = smp_processor_id();
 	info = cidev->notify_map + id;
 
+	busy = readq((void *__iomem)info);
+	if (busy) {
+		pr_err("%s: coiommu unexpected busy on CPU%lld: notify info 0x%llx\n",
+			__func__, id, busy);
+		local_irq_restore(flags);
+		return;
+	}
+
 	writeq(data, (void *__iomem)info);
 
 	writeb(1, (void *__iomem)(cidev->mmio_info->triggers + id));
 
-	while (readq((void *__iomem)info))
-		continue;
+	/*
+	 * Set a timeout in case the backend coiommu cannot complete
+	 * the request.
+	 */
+	timeout = READ_ONCE(jiffies) + msecs_to_jiffies(5000);
+	while (readq((void *__iomem)info)) {
+		if (time_after(READ_ONCE(jiffies), timeout)) {
+			pr_err("%s: coIOMMU timeout waiting for complete\n",
+				__func__);
+			break;
+		}
+	}
 
 	local_irq_restore(flags);
 }
