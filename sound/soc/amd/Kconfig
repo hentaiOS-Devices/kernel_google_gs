@@ -61,3 +61,5 @@ config SND_AMD_ACP_CONFIG
 	help
 	 This option adds an auto detection to determine which ACP
 	 driver modules to use
+
+source "sound/soc/amd/acp/Kconfig"
