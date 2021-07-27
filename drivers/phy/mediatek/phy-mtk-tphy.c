@@ -1263,6 +1263,8 @@ static int mtk_tphy_probe(struct platform_device *pdev)
 		}
 	}
 
+	device_init_wakeup(dev, true);
+
 	provider = devm_of_phy_provider_register(dev, mtk_phy_xlate);
 
 	return PTR_ERR_OR_ZERO(provider);
