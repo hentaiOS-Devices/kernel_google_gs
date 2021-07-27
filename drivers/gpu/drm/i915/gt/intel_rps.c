@@ -1876,7 +1876,8 @@ void intel_rps_init(struct intel_rps *rps)
 	if (GRAPHICS_VER(i915) >= 8 && GRAPHICS_VER(i915) < 11)
 		rps->pm_intrmsk_mbz |= GEN8_PMINTR_DISABLE_REDIRECT_TO_GUC;
 
-	if (intel_uc_uses_guc(&i915->gt.uc))
+	/* GuC needs ARAT expired interrupt unmasked */
+	if (intel_uc_uses_guc_submission(&rps_to_gt(rps)->uc))
 		rps->pm_intrmsk_mbz |= ARAT_EXPIRED_INTRMSK;
 }
 
