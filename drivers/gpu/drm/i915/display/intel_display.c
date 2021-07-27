@@ -13093,7 +13093,7 @@ static void intel_early_display_was(struct drm_i915_private *dev_priv)
 	}
 
 	if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_B0)) {
-		uint32_t val;
+		u32 val;
 
 		/*
 		 * Wa_16011069516:adl-p[a0]
@@ -13107,7 +13107,7 @@ static void intel_early_display_was(struct drm_i915_private *dev_priv)
 		val = intel_de_read(dev_priv, TRANS_CMTG_CHICKEN);
 		val = intel_de_read(dev_priv, TRANS_CMTG_CHICKEN);
 		intel_de_write(dev_priv, TRANS_CMTG_CHICKEN, DISABLE_DPT_CLK_GATING);
-		drm_WARN_ON(&dev_priv->drm, val &~ DISABLE_DPT_CLK_GATING);
+		drm_WARN_ON(&dev_priv->drm, val & ~DISABLE_DPT_CLK_GATING);
 	}
 }
 
