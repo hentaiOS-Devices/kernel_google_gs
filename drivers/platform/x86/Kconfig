@@ -634,6 +634,7 @@ config THINKPAD_ACPI
 	depends on BACKLIGHT_CLASS_DEVICE
 	depends on DRM
 	select DRM_PRIVACY_SCREEN
+	depends on I2C
 	select HWMON
 	select NVRAM
 	select NEW_LEDS
@@ -816,6 +817,7 @@ config INTEL_HID_EVENT
 	tristate "INTEL HID Event"
 	depends on ACPI
 	depends on INPUT
+	depends on I2C
 	select INPUT_SPARSEKMAP
 	help
 	  This driver provides support for the Intel HID Event hotkey interface.
@@ -867,6 +869,7 @@ config INTEL_VBTN
 	tristate "INTEL VIRTUAL BUTTON"
 	depends on ACPI
 	depends on INPUT
+	depends on I2C
 	select INPUT_SPARSEKMAP
 	help
 	  This driver provides support for the Intel Virtual Button interface.
