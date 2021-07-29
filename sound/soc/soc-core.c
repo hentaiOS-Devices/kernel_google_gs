@@ -2876,7 +2876,7 @@ unsigned int snd_soc_of_parse_daifmt(struct device_node *np,
 				     struct device_node **bitclkmaster,
 				     struct device_node **framemaster)
 {
-	int ret, i;
+	int ret;
 	char prop[128];
 	unsigned int format = 0;
 	int bit, frame;
@@ -2910,6 +2910,8 @@ unsigned int snd_soc_of_parse_daifmt(struct device_node *np,
 		ret = of_property_read_string(np, prop, &str);
 	}
 	if (ret == 0) {
+		int i;
+
 		for (i = 0; i < ARRAY_SIZE(of_fmt_table); i++) {
 			if (strcmp(str, of_fmt_table[i].name) == 0) {
 				format |= of_fmt_table[i].val;
