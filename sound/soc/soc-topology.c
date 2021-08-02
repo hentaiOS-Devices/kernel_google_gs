@@ -1052,7 +1052,6 @@ err_denum:
 static int soc_tplg_kcontrol_elems_load(struct soc_tplg *tplg,
 	struct snd_soc_tplg_hdr *hdr)
 {
-	struct snd_soc_tplg_ctl_hdr *control_hdr;
 	int ret;
 	int i;
 
@@ -1060,8 +1059,7 @@ static int soc_tplg_kcontrol_elems_load(struct soc_tplg *tplg,
 		soc_tplg_get_offset(tplg));
 
 	for (i = 0; i < le32_to_cpu(hdr->count); i++) {
-
-		control_hdr = (struct snd_soc_tplg_ctl_hdr *)tplg->pos;
+		struct snd_soc_tplg_ctl_hdr *control_hdr = (struct snd_soc_tplg_ctl_hdr *)tplg->pos;
 
 		if (le32_to_cpu(control_hdr->size) != sizeof(*control_hdr)) {
 			dev_err(tplg->dev, "ASoC: invalid control size\n");
