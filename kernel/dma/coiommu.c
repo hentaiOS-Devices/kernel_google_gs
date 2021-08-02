@@ -34,9 +34,33 @@ static inline unsigned int dtt_level_to_offset(unsigned long pfn,
 	return (pfn >> offset) & COIOMMU_UPPER_LEVEL_MASK;
 }
 
-static void *dtt_alloc_page(void)
+static void *dtt_alloc_page(struct coiommu_dtt *dtt)
 {
-	return (void *)get_zeroed_page(GFP_ATOMIC | __GFP_ACCOUNT);
+	struct dtt_page_cache *c;
+	unsigned long flags;
+	void *obj = NULL;
+
+	spin_lock_irqsave(&dtt->alloc_lock, flags);
+	c = &dtt->cache[dtt->cur_cache];
+	if (!c->nobjs) {
+		/*
+		 * get the page directly
+		 */
+		obj = (void *)get_zeroed_page(GFP_ATOMIC | __GFP_ACCOUNT);
+		if (!obj)
+			pr_err("%s: coiommu failed to alloc dtt page\n",
+				__func__);
+	} else {
+		obj = c->objects[--c->nobjs];
+		if (!c->nobjs)
+			/*
+			 * Prepare the next cache by waking up the alloc work
+			 */
+			kthread_queue_work(dtt->worker, &dtt->alloc_work);
+	}
+
+	spin_unlock_irqrestore(&dtt->alloc_lock, flags);
+	return obj;
 }
 
 static struct dtt_leaf_entry *pfn_to_dtt_pte(struct coiommu_dtt *dtt,
@@ -56,7 +80,7 @@ static struct dtt_leaf_entry *pfn_to_dtt_pte(struct coiommu_dtt *dtt,
 		if (!parent_pte_present(parent_pte)) {
 			if (!alloc)
 				break;
-			pt = dtt_alloc_page();
+			pt = dtt_alloc_page(dtt);
 			if (!pt)
 				break;
 			pteval = parent_pte_value(pt);
@@ -675,9 +699,73 @@ static void dtt_root_free(struct coiommu_dtt *dtt)
 	dtt->level = 0;
 }
 
+static int populate_dtt_page_cache(struct dtt_page_cache *c,
+				   int count, gfp_t gfp_mask)
+{
+	void *obj;
+
+	while (c->nobjs < count) {
+		obj = (void *)get_zeroed_page(gfp_mask);
+		if (!obj)
+			break;
+		c->objects[c->nobjs++] = obj;
+	}
+
+	return c->nobjs;
+}
+
+static void dtt_page_cache_free(struct coiommu_dtt *dtt)
+{
+	struct dtt_page_cache *c;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dtt->cache); i++) {
+		c = &dtt->cache[i];
+		while (c->nobjs)
+			free_page((unsigned long)c->objects[--c->nobjs]);
+	}
+}
+
+static int dtt_page_cache_alloc(struct coiommu_dtt *dtt)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dtt->cache); i++) {
+		if (!populate_dtt_page_cache(&dtt->cache[i],
+				COIOMMU_INFO_NR_OBJS, GFP_KERNEL_ACCOUNT)) {
+			goto free;
+		}
+	}
+
+	return 0;
+free:
+	dtt_page_cache_free(dtt);
+	return -ENOMEM;
+}
+
+static void alloc_dtt_pages(struct kthread_work *work)
+{
+	struct coiommu_dtt *dtt =
+		container_of(work, struct coiommu_dtt, alloc_work);
+	int prev_cache = dtt->cur_cache;
+	unsigned long flags;
+	int nobjs;
+
+	spin_lock_irqsave(&dtt->alloc_lock, flags);
+	dtt->cur_cache = !dtt->cur_cache;
+	spin_unlock_irqrestore(&dtt->alloc_lock, flags);
+
+	nobjs = populate_dtt_page_cache(&dtt->cache[prev_cache],
+			COIOMMU_INFO_NR_OBJS, GFP_KERNEL_ACCOUNT);
+	if (nobjs != COIOMMU_INFO_NR_OBJS)
+		pr_warn("%s: coiommu: cache%d supposed to get %d pages but got %d\n",
+			__func__, prev_cache, COIOMMU_INFO_NR_OBJS, nobjs);
+}
+
 int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 {
 	struct coiommu_dtt *dtt;
+	int ret;
 
 	if (!global_coiommu) {
 		pr_err("%s: coiommu not exists\n", __func__);
@@ -689,6 +777,18 @@ int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 	if (!dtt->root)
 		return -ENOMEM;
 	dtt->level = get_dtt_level();
+
+	ret = dtt_page_cache_alloc(dtt);
+	if (ret)
+		goto free_root;
+	dtt->cur_cache = 0;
+
+	dtt->worker = kthread_create_worker(0, "coiommu_pagecache_alloc");
+	if (IS_ERR(dtt->worker)) {
+		ret = PTR_ERR(dtt->worker);
+		goto free_page_cache;
+	}
+	kthread_init_work(&dtt->alloc_work, alloc_dtt_pages);
 
 	if (dtt_addr)
 		*dtt_addr = (u64)__pa(dtt->root);
@@ -706,6 +806,14 @@ int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 		__func__, dtt->max_map_count);
 
 	return 0;
+
+free_page_cache:
+	dtt_page_cache_free(dtt);
+free_root:
+	free_page((unsigned long)dtt->root);
+	dtt->root = NULL;
+	pr_err("%s: failed with error %d\n", __func__, ret);
+	return ret;
 }
 
 void coiommu_disable_dtt(void)
@@ -721,6 +829,8 @@ void coiommu_disable_dtt(void)
 		return;
 
 	write_lock_irqsave(&dtt->lock, flags);
+	kthread_destroy_worker(dtt->worker);
+	dtt_page_cache_free(dtt);
 	dtt_root_free(dtt);
 	write_unlock_irqrestore(&dtt->lock, flags);
 }
@@ -758,5 +868,6 @@ void coiommu_init(unsigned short ep_count, unsigned short *endpoints)
 		return;
 
 	rwlock_init(&global_coiommu->dtt.lock);
+	spin_lock_init(&global_coiommu->dtt.alloc_lock);
 	coiommu_set_endpoints(global_coiommu, ep_count, endpoints);
 }

@@ -3,12 +3,25 @@
 #define __COIOMMU_H
 
 #include <linux/rwlock.h>
+#include <linux/kthread.h>
+
+#define COIOMMU_INFO_NR_OBJS 64
+
+struct dtt_page_cache {
+	int nobjs;
+	void *objects[COIOMMU_INFO_NR_OBJS];
+};
 
 struct coiommu_dtt {
 	void *root;
 	unsigned int level;
 	int max_map_count;
 	rwlock_t lock;
+	spinlock_t alloc_lock;
+	int cur_cache;
+	struct kthread_worker *worker;
+	struct kthread_work alloc_work;
+	struct dtt_page_cache cache[2];
 };
 
 struct coiommu {
@@ -20,6 +33,7 @@ struct coiommu {
 };
 
 #define dtt_to_coiommu(v) container_of(v, struct coiommu, dtt)
+
 #define COIOMMU_UPPER_LEVEL_STRIDE	9
 #define COIOMMU_UPPER_LEVEL_MASK	(((u64)1 << COIOMMU_UPPER_LEVEL_STRIDE) - 1)
 #define COIOMMU_PT_LEVEL_STRIDE		10
