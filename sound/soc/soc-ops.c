@@ -904,8 +904,7 @@ int snd_soc_put_xr_sx(struct snd_kcontrol *kcontrol,
 	unsigned long mask = (1UL<<mc->nbits)-1;
 	long max = mc->max;
 	long val = ucontrol->value.integer.value[0];
-	unsigned int i, regval, regmask;
-	int err;
+	unsigned int i;
 
 	if (val < mc->min || val > mc->max)
 		return -EINVAL;
@@ -913,10 +912,10 @@ int snd_soc_put_xr_sx(struct snd_kcontrol *kcontrol,
 		val = max - val;
 	val &= mask;
 	for (i = 0; i < regcount; i++) {
-		regval = (val >> (regwshift*(regcount-i-1))) & regwmask;
-		regmask = (mask >> (regwshift*(regcount-i-1))) & regwmask;
-		err = snd_soc_component_update_bits(component, regbase+i,
-				regmask, regval);
+		unsigned int regval = (val >> (regwshift*(regcount-i-1))) & regwmask;
+		unsigned int regmask = (mask >> (regwshift*(regcount-i-1))) & regwmask;
+		int err = snd_soc_component_update_bits(component, regbase+i,
+							regmask, regval);
 		if (err < 0)
 			return err;
 	}
