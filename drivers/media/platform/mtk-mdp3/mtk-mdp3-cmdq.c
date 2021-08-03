@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
 
@@ -10,12 +10,7 @@
 #include "mtk-mdp3-core.h"
 #include "mtk-mdp3-m2m.h"
 
-#include "mdp-platform.h"
-#include "mmsys_mutex.h"
 #include "mtk-mdp3-debug.h"
-
-#define DISP_MUTEX_MDP_FIRST	(5)
-#define DISP_MUTEX_MDP_COUNT	(5)
 
 #define MDP_PATH_MAX_COMPS	IMG_MAX_COMPONENTS
 
@@ -30,7 +25,7 @@ struct mdp_path {
 };
 
 #define has_op(ctx, op) \
-	(ctx->comp->ops && (ctx)->comp->ops->op)
+	((ctx)->comp->ops && (ctx)->comp->ops->op)
 #define call_op(ctx, op, ...) \
 	(has_op(ctx, op) ? (ctx)->comp->ops->op(ctx, ##__VA_ARGS__) : 0)
 
@@ -51,16 +46,14 @@ static bool is_output_disable(const struct img_compparam *param, u32 count)
 
 static int mdp_path_subfrm_require(struct mdp_path_subfrm *subfrm,
 				   const struct mdp_path *path,
-				   struct mdp_cmd *cmd, u32 count)
+				   struct mmsys_cmdq_cmd *cmd, u32 count)
 {
 	const struct img_config *config = path->config;
 	const struct mdp_comp_ctx *ctx;
-	phys_addr_t mm_mutex = path->mdp_dev->mm_mutex.reg_base;
+	struct device *dev = &path->mdp_dev->pdev->dev;
+	struct mtk_mutex **mutex = path->mdp_dev->mdp_mutex;
 	s32 mutex_id = -1;
-	u32 mutex_sof = 0;
-	int mdp_color = 0;
 	int index;
-	u8 subsys_id = path->mdp_dev->mm_mutex.subsys_id;
 
 	/* Default value */
 	memset(subfrm, 0, sizeof(*subfrm));
@@ -86,49 +79,45 @@ static int mdp_path_subfrm_require(struct mdp_path_subfrm *subfrm,
 		 *  23 mdp_aal
 		 *  24 mdp_ccorr
 		 **********************************************/
-		case MDP_AAL0:
+		case MDP_COMP_AAL0:
 			subfrm->mutex_mod |= 1 << 23;
 			break;
-		case MDP_CCORR0:
+		case MDP_COMP_CCORR0:
 			subfrm->mutex_mod |= 1 << 24;
 			break;
-		case MDP_COLOR0:
-			if (mdp_color)
-				subfrm->mutex_mod |= 1 << 13;
-			break;
-		case MDP_WDMA:
+		case MDP_COMP_WDMA:
 			subfrm->mutex_mod |= 1 << 8;
-			subfrm->sofs[subfrm->num_sofs++] = MDP_WDMA;
+			subfrm->sofs[subfrm->num_sofs++] = MDP_COMP_WDMA;
 			break;
-		case MDP_WROT0:
+		case MDP_COMP_WROT0:
 			subfrm->mutex_mod |= 1 << 7;
-			subfrm->sofs[subfrm->num_sofs++] = MDP_WROT0;
+			subfrm->sofs[subfrm->num_sofs++] = MDP_COMP_WROT0;
 			break;
-		case MDP_TDSHP0:
+		case MDP_COMP_TDSHP0:
 			subfrm->mutex_mod |= 1 << 6;
-			subfrm->sofs[subfrm->num_sofs++] = MDP_TDSHP0;
+			subfrm->sofs[subfrm->num_sofs++] = MDP_COMP_TDSHP0;
 			break;
-		case MDP_SCL1:
+		case MDP_COMP_RSZ1:
 			subfrm->mutex_mod |= 1 << 5;
-			subfrm->sofs[subfrm->num_sofs++] = MDP_SCL1;
+			subfrm->sofs[subfrm->num_sofs++] = MDP_COMP_RSZ1;
 			break;
-		case MDP_SCL0:
+		case MDP_COMP_RSZ0:
 			subfrm->mutex_mod |= 1 << 4;
-			subfrm->sofs[subfrm->num_sofs++] = MDP_SCL0;
+			subfrm->sofs[subfrm->num_sofs++] = MDP_COMP_RSZ0;
 			break;
-		case MDP_RDMA0:
-			mutex_id = DISP_MUTEX_MDP_FIRST + 1;
+		case MDP_COMP_RDMA0:
+			mutex_id = MDP_PIPE_RDMA0;
 			subfrm->mutex_mod |= 1 << 2;
-			subfrm->sofs[subfrm->num_sofs++] = MDP_RDMA0;
+			subfrm->sofs[subfrm->num_sofs++] = MDP_COMP_RDMA0;
 			break;
-		case MDP_IMGI:
-			mutex_id = DISP_MUTEX_MDP_FIRST;
+		case MDP_COMP_ISP_IMGI:
+			mutex_id = MDP_PIPE_IMGI;
 			break;
-		case MDP_WPEI:
-			mutex_id = DISP_MUTEX_MDP_FIRST + 3;
+		case MDP_COMP_WPEI:
+			mutex_id = MDP_PIPE_WPEI;
 			break;
-		case MDP_WPEI2:
-			mutex_id = DISP_MUTEX_MDP_FIRST + 4;
+		case MDP_COMP_WPEI2:
+			mutex_id = MDP_PIPE_WPEI2;
 			break;
 		default:
 			break;
@@ -137,30 +126,27 @@ static int mdp_path_subfrm_require(struct mdp_path_subfrm *subfrm,
 
 	subfrm->mutex_id = mutex_id;
 	if (-1 == mutex_id) {
-		mdp_err("No mutex assigned");
+		dev_err(dev, "No mutex assigned");
 		return -EINVAL;
 	}
 
-	if (subfrm->mutex_mod) {
-		/* Set mutex modules */
-		MM_REG_WRITE(cmd, subsys_id, mm_mutex, MM_MUTEX_MOD,
-			     subfrm->mutex_mod, 0x07FFFFFF);
-		MM_REG_WRITE(cmd, subsys_id, mm_mutex, MM_MUTEX_SOF,
-			     mutex_sof, 0x00000007);
-	}
+	/* Set mutex modules */
+	if (subfrm->mutex_mod)
+		mtk_mutex_add_mod_by_cmdq(mutex[mutex_id], subfrm->mutex_mod, cmd);
+
 	return 0;
 }
 
 static int mdp_path_subfrm_run(const struct mdp_path_subfrm *subfrm,
 			       const struct mdp_path *path,
-			       struct mdp_cmd *cmd)
+			       struct mmsys_cmdq_cmd *cmd)
 {
-	phys_addr_t mm_mutex = path->mdp_dev->mm_mutex.reg_base;
+	struct device *dev = &path->mdp_dev->pdev->dev;
+	struct mtk_mutex **mutex = path->mdp_dev->mdp_mutex;
 	s32 mutex_id = subfrm->mutex_id;
-	u8 subsys_id = path->mdp_dev->mm_mutex.subsys_id;
 
 	if (-1 == mutex_id) {
-		mdp_err("Incorrect mutex id");
+		dev_err(dev, "Incorrect mutex id");
 		return -EINVAL;
 	}
 
@@ -171,25 +157,22 @@ static int mdp_path_subfrm_run(const struct mdp_path_subfrm *subfrm,
 		/* Clear SOF event for each engine */
 		for (index = 0; index < subfrm->num_sofs; index++) {
 			switch (subfrm->sofs[index]) {
-			case MDP_RDMA0:
+			case MDP_COMP_RDMA0:
 				MM_REG_CLEAR(cmd, RDMA0_SOF);
 				break;
-			case MDP_TDSHP0:
+			case MDP_COMP_TDSHP0:
 				MM_REG_CLEAR(cmd, TDSHP0_SOF);
 				break;
-			case MDP_SCL0:
+			case MDP_COMP_RSZ0:
 				MM_REG_CLEAR(cmd, RSZ0_SOF);
 				break;
-			case MDP_SCL1:
+			case MDP_COMP_RSZ1:
 				MM_REG_CLEAR(cmd, RSZ1_SOF);
 				break;
-			case MDP_WDMA:
+			case MDP_COMP_WDMA:
 				MM_REG_CLEAR(cmd, WDMA0_SOF);
 				break;
-			case MDP_WROT0:
-#if WROT0_DISP_SRAM_SHARING
-				MM_REG_WAIT_NO_CLEAR(cmd, WROT0_SRAM_READY);
-#endif
+			case MDP_COMP_WROT0:
 				MM_REG_CLEAR(cmd, WROT0_SOF);
 				break;
 			default:
@@ -198,28 +181,27 @@ static int mdp_path_subfrm_run(const struct mdp_path_subfrm *subfrm,
 		}
 
 		/* Enable the mutex */
-		MM_REG_WRITE(cmd, subsys_id, mm_mutex, MM_MUTEX_EN, 0x1,
-			     0x00000001);
+		mtk_mutex_enable_by_cmdq(mutex[mutex_id], cmd);
 
 		/* Wait SOF events and clear mutex modules (optional) */
 		for (index = 0; index < subfrm->num_sofs; index++) {
 			switch (subfrm->sofs[index]) {
-			case MDP_RDMA0:
+			case MDP_COMP_RDMA0:
 				MM_REG_WAIT(cmd, RDMA0_SOF);
 				break;
-			case MDP_TDSHP0:
+			case MDP_COMP_TDSHP0:
 				MM_REG_WAIT(cmd, TDSHP0_SOF);
 				break;
-			case MDP_SCL0:
+			case MDP_COMP_RSZ0:
 				MM_REG_WAIT(cmd, RSZ0_SOF);
 				break;
-			case MDP_SCL1:
+			case MDP_COMP_RSZ1:
 				MM_REG_WAIT(cmd, RSZ1_SOF);
 				break;
-			case MDP_WDMA:
+			case MDP_COMP_WDMA:
 				MM_REG_WAIT(cmd, WDMA0_SOF);
 				break;
-			case MDP_WROT0:
+			case MDP_COMP_WROT0:
 				MM_REG_WAIT(cmd, WROT0_SOF);
 				break;
 			default:
@@ -249,28 +231,24 @@ static int mdp_path_ctx_init(struct mdp_dev *mdp, struct mdp_path *path)
 	return 0;
 }
 
-static int mdp_path_config_subfrm(struct mdp_cmd *cmd, struct mdp_path *path,
-				  u32 count)
+static int mdp_path_config_subfrm(struct mmsys_cmdq_cmd *cmd,
+				  struct mdp_path *path, u32 count)
 {
 	struct mdp_path_subfrm subfrm;
 	const struct img_config *config = path->config;
-	const struct img_mmsys_ctrl *ctrl = &config->ctrls[count];
-	const struct img_mux *set;
+	struct device *mmsys_dev = path->mdp_dev->mdp_mmsys;
 	struct mdp_comp_ctx *ctx;
-	phys_addr_t mmsys = path->mdp_dev->mmsys.reg_base;
 	int index, ret;
-	u8 subsys_id = path->mdp_dev->mmsys.subsys_id;
 
 	/* Acquire components */
 	ret = mdp_path_subfrm_require(&subfrm, path, cmd, count);
 	if (ret)
 		return ret;
 	/* Enable mux settings */
-	for (index = 0; index < ctrl->num_sets; index++) {
-		set = &ctrl->sets[index];
-		MM_REG_WRITE_MASK(cmd, subsys_id, mmsys, set->reg, set->value,
-				  0xFFFFFFFF);
-	}
+	for (index = 0; index < (config->num_components - 1); index++)
+		mtk_mmsys_mdp_connect(mmsys_dev, cmd,
+				      path->comps[index].comp->id,
+				      path->comps[index + 1].comp->id);
 	/* Config sub-frame information */
 	for (index = (config->num_components - 1); index >= 0; index--) {
 		ctx = &path->comps[index];
@@ -301,15 +279,14 @@ static int mdp_path_config_subfrm(struct mdp_cmd *cmd, struct mdp_path *path,
 			return ret;
 	}
 	/* Disable mux settings */
-	for (index = 0; index < ctrl->num_sets; index++) {
-		set = &ctrl->sets[index];
-		MM_REG_WRITE_MASK(cmd, subsys_id, mmsys, set->reg, 0,
-				  0xFFFFFFFF);
-	}
+	for (index = 0; index < (config->num_components - 1); index++)
+		mtk_mmsys_mdp_disconnect(mmsys_dev, cmd,
+					 path->comps[index].comp->id,
+					 path->comps[index + 1].comp->id);
 	return 0;
 }
 
-static int mdp_path_config(struct mdp_dev *mdp, struct mdp_cmd *cmd,
+static int mdp_path_config(struct mdp_dev *mdp, struct mmsys_cmdq_cmd *cmd,
 			   struct mdp_path *path)
 {
 	const struct img_config *config = path->config;
@@ -360,6 +337,7 @@ static void mdp_auto_release_work(struct work_struct *work)
 				auto_release_work);
 	mdp = cb_param->mdp;
 
+	mtk_mutex_unprepare(mdp->mdp_mutex[MDP_PIPE_RDMA0]);
 	mdp_comp_clocks_off(&mdp->pdev->dev, cb_param->comps,
 			    cb_param->num_comps);
 
@@ -374,25 +352,27 @@ static void mdp_handle_cmdq_callback(struct cmdq_cb_data data)
 {
 	struct mdp_cmdq_cb_param *cb_param;
 	struct mdp_dev *mdp;
+	struct device *dev;
 
 	if (!data.data) {
-		mdp_err("%s:no callback data\n", __func__);
+		pr_info("%s:no callback data\n", __func__);
 		return;
 	}
 
 	cb_param = (struct mdp_cmdq_cb_param *)data.data;
 	mdp = cb_param->mdp;
+	dev = &mdp->pdev->dev;
 
 	if (cb_param->mdp_ctx)
 		mdp_m2m_job_finish(cb_param->mdp_ctx);
 
 #ifdef MDP_DEBUG
-	if (data.sta < 0) {
-		struct mdp_func_struct *p_func = mdp_get_func();
+		if (data.sta < 0) {
+				struct mdp_func_struct *p_func = mdp_get_func();
 
-		p_func->mdp_dump_mmsys_config();
-		mdp_dump_info(~0, 1);
-	}
+				p_func->mdp_dump_mmsys_config();
+				mdp_dump_info(~0, 1);
+		}
 #endif
 
 	if (cb_param->user_cmdq_cb) {
@@ -406,7 +386,8 @@ static void mdp_handle_cmdq_callback(struct cmdq_cb_data data)
 	cmdq_pkt_destroy(cb_param->pkt);
 	INIT_WORK(&cb_param->auto_release_work, mdp_auto_release_work);
 	if (!queue_work(mdp->clock_wq, &cb_param->auto_release_work)) {
-		mdp_err("%s:queue_work fail!\n", __func__);
+		dev_err(dev, "%s:queue_work fail!\n", __func__);
+		mtk_mutex_unprepare(mdp->mdp_mutex[MDP_PIPE_RDMA0]);
 		mdp_comp_clocks_off(&mdp->pdev->dev, cb_param->comps,
 				    cb_param->num_comps);
 
@@ -420,10 +401,11 @@ static void mdp_handle_cmdq_callback(struct cmdq_cb_data data)
 
 int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 {
-	struct mdp_cmd cmd;
-	struct mdp_path path;
+	struct mmsys_cmdq_cmd cmd;
+	struct mdp_path *path = NULL;
 	struct mdp_cmdq_cb_param *cb_param = NULL;
 	struct mdp_comp *comps = NULL;
+	struct device *dev = &mdp->pdev->dev;
 	int i, ret;
 
 	if (atomic_read(&mdp->suspended))
@@ -439,32 +421,39 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 	}
 	cmd.event = &mdp->event[0];
 
-	path.mdp_dev = mdp;
-	path.config = param->config;
-	path.param = param->param;
-	for (i = 0; i < param->param->num_outputs; i++) {
-		path.bounds[i].left = 0;
-		path.bounds[i].top = 0;
-		path.bounds[i].width =
-			param->param->outputs[i].buffer.format.width;
-		path.bounds[i].height =
-			param->param->outputs[i].buffer.format.height;
-		path.composes[i] = param->composes[i] ?
-			param->composes[i] : &path.bounds[i];
-	}
-
-	ret = mdp_path_ctx_init(mdp, &path);
-	if (ret) {
-		pr_info("%s mdp_path_ctx_init error\n", __func__);
+	path = kzalloc(sizeof(*path), GFP_KERNEL);
+	if (!path) {
+		ret = -ENOMEM;
 		goto err_destroy_pkt;
 	}
 
-	for (i = 0; i < param->config->num_components; i++)
-			mdp_comp_clock_on(&mdp->pdev->dev, path.comps[i].comp);
+	path->mdp_dev = mdp;
+	path->config = param->config;
+	path->param = param->param;
+	for (i = 0; i < param->param->num_outputs; i++) {
+		path->bounds[i].left = 0;
+		path->bounds[i].top = 0;
+		path->bounds[i].width =
+			param->param->outputs[i].buffer.format.width;
+		path->bounds[i].height =
+			param->param->outputs[i].buffer.format.height;
+		path->composes[i] = param->composes[i] ?
+			param->composes[i] : &path->bounds[i];
+	}
 
-	ret = mdp_path_config(mdp, &cmd, &path);
+	ret = mdp_path_ctx_init(mdp, path);
 	if (ret) {
-		pr_info("%s mdp_path_config error\n", __func__);
+		dev_err(dev, "mdp_path_ctx_init error\n");
+		goto err_destroy_pkt;
+	}
+
+	mtk_mutex_prepare(mdp->mdp_mutex[MDP_PIPE_RDMA0]);
+	for (i = 0; i < param->config->num_components; i++)
+		mdp_comp_clock_on(&mdp->pdev->dev, path->comps[i].comp);
+
+	ret = mdp_path_config(mdp, &cmd, path);
+	if (ret) {
+		dev_err(dev, "mdp_path_config error\n");
 		goto err_destroy_pkt;
 	}
 
@@ -482,7 +471,7 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 	}
 
 	for (i = 0; i < param->config->num_components; i++)
-		memcpy(&comps[i], path.comps[i].comp,
+		memcpy(&comps[i], path->comps[i].comp,
 		       sizeof(struct mdp_comp));
 	cb_param->mdp = mdp;
 	cb_param->user_cmdq_cb = param->cmdq_cb;
@@ -497,26 +486,29 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 				   mdp_handle_cmdq_callback,
 				   (void *)cb_param);
 	if (ret) {
-		mdp_err("%s:cmdq_pkt_flush_async fail!\n", __func__);
+		dev_err(dev, "cmdq_pkt_flush_async fail!\n");
 		goto err_clock_off;
 	}
 	return 0;
 
 err_clock_off:
+	mtk_mutex_unprepare(mdp->mdp_mutex[MDP_PIPE_RDMA0]);
 	mdp_comp_clocks_off(&mdp->pdev->dev, cb_param->comps,
-						cb_param->num_comps);
+			    cb_param->num_comps);
 err_destroy_pkt:
 	cmdq_pkt_destroy(cmd.pkt);
 	atomic_dec(&mdp->job_count);
 	wake_up(&mdp->callback_wq);
 	kfree(comps);
 	kfree(cb_param);
+	kfree(path);
 
 	return ret;
 }
 
 int mdp_cmdq_sendtask(struct platform_device *pdev, struct img_config *config,
-		      struct img_ipi_frameparam *param, struct v4l2_rect *compose,
+		      struct img_ipi_frameparam *param,
+		      struct v4l2_rect *compose,
 		      void (*cmdq_cb)(struct cmdq_cb_data data), void *cb_data)
 {
 	struct mdp_dev *mdp = platform_get_drvdata(pdev);
@@ -531,4 +523,3 @@ int mdp_cmdq_sendtask(struct platform_device *pdev, struct img_config *config,
 	return mdp_cmdq_send(mdp, &task);
 }
 EXPORT_SYMBOL_GPL(mdp_cmdq_sendtask);
-

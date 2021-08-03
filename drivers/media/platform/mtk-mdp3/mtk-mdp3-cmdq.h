@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
 
@@ -17,11 +17,6 @@ struct platform_device *mdp_get_plat_device(struct platform_device *pdev);
 int mdp_cmdq_sendtask(struct platform_device *pdev, struct img_config *config,
 		      struct img_ipi_frameparam *param, struct v4l2_rect *compose,
 		      void (*cmdq_cb)(struct cmdq_cb_data data), void *cb_data);
-
-struct mdp_cmd {
-	struct cmdq_pkt *pkt;
-	s32 *event;
-};
 
 struct mdp_cmdq_param {
 	struct img_config *config;
@@ -49,4 +44,3 @@ struct mdp_dev;
 int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param);
 
 #endif  /* __MTK_MDP3_CMDQ_H__ */
-

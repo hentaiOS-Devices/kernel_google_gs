@@ -273,7 +273,7 @@ config VIDEO_MEDIATEK_MDP
 
 config VIDEO_MEDIATEK_MDP3
 	tristate "Mediatek MDP v3 driver"
-	depends on MTK_IOMMU
+	depends on MTK_IOMMU || COMPLIE_TEST
 	depends on VIDEO_DEV && VIDEO_V4L2
 	depends on ARCH_MEDIATEK || COMPILE_TEST
 	depends on HAS_DMA

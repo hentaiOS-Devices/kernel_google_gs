@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Holmes Chiou <holmes.chiou@mediatek.com>
  *         Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
@@ -26,29 +26,29 @@
 struct img_timeval {
 	int32_t tv_sec;
 	int32_t tv_usec;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_addr {
 	u64 va; /* Used for Linux OS access */
 	u32 pa; /* Used for CM4 access */
 	u32 iova; /* Used for IOMMU HW access */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct tuning_addr {
 	u64	present;
 	u32	pa;	/* Used for CM4 access */
 	u32	iova;	/* Used for IOMMU HW access */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_sw_addr {
 	u64 va; /* Used for APMCU access */
 	u32 pa; /* Used for CM4 access */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_plane_format {
 	u32 size;
 	u16 stride;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_pix_format {
 	u16 width;
@@ -56,14 +56,14 @@ struct img_pix_format {
 	u32 colorformat; /* enum mdp_color */
 	u16 ycbcr_prof; /* enum mdp_ycbcr_profile */
 	struct img_plane_format plane_fmt[IMG_MAX_PLANES];
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_image_buffer {
 	struct img_pix_format format;
 	u32 iova[IMG_MAX_PLANES];
 	/* enum mdp_buffer_usage, FD or advanced ISP usages */
 	u32 usage;
-} __attribute__ ((__packed__));
+} __packed;
 
 #define IMG_SUBPIXEL_SHIFT	20
 
@@ -76,7 +76,7 @@ struct img_crop {
 	u32 top_subpix;
 	u32 width_subpix;
 	u32 height_subpix;
-} __attribute__ ((__packed__));
+} __packed;
 
 #define IMG_CTRL_FLAG_HFLIP	BIT(0)
 #define IMG_CTRL_FLAG_DITHER	BIT(1)
@@ -87,14 +87,14 @@ struct img_crop {
 struct img_input {
 	struct img_image_buffer buffer;
 	u16 flags; /* HDR, DRE, dither */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_output {
 	struct img_image_buffer buffer;
 	struct img_crop crop;
 	s16 rotation;
 	u16 flags; /* H-flip, sharpness, dither */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_ipi_frameparam {
 	u32 index;
@@ -111,17 +111,17 @@ struct img_ipi_frameparam {
 	struct img_addr subfrm_data;
 	struct img_sw_addr config_data;
 	struct img_sw_addr self_data;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_sw_buffer {
 	u64	handle;		/* Used for APMCU access */
 	u32	scp_addr;	/* Used for CM4 access */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_ipi_param {
 	u8 usage;
 	struct img_sw_buffer frm_param;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_frameparam {
 	struct list_head list_entry;
@@ -140,21 +140,21 @@ struct img_comp_frame {
 	struct img_crop crop;
 	u16 in_total_width;
 	u16 out_total_width;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_region {
 	s16 left;
 	s16 right;
 	s16 top;
 	s16 bottom;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_offset {
 	s16 left;
 	s16 top;
 	u32 left_subpix;
 	u32 top_subpix;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_comp_subfrm {
 	u32 tile_disable:1;
@@ -164,7 +164,7 @@ struct img_comp_subfrm {
 	struct img_offset chroma;
 	s16 out_vertical; /* Output vertical index */
 	s16 out_horizontal; /* Output horizontal index */
-} __attribute__ ((__packed__));
+} __packed;
 
 #define IMG_MAX_SUBFRAMES	14
 
@@ -174,7 +174,7 @@ struct mdp_rdma_subfrm {
 	u32 src;
 	u32 clip;
 	u32 clip_ofst;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_rdma_data {
 	u32 src_ctrl;
@@ -188,13 +188,13 @@ struct mdp_rdma_data {
 	u32 ufo_dec_c;
 	u32 transform;
 	struct mdp_rdma_subfrm subfrms[IMG_MAX_SUBFRAMES];
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_rsz_subfrm {
 	u32 control2;
 	u32 src;
 	u32 clip;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_rsz_data {
 	u32 coeff_step_x;
@@ -202,7 +202,7 @@ struct mdp_rsz_data {
 	u32 control1;
 	u32 control2;
 	struct mdp_rsz_subfrm subfrms[IMG_MAX_SUBFRAMES];
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_wrot_subfrm {
 	u32 offset[IMG_MAX_PLANES];
@@ -210,7 +210,7 @@ struct mdp_wrot_subfrm {
 	u32 clip;
 	u32 clip_ofst;
 	u32 main_buf;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_wrot_data {
 	u32 iova[IMG_MAX_PLANES];
@@ -220,14 +220,14 @@ struct mdp_wrot_data {
 	u32 fifo_test;
 	u32 filter;
 	struct mdp_wrot_subfrm subfrms[IMG_MAX_SUBFRAMES];
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_wdma_subfrm {
 	u32 offset[IMG_MAX_PLANES];
 	u32 src;
 	u32 clip;
 	u32 clip_ofst;
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_wdma_data {
 	u32 wdma_cfg;
@@ -235,7 +235,7 @@ struct mdp_wdma_data {
 	u32 w_in_byte;
 	u32 uv_stride;
 	struct mdp_wdma_subfrm subfrms[IMG_MAX_SUBFRAMES];
-} __attribute__ ((__packed__));
+} __packed;
 
 struct isp_data {
 	u64 dl_flags; /* 1 << (enum mdp_comp_type) */
@@ -243,11 +243,11 @@ struct isp_data {
 	u32 cq_idx;
 	u32 cq_iova;
 	u32 tpipe_iova[IMG_MAX_SUBFRAMES];
-} __attribute__ ((__packed__));
+} __packed;
 
 struct img_compparam {
 	u16 type; /* enum mdp_comp_type */
-	u16 id; /* enum mdp_comp_id */
+	u16 id; /* enum mtk_mdp_comp_id */
 	u32 input;
 	u32 outputs[IMG_MAX_HW_OUTPUTS];
 	u32 num_outputs;
@@ -261,7 +261,7 @@ struct img_compparam {
 		struct mdp_wdma_data wdma;
 		struct isp_data isp;
 	};
-} __attribute__ ((__packed__));
+} __packed;
 
 #define IMG_MAX_COMPONENTS	20
 
@@ -280,7 +280,6 @@ struct img_config {
 	u32 num_components;
 	struct img_mmsys_ctrl ctrls[IMG_MAX_SUBFRAMES];
 	u32 num_subfrms;
-} __attribute__ ((__packed__));
+} __packed;
 
 #endif  /* __MTK_IMG_IPI_H__ */
-

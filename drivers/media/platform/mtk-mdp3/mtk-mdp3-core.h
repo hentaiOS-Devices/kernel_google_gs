@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
 
@@ -9,6 +9,8 @@
 
 #include <media/v4l2-device.h>
 #include <media/v4l2-mem2mem.h>
+#include <linux/soc/mediatek/mtk-mmsys.h>
+#include <linux/soc/mediatek/mtk-mutex.h>
 #include "mtk-mdp3-comp.h"
 #include "mtk-mdp3-vpu.h"
 
@@ -22,65 +24,53 @@ enum mdp_buffer_usage {
 	MDP_BUFFER_USAGE_WPE,
 };
 
+struct mdp_platform_config {
+	bool	rdma_support_10bit;
+	bool	rdma_rsz1_sram_sharing;
+	bool	rdma_upsample_repeat_only;
+	bool	rsz_disable_dcm_small_sample;
+	bool	wrot_filter_constraint;
+	u32	gce_event_offset;
+};
+
+struct mtk_mdp_driver_data {
+	const struct mdp_platform_config *mdp_cfg;
+};
+
 struct mdp_dev {
-	struct platform_device	*pdev;
-	struct mdp_comp		mmsys;
-	struct mdp_comp		mm_mutex;
-	struct mdp_comp		*comp[MDP_MAX_COMP_COUNT];
-	s32			event[MDP_MAX_EVENT_COUNT];
+	struct platform_device			*pdev;
+	struct device				*mdp_mmsys;
+	struct mtk_mutex			*mdp_mutex[MDP_PIPE_MAX];
+	struct mdp_comp				*comp[MDP_MAX_COMP_COUNT];
+	const struct mtk_mdp_driver_data	*mdp_data;
+	s32					event[MDP_MAX_EVENT_COUNT];
 
-	struct workqueue_struct	*job_wq;
-	struct workqueue_struct	*clock_wq;
-	struct mdp_vpu_dev	vpu;
-	struct mtk_scp		*scp;
-	struct rproc		*rproc_handle;
+	struct workqueue_struct			*job_wq;
+	struct workqueue_struct			*clock_wq;
+	struct mdp_vpu_dev			vpu;
+	struct mtk_scp				*scp;
+	struct rproc				*rproc_handle;
 	/* synchronization protect for accessing vpu working buffer info */
-	struct mutex		vpu_lock;
-	s32			vpu_count;
-	u32			id_count;
-	struct ida		mdp_ida;
-	struct cmdq_client	*cmdq_clt;
-	wait_queue_head_t	callback_wq;
+	struct mutex				vpu_lock;
+	s32					vpu_count;
+	u32					id_count;
+	struct ida				mdp_ida;
+	struct cmdq_client			*cmdq_clt;
+	wait_queue_head_t			callback_wq;
 
-	struct v4l2_device	v4l2_dev;
-	struct video_device	*m2m_vdev;
-	struct v4l2_m2m_dev	*m2m_dev;
+	struct v4l2_device			v4l2_dev;
+	struct video_device			*m2m_vdev;
+	struct v4l2_m2m_dev			*m2m_dev;
 	/* synchronization protect for m2m device operation */
-	struct mutex		m2m_lock;
-	atomic_t		suspended;
-	atomic_t		job_count;
+	struct mutex				m2m_lock;
+	atomic_t				suspended;
+	atomic_t				job_count;
 };
 
 int mdp_vpu_get_locked(struct mdp_dev *mdp);
 void mdp_vpu_put_locked(struct mdp_dev *mdp);
 int mdp_vpu_register(struct mdp_dev *mdp);
 void mdp_vpu_unregister(struct mdp_dev *mdp);
-
-extern int mtk_mdp_debug;
-
-#define DEBUG
-#if defined(DEBUG)
-
-#define mdp_dbg(level, fmt, ...)\
-	do {\
-		if (mtk_mdp_debug >= (level))\
-			pr_info("[MTK-MDP3] %d %s:%d: " fmt,\
-				level, __func__, __LINE__, ##__VA_ARGS__);\
-	} while (0)
-
-#define mdp_err(fmt, ...)\
-	pr_err("[MTK-MDP3][ERR] %s:%d: " fmt, __func__, __LINE__,\
-		##__VA_ARGS__)
-
-#else
-
-#define mdp_dbg(level, fmt, ...)	do {} while (0)
-#define mdp_err(fmt, ...)		do {} while (0)
-
-#endif
-
-#define mdp_dbg_enter() mdp_dbg(3, "+")
-#define mdp_dbg_leave() mdp_dbg(3, "-")
+void mdp_video_device_release(struct video_device *vdev);
 
 #endif  /* __MTK_MDP3_CORE_H__ */
-

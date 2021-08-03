@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
 
@@ -29,13 +29,13 @@ struct mdp_ipi_init_msg {
 	u64	drv_data;
 	u32	work_addr;	/* [in] working buffer address */
 	u32	work_size;	/* [in] working buffer size */
-} __attribute__ ((__packed__));
+} __packed;
 
 struct mdp_ipi_deinit_msg {
 	u32	status;
 	u64	drv_data;
 	u32	work_addr;
-} __attribute__ ((__packed__));
+} __packed;
 
 enum mdp_config_id {
 	MDP_DEV_M2M = 0,
@@ -68,7 +68,7 @@ struct mdp_vpu_ctx {
 
 void mdp_vpu_shared_mem_free(struct mdp_vpu_dev *vpu);
 int mdp_vpu_dev_init(struct mdp_vpu_dev *vpu, struct mtk_scp *scp,
-		     struct mutex *lock);
+		     struct mutex *lock /* for sync */);
 int mdp_vpu_dev_deinit(struct mdp_vpu_dev *vpu);
 int mdp_vpu_ctx_init(struct mdp_vpu_ctx *ctx, struct mdp_vpu_dev *vpu,
 		     enum mdp_config_id id);
@@ -76,4 +76,3 @@ int mdp_vpu_ctx_deinit(struct mdp_vpu_ctx *ctx);
 int mdp_vpu_process(struct mdp_vpu_ctx *vpu, struct img_ipi_frameparam *param);
 
 #endif  /* __MTK_MDP3_VPU_H__ */
-
