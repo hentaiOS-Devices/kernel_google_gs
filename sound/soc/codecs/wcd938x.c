@@ -1360,7 +1360,6 @@ static int wcd938x_io_init(struct wcd938x_priv *wcd938x)
 
 static int wcd938x_sdw_connect_port(struct wcd938x_sdw_ch_info *ch_info,
 				    struct sdw_port_config *port_config,
-				    u32 mstr_port_num,
 				    u8 enable)
 {
 	u8 ch_mask, port_num;
@@ -1380,14 +1379,12 @@ static int wcd938x_sdw_connect_port(struct wcd938x_sdw_ch_info *ch_info,
 
 static int wcd938x_connect_port(struct wcd938x_sdw_priv *wcd, u8 ch_id, u8 enable)
 {
-	u8 port_num, mstr_port_num;
+	u8 port_num;
 
 	port_num = wcd->ch_info[ch_id].port_num;
-	mstr_port_num = wcd->port_map[port_num - 1];
 
 	return wcd938x_sdw_connect_port(&wcd->ch_info[ch_id],
 					&wcd->port_config[port_num],
-					mstr_port_num,
 					enable);
 }
 
@@ -3317,13 +3314,6 @@ static int wcd938x_soc_codec_probe(struct snd_soc_component *component)
 			     (WCD938X_DIGITAL_INTR_LEVEL_0 + i), 0);
 	}
 
-	ret = wcd938x_irq_init(wcd938x, component->dev);
-	if (ret) {
-		dev_err(component->dev, "%s: IRQ init failed: %d\n",
-			__func__, ret);
-		return ret;
-	}
-
 	wcd938x->hphr_pdm_wd_int = regmap_irq_get_virq(wcd938x->irq_chip,
 						       WCD938X_IRQ_HPHR_PDM_WD_INT);
 	wcd938x->hphl_pdm_wd_int = regmap_irq_get_virq(wcd938x->irq_chip,
@@ -3553,7 +3543,6 @@ static int wcd938x_bind(struct device *dev)
 	}
 	wcd938x->sdw_priv[AIF1_PB] = dev_get_drvdata(wcd938x->rxdev);
 	wcd938x->sdw_priv[AIF1_PB]->wcd938x = wcd938x;
-	wcd938x->sdw_priv[AIF1_PB]->slave_irq = wcd938x->virq;
 
 	wcd938x->txdev = wcd938x_sdw_device_get(wcd938x->txnode);
 	if (!wcd938x->txdev) {
@@ -3562,7 +3551,6 @@ static int wcd938x_bind(struct device *dev)
 	}
 	wcd938x->sdw_priv[AIF1_CAP] = dev_get_drvdata(wcd938x->txdev);
 	wcd938x->sdw_priv[AIF1_CAP]->wcd938x = wcd938x;
-	wcd938x->sdw_priv[AIF1_CAP]->slave_irq = wcd938x->virq;
 	wcd938x->tx_sdw_dev = dev_to_sdw_dev(wcd938x->txdev);
 	if (!wcd938x->tx_sdw_dev) {
 		dev_err(dev, "could not get txslave with matching of dev\n");
@@ -3594,6 +3582,15 @@ static int wcd938x_bind(struct device *dev)
 		dev_err(dev, "%s: tx csr regmap not found\n", __func__);
 		return PTR_ERR(wcd938x->regmap);
 	}
+
+	ret = wcd938x_irq_init(wcd938x, dev);
+	if (ret) {
+		dev_err(dev, "%s: IRQ init failed: %d\n", __func__, ret);
+		return ret;
+	}
+
+	wcd938x->sdw_priv[AIF1_PB]->slave_irq = wcd938x->virq;
+	wcd938x->sdw_priv[AIF1_CAP]->slave_irq = wcd938x->virq;
 
 	ret = wcd938x_set_micbias_data(wcd938x);
 	if (ret < 0) {
