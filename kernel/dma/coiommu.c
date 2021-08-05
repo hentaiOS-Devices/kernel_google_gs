@@ -11,6 +11,8 @@
 #include <linux/pci.h>
 #include <linux/dma-map-ops.h>
 #include <linux/coiommu_dev.h>
+#include <linux/coiommu.h>
+#include <linux/iommu.h>
 #include "coiommu.h"
 #include "direct.h"
 
@@ -18,7 +20,7 @@ static struct coiommu *global_coiommu;
 
 static inline struct coiommu_dtt *get_coiommu_dtt(struct device *dev)
 {
-	return NULL;
+	return (struct coiommu_dtt *)dev_iommu_priv_get(dev);
 }
 
 static inline unsigned int dtt_level_to_offset(unsigned long pfn,
@@ -762,6 +764,50 @@ static void alloc_dtt_pages(struct kthread_work *work)
 			__func__, prev_cache, COIOMMU_INFO_NR_OBJS, nobjs);
 }
 
+static int coiommu_setup_endpoint(struct device *dev)
+{
+	struct coiommu *coiommu = NULL;
+	int i;
+
+	if (!global_coiommu || !global_coiommu->endpoints)
+		return 0;
+
+	for (i = 0; i < global_coiommu->ep_count; i++) {
+		if (get_pci_device_id(dev) == global_coiommu->endpoints[i]) {
+			coiommu = global_coiommu;
+			break;
+		}
+	}
+
+	/*
+	 * Device is not on top of coIOMMU, so no need to setup
+	 */
+	if (!coiommu)
+		return 0;
+
+	if (!coiommu->dev_ops) {
+		dev_info(dev, "%s: probe earlier than coiommu, deferred\n", __func__);
+		return -EPROBE_DEFER;
+	}
+
+	if (dev->iommu) {
+		if (dev_iommu_priv_get(dev)) {
+			dev_err(dev, "%s: already translated by other iommu?\n", __func__);
+			return -EINVAL;
+		}
+	} else {
+		dev->iommu = kzalloc(sizeof(struct dev_iommu), GFP_KERNEL);
+		if (!dev->iommu)
+			return -ENOMEM;
+		mutex_init(&dev->iommu->lock);
+	}
+
+	dev_iommu_priv_set(dev, (void *)&coiommu->dtt);
+	set_dma_ops(dev, &coiommu_ops);
+
+	return 0;
+}
+
 int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 {
 	struct coiommu_dtt *dtt;
@@ -833,6 +879,40 @@ void coiommu_disable_dtt(void)
 	dtt_page_cache_free(dtt);
 	dtt_root_free(dtt);
 	write_unlock_irqrestore(&dtt->lock, flags);
+}
+
+int coiommu_setup_dev_ops(const struct coiommu_dev_ops *ops, void *dev)
+{
+	if (!global_coiommu)
+		return -ENODEV;
+
+	/*
+	 * If this is not the first time to set up the
+	 * dev ops, means coiommu is already occupied
+	 * by the driver, and be here because the coiommu
+	 * is removed and re-probed again. Doing so cannot
+	 * bring the coiommu back because removing already
+	 * cleared the DTT which contains the previous mapping
+	 * and pinning status.
+	 */
+	if (global_coiommu->dev_ops)
+		return -EBUSY;
+
+	global_coiommu->dev_ops = ops;
+	global_coiommu->dev = dev;
+
+	return 0;
+}
+
+int coiommu_configure(struct device *dev)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+
+	if (pdev->vendor == PCI_VENDOR_ID_COIOMMU &&
+		pdev->device == PCI_DEVICE_ID_COIOMMU)
+		return 0;
+
+	return coiommu_setup_endpoint(dev);
 }
 
 static void coiommu_set_endpoints(struct coiommu *coiommu,

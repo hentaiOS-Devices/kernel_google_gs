@@ -84,6 +84,7 @@ config COIOMMU
 	bool
 	depends on HAS_DMA
 	select DMA_OPS
+	select IOMMU_API
 
 config SWIOTLB
 	bool

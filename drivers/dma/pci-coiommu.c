@@ -7,8 +7,6 @@
 #include <linux/mutex.h>
 #include <linux/coiommu_dev.h>
 
-#define PCI_VENDOR_ID_COIOMMU	0x1234
-#define PCI_DEVICE_ID_COIOMMU	0xabcd
 #define COIOMMU_MMIO_BAR	0
 #define COIOMMU_NOTIFY_BAR	2
 #define COIOMMU_TOPOLOGY_BAR	4
@@ -174,9 +172,19 @@ static int pci_coiommu_probe(struct pci_dev *dev, const struct pci_device_id *id
 	coiommu_execute_cmd(COIOMMU_CMD_ACTIVATE,
 			(void *__iomem)&cidev->mmio_info->command);
 
+	/* The last step to enable coiommu */
+	ret = coiommu_setup_dev_ops(&dev_ops, cidev);
+	if (ret)
+		goto deactivate;
+
 	dev_set_drvdata(&dev->dev, cidev);
 
 	return 0;
+
+deactivate:
+	coiommu_execute_cmd(COIOMMU_CMD_DEACTIVATE,
+			(void *__iomem)&cidev->mmio_info->command);
+	coiommu_disable_dtt();
 free_notify:
 	pci_iounmap(dev, cidev->notify_map);
 free_mmio:
