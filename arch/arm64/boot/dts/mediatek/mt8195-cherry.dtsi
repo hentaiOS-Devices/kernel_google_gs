@@ -412,6 +412,10 @@
 	regulator-always-on;
 };
 
+&mt6359_vufs_ldo_reg {
+	regulator-always-on;
+};
+
 &mt6359codec {
 	mediatek,dmic-mode = <1>; /* one-wire */
 	mediatek,mic-type-0 = <2>; /* DMIC */
