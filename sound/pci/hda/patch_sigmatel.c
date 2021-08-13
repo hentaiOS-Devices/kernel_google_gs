@@ -4484,7 +4484,6 @@ static const struct hda_codec_ops stac_patch_ops = {
 	.suspend = stac_suspend,
 	.check_power_status = stac_check_power_status,
 #endif
-	.reboot_notify = stac_shutup,
 };
 
 static int alloc_stac_spec(struct hda_codec *codec)
