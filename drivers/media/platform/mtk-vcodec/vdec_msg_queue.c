@@ -14,6 +14,7 @@
 
 #define VDEC_LAT_SLICE_HEADER_SZ    (640 * 1024)
 #define VDEC_ERR_MAP_SZ_AVC         ((8192 / 16) * (4352 / 16) / 8)
+#define VDEC_LAT_ROY_BUF_SZ    (4 * 1024 * 1024)
 
 static int vde_msg_queue_get_trans_size(int width, int height)
 {
@@ -63,6 +64,15 @@ int vdec_msg_queue_init(
 		if (err) {
 			mtk_v4l2_err("failed to allocate wdma_addr buf[%d]", i);
 			return -ENOMEM;
+		}
+
+		if (ctx->dev->vdec_pdata->hw_arch == MTK_VDEC_LAT_DUAL_CORE) {
+			lat_buf->roy_buf_addr.size = VDEC_LAT_ROY_BUF_SZ;
+			err = mtk_vcodec_mem_alloc(ctx, &lat_buf->roy_buf_addr);
+			if (err) {
+				mtk_v4l2_err("failed to allocate roy_buf_addr[%d]", i);
+				return -ENOMEM;
+			}
 		}
 
 		lat_buf->private_data = kzalloc(private_size, GFP_KERNEL);
@@ -225,6 +235,12 @@ void vdec_msg_queue_deinit(
 		mem = &lat_buf->slice_bc_addr;
 		if (mem->va)
 			mtk_vcodec_mem_free(ctx, mem);
+
+		if (ctx->dev->vdec_pdata->hw_arch == MTK_VDEC_LAT_DUAL_CORE) {
+			mem = &lat_buf->roy_buf_addr;
+			if (mem->va)
+				mtk_vcodec_mem_free(ctx, mem);
+		}
 
 		if (lat_buf->private_data)
 			kfree(lat_buf->private_data);

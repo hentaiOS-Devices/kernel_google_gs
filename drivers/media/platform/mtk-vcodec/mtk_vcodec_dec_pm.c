@@ -230,6 +230,12 @@ void mtk_vcodec_dec_enable_hardware(struct mtk_vcodec_ctx *ctx,
 	mtk_vcodec_dec_enable_irq(ctx->dev, comp_idx);
 
 	if (VDEC_LAT_ARCH(ctx->dev->vdec_pdata->hw_arch) &&
+		comp_idx == MTK_VDEC_CORE) {
+		mtk_vcodec_dec_pw_on(ctx->dev, MTK_VDEC_CORE1);
+		mtk_vcodec_dec_clock_on(ctx->dev, MTK_VDEC_CORE1);
+	}
+
+	if (VDEC_LAT_ARCH(ctx->dev->vdec_pdata->hw_arch) &&
 		comp_idx != MTK_VDEC_CORE) {
 		mtk_vcodec_dec_pw_on(ctx->dev, MTK_VDEC_LAT_SOC);
 		mtk_vcodec_dec_clock_on(ctx->dev, MTK_VDEC_LAT_SOC);
@@ -245,6 +251,12 @@ void mtk_vcodec_dec_disable_hardware(struct mtk_vcodec_ctx *ctx,
 		comp_idx != MTK_VDEC_CORE) {
 		mtk_vcodec_dec_clock_off(ctx->dev, MTK_VDEC_LAT_SOC);
 		mtk_vcodec_dec_pw_off(ctx->dev, MTK_VDEC_LAT_SOC);
+	}
+
+	if (VDEC_LAT_ARCH(ctx->dev->vdec_pdata->hw_arch) &&
+		comp_idx == MTK_VDEC_CORE) {
+		mtk_vcodec_dec_clock_off(ctx->dev, MTK_VDEC_CORE1);
+		mtk_vcodec_dec_pw_off(ctx->dev, MTK_VDEC_CORE1);
 	}
 	mtk_vcodec_dec_clock_off(ctx->dev, comp_idx);
 	mtk_vcodec_dec_pw_off(ctx->dev, comp_idx);

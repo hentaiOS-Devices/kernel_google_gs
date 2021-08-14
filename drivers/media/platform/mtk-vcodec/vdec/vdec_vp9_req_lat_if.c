@@ -1026,8 +1026,8 @@ static int vdec_vp9_slice_setup_lat_buffer(
 	vsi->err_map.dma_addr = lat_buf->wdma_err_addr.dma_addr;
 	vsi->err_map.size = lat_buf->wdma_err_addr.size;
 
-	vsi->row_info.buf = 0;
-	vsi->row_info.size = 0;
+	vsi->row_info.buf = lat_buf->roy_buf_addr.dma_addr;
+	vsi->row_info.size = lat_buf->roy_buf_addr.size;
 
 	return 0;
 }

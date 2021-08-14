@@ -132,7 +132,7 @@ static int vcodec_vpu_send_msg(struct vdec_vpu_inst *vpu, void *msg, int len)
 	vpu->failure = 0;
 	vpu->signaled = 0;
 
-	if (vpu->ctx->dev->vdec_pdata->hw_arch == MTK_VDEC_LAT_SINGLE_CORE) {
+	if (VDEC_LAT_ARCH(vpu->ctx->dev->vdec_pdata->hw_arch)) {
 		if (msgid == AP_IPIMSG_DEC_CORE ||
 			msgid == AP_IPIMSG_DEC_CORE_END)
 			id = vpu->core_id;
@@ -190,7 +190,7 @@ int vpu_dec_init(struct vdec_vpu_inst *vpu)
 		return err;
 	}
 
-	if (vpu->ctx->dev->vdec_pdata->hw_arch == MTK_VDEC_LAT_SINGLE_CORE) {
+	if (VDEC_LAT_ARCH(vpu->ctx->dev->vdec_pdata->hw_arch)) {
 		err = mtk_vcodec_fw_ipi_register(vpu->ctx->dev->fw_handler,
 					 vpu->core_id, vpu->handler,
 					 "vdec", NULL);

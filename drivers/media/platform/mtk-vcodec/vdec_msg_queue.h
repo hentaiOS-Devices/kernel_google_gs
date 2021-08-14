@@ -28,6 +28,7 @@ typedef int (*core_decode_cb_t)(struct vdec_lat_buf *lat_buf);
 struct vdec_lat_buf {
 	struct mtk_vcodec_mem wdma_err_addr;
 	struct mtk_vcodec_mem slice_bc_addr;
+	struct mtk_vcodec_mem roy_buf_addr;
 	struct vb2_v4l2_buffer ts_info;
 
 	void *private_data;

@@ -109,6 +109,7 @@ enum mtk_fmt_type {
  */
 enum mtk_vdec_hw_id {
 	MTK_VDEC_CORE,
+	MTK_VDEC_CORE1,
 	MTK_VDEC_LAT0,
 	MTK_VDEC_LAT1,
 	MTK_VDEC_LAT_SOC,
@@ -360,6 +361,7 @@ enum mtk_chip {
 enum mtk_vdec_hw_arch {
 	MTK_VDEC_PURE_SINGLE_CORE,
 	MTK_VDEC_LAT_SINGLE_CORE,
+	MTK_VDEC_LAT_DUAL_CORE,
 };
 
 /**

@@ -158,7 +158,6 @@ static int mtk_vdec_comp_probe(struct platform_device *pdev)
 	ret = mtk_vdec_comp_init_irq(dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register irq handler.\n");
-		goto err;
 	}
 
 	platform_set_drvdata(pdev, dev);
@@ -184,6 +183,9 @@ static const struct of_device_id mtk_vdec_comp_ids[] = {
 	},
 	{
 		.compatible = "mediatek,mtk-vcodec-lat-soc",
+	},
+	{
+		.compatible = "mediatek,mtk-vcodec-core1",
 	},
 	{},
 };
