@@ -130,6 +130,20 @@
                realtek,btndet-delay = <16>;
                status = "disabled";
 	};
+
+	rt1011_l: rt1011@38 {
+		compatible = "realtek,rt1011";
+		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&rt1011_pins_default>;
+		status = "disabled";
+	};
+
+	rt1011_r: rt1011@39 {
+		compatible = "realtek,rt1011";
+		reg = <0x39>;
+		status = "disabled";
+	};
 };
 
 &i2c3 {
@@ -459,6 +473,14 @@
 				 <PINMUX_GPIO23__FUNC_CLKREQN_1>,
 				 <PINMUX_GPIO24__FUNC_WAKEN_1>;
 				 bias-pull-up;
+		};
+	};
+
+	rt1011_pins_default: rt1011default {
+		pins_spk {
+			pinmux = <PINMUX_GPIO94__FUNC_GPIO94>,
+			     <PINMUX_GPIO100__FUNC_GPIO100>;
+			output-high;
 		};
 	};
 
