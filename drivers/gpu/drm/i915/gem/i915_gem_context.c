@@ -1010,6 +1010,9 @@ void i915_gem_context_release(struct kref *ref)
 	if (ctx->client)
 		i915_drm_client_put(ctx->client);
 
+	if (ctx->syncobj)
+		drm_syncobj_put(ctx->syncobj);
+
 	mutex_destroy(&ctx->engines_mutex);
 	mutex_destroy(&ctx->lut_mutex);
 	mutex_destroy(&ctx->mutex);
@@ -1227,9 +1230,6 @@ static void context_close(struct i915_gem_context *ctx)
 	vm = i915_gem_context_vm(ctx);
 	if (vm)
 		i915_vm_close(vm);
-
-	if (ctx->syncobj)
-		drm_syncobj_put(ctx->syncobj);
 
 	ctx->file_priv = ERR_PTR(-EBADF);
 
