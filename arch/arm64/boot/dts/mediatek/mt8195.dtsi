@@ -564,7 +564,9 @@
 			reg = <0 0x11200000 0 0x1000>,
 			      <0 0x11203e00 0 0x0100>;
 			reg-names = "mac", "ippc";
-			interrupts = <GIC_SPI 129 IRQ_TYPE_LEVEL_HIGH 0>;
+			interrupts-extended = <&gic GIC_SPI 129 IRQ_TYPE_LEVEL_HIGH 0>,
+					      <&pio 219 IRQ_TYPE_LEVEL_LOW>;
+			interrupt-names = "host", "wakeup";
 			phys = <&u2port0 PHY_TYPE_USB2>,
 			       <&u3port0 PHY_TYPE_USB3>;
 			assigned-clocks = <&topckgen CLK_TOP_USB_TOP>,
@@ -576,6 +578,8 @@
 				 <&topckgen CLK_TOP_SSUSB_REF>,
 				 <&apmixedsys CLK_APMIXED_USB1PLL>;
 			clock-names = "sys_ck", "xhci_ck", "ref_ck", "mcu_ck";
+			mediatek,syscon-wakeup = <&pericfg 0x400 103>;
+			wakeup-source;
 			#address-cells = <2>;
 			#size-cells = <2>;
 			status = "disabled";
@@ -632,7 +636,9 @@
 			reg = <0 0x11290000 0 0x1000>,
 			      <0 0x11293e00 0 0x0100>;
 			reg-names = "mac", "ippc";
-			interrupts = <GIC_SPI 530 IRQ_TYPE_LEVEL_HIGH 0>;
+			interrupts-extended = <&gic GIC_SPI 530 IRQ_TYPE_LEVEL_HIGH 0>,
+					     <&pio 218 IRQ_TYPE_LEVEL_LOW>;
+			interrupt-names = "host", "wakeup";
 			phys = <&u2port1 PHY_TYPE_USB2>;
 			assigned-clocks = <&topckgen CLK_TOP_USB_TOP_1P>,
 					  <&topckgen CLK_TOP_SSUSB_XHCI_1P>;
@@ -643,6 +649,9 @@
 				 <&topckgen CLK_TOP_SSUSB_P1_REF>,
 				 <&apmixedsys CLK_APMIXED_USB1PLL>;
 			clock-names = "sys_ck", "xhci_ck", "ref_ck", "mcu_ck";
+			mediatek,syscon-wakeup = <&pericfg 0x400 104>;
+			wakeup-source;
+			mediatek,u3p-dis-msk = <0x1>;
 			#address-cells = <2>;
 			#size-cells = <2>;
 			status = "disabled";
@@ -675,7 +684,9 @@
 			reg = <0 0x112b0000 0 0x1000>,
 			      <0 0x112b3e00 0 0x0100>;
 			reg-names = "mac", "ippc";
-			interrupts = <GIC_SPI 536 IRQ_TYPE_LEVEL_HIGH 0>;
+			interrupts-extended = <&gic GIC_SPI 536 IRQ_TYPE_LEVEL_HIGH 0>,
+					      <&pio 221 IRQ_TYPE_LEVEL_LOW>;
+			interrupts-names = "host", "wakeup";
 			phys = <&u2port3 PHY_TYPE_USB2>;
 			assigned-clocks = <&topckgen CLK_TOP_USB_TOP_3P>,
 					  <&topckgen CLK_TOP_SSUSB_XHCI_3P>;
@@ -685,6 +696,8 @@
 				 <&pericfg_ao CLK_PERI_AO_SSUSB_3P_XHCI>,
 				 <&topckgen CLK_TOP_SSUSB_P3_REF>;
 			clock-names = "sys_ck", "xhci_ck", "ref_ck";
+			mediatek,syscon-wakeup = <&pericfg 0x400 106>;
+			wakeup-source;
 			usb2-lpm-disable;
 			#address-cells = <2>;
 			#size-cells = <2>;
