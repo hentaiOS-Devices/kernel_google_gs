@@ -12,6 +12,7 @@
 #include "avs.h"
 #include "path.h"
 #include "topology.h"
+#include "kcontrol.h"
 
 /* Must be called with adev->comp_list_mutex held. */
 static struct avs_tplg *
@@ -337,6 +338,45 @@ static int avs_copier_create(struct avs_dev *adev, struct avs_path_module *mod)
 	return ret;
 }
 
+static int avs_peakvol_create(struct avs_dev *adev, struct avs_path_module *mod)
+{
+	struct avs_tplg_module *t = mod->template;
+	struct avs_peakvol_cfg *cfg;
+	struct avs_volume_cfg *vols;
+	size_t data_size;
+	int ret;
+
+	ret = avs_kcontrol_volume_module_init(mod, &vols, &data_size);
+	if (ret)
+		return ret;
+
+	cfg = kzalloc(sizeof(*cfg) + data_size, GFP_KERNEL);
+	if (!cfg) {
+		avs_kcontrol_volume_module_deinit(mod);
+		kfree(vols);
+		return -ENOMEM;
+	}
+
+	cfg->base.cpc = t->cfg_base->cpc;
+	cfg->base.ibs = t->cfg_base->ibs;
+	cfg->base.obs = t->cfg_base->obs;
+	cfg->base.is_pages = t->cfg_base->is_pages;
+	cfg->base.audio_fmt = *t->in_fmt;
+
+	memcpy(cfg->vols, vols, data_size);
+
+	ret = avs_dsp_init_module(adev, mod->module_id, mod->owner->instance_id,
+				  t->core_id, t->domain, cfg,
+				  sizeof(*cfg) + data_size, &mod->instance_id);
+	if (ret)
+		avs_kcontrol_volume_module_deinit(mod);
+
+	kfree(cfg);
+	kfree(vols);
+
+	return ret;
+}
+
 static int avs_updown_mix_create(struct avs_dev *adev, struct avs_path_module *mod)
 {
 	struct avs_tplg_module *t = mod->template;
@@ -532,6 +572,9 @@ static int avs_path_module_type_create(struct avs_dev *adev, struct avs_path_mod
 		return avs_modbase_create(adev, mod);
 	if (guid_equal(type, &AVS_COPIER_MOD_UUID))
 		return avs_copier_create(adev, mod);
+	if (guid_equal(type, &AVS_PEAKVOL_MOD_UUID) ||
+	    guid_equal(type, &AVS_GAIN_MOD_UUID))
+		return avs_peakvol_create(adev, mod);
 	if (guid_equal(type, &AVS_MICSEL_MOD_UUID))
 		return avs_micsel_create(adev, mod);
 	if (guid_equal(type, &AVS_MUX_MOD_UUID))
@@ -632,6 +675,7 @@ avs_path_module_create(struct avs_dev *adev,
 	ret = kobject_init_and_add(&mod->kobj, &avs_path_module_ktype,
 				   &owner->kobj, "%d", template->id);
 	if (ret) {
+		avs_kcontrol_volume_module_deinit(mod);
 		kobject_put(&mod->kobj);
 		return ERR_PTR(ret);
 	}
@@ -829,6 +873,10 @@ static void avs_path_pipeline_free(struct avs_dev *adev,
 {
 	struct avs_path_binding *binding, *bsave;
 	struct avs_path_module *mod, *save;
+
+	/* unlink kcontrols from active modules, before we start deleting pipelines */
+	list_for_each_entry(mod, &ppl->mod_list, node)
+		avs_kcontrol_volume_module_deinit(mod);
 
 	list_for_each_entry_safe(binding, bsave, &ppl->binding_list, node) {
 		list_del(&binding->node);
