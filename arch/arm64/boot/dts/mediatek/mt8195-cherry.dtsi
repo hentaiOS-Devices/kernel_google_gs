@@ -99,7 +99,7 @@
 		compatible = "google,cr50";
 		reg = <0x50>;
 		interrupt-parent = <&pio>;
-		interrupts = <88 IRQ_TYPE_EDGE_RISING>;
+		interrupts = <88 IRQ_TYPE_EDGE_FALLING>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&cr50_irq>;
 	};
