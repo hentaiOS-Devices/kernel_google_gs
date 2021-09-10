@@ -192,6 +192,8 @@ struct avs_tplg_module {
 	u8 core_id;
 	u8 domain;
 	struct avs_tplg_modcfg_ext *cfg_ext;
+	/* KControl if any. */
+	struct snd_kcontrol *kctrl;
 
 	struct avs_tplg_pipeline *owner;
 	/* Pipeline modules management. */
