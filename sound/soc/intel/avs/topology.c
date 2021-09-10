@@ -13,6 +13,7 @@
 #include <sound/soc-topology.h>
 #include <uapi/sound/intel/avs/tokens.h>
 #include "avs.h"
+#include "kcontrol.h"
 #include "topology.h"
 
 /* Get pointer to vendor array at the specified offset. */
@@ -1525,6 +1526,107 @@ static int avs_widget_load(struct snd_soc_component *comp, int index,
 	return 0;
 }
 
+static int avs_widget_ready(struct snd_soc_component *comp, int index,
+			    struct snd_soc_dapm_widget *w,
+			    struct snd_soc_tplg_dapm_widget *dw)
+{
+	struct avs_tplg_path_template *template = w->priv;
+	struct avs_tplg_pipeline *pipeline;
+	struct avs_tplg_module *module;
+	struct avs_tplg_path *path;
+	struct avs_dev *adev = to_avs_dev(comp->dev);
+	int i, k, max = 0;
+	int *chns; /* maximum channels per kcontrol */
+
+	/*
+	 * Count PEAKVOLs on each path template before creating kcontrols for
+	 * path. This is needed to index them if there is more than one
+	 * PEAKVOL present in any of path templates.
+	 */
+	list_for_each_entry(path, &template->path_list, node) {
+		i = 0;
+
+		list_for_each_entry(pipeline, &path->ppl_list, node) {
+			list_for_each_entry(module, &pipeline->mod_list, node) {
+				const guid_t *type = &module->cfg_ext->type;
+
+				if (guid_equal(type, &AVS_PEAKVOL_MOD_UUID) ||
+				    guid_equal(type, &AVS_GAIN_MOD_UUID))
+					i++;
+			}
+		}
+
+		if (i > max)
+			max = i;
+	}
+
+	/* No PEAKVOLs found, so leave early */
+	if (!max)
+		return 0;
+
+	/*
+	 * Now that PEAKVOLs are counted, find number of channels needed.
+	 * We walk all path templates again, as for example one path
+	 * template can have PEAKVOL in 2 channel configuration, while
+	 * another in 4 channel.
+	 */
+	chns = kcalloc(max, sizeof(*chns), GFP_KERNEL);
+	if (!chns)
+		return -ENOMEM;
+
+	list_for_each_entry(path, &template->path_list, node) {
+		i = 0;
+
+		list_for_each_entry(pipeline, &path->ppl_list, node) {
+			list_for_each_entry(module, &pipeline->mod_list, node) {
+				const guid_t *type = &module->cfg_ext->type;
+
+				if (guid_equal(type, &AVS_PEAKVOL_MOD_UUID) ||
+				    guid_equal(type, &AVS_GAIN_MOD_UUID)) {
+					if (chns[i] < module->in_fmt->num_channels)
+						chns[i] = module->in_fmt->num_channels;
+					i++;
+				}
+			}
+		}
+	}
+
+	/*
+	 * For each PAEKVOL we found, create and assign kcontrol to tplg module
+	 * template.
+	 */
+	for (k = 0; k < max; k++) {
+		struct snd_kcontrol *kctrl;
+
+		kctrl = avs_kcontrol_volume_register(adev, w, k, max, chns[k]);
+		if (IS_ERR_OR_NULL(kctrl)) {
+			kfree(chns);
+			return -ENOMEM;
+		}
+
+		list_for_each_entry(path, &template->path_list, node) {
+			i = 0;
+
+			list_for_each_entry(pipeline, &path->ppl_list, node) {
+				list_for_each_entry(module, &pipeline->mod_list, node) {
+					const guid_t *type = &module->cfg_ext->type;
+
+					if (!guid_equal(type, &AVS_PEAKVOL_MOD_UUID) &&
+					    !guid_equal(type, &AVS_GAIN_MOD_UUID))
+						continue;
+					if (i == k)
+						module->kctrl = kctrl;
+					i++;
+				}
+			}
+		}
+	}
+
+	kfree(chns);
+
+	return 0;
+}
+
 static int avs_dai_load(struct snd_soc_component *comp, int index,
 			struct snd_soc_dai_driver *dai_drv, struct snd_soc_tplg_pcm *pcm,
 			struct snd_soc_dai *dai)
@@ -1689,6 +1791,7 @@ static int avs_manifest(struct snd_soc_component *comp, int index,
 static struct snd_soc_tplg_ops avs_tplg_ops = {
 	.dapm_route_load	= avs_route_load,
 	.widget_load		= avs_widget_load,
+	.widget_ready		= avs_widget_ready,
 	.dai_load		= avs_dai_load,
 	.link_load		= avs_link_load,
 	.manifest		= avs_manifest,
