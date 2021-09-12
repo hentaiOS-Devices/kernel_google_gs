@@ -12,10 +12,41 @@
 /* Intel HD Audio General DSP Registers */
 #define AZX_ADSP_GEN_BASE		0x0
 #define AZX_ADSP_REG_ADSPCS		(AZX_ADSP_GEN_BASE + 0x04)
+#define AZX_ADSP_REG_ADSPIC		(AZX_ADSP_GEN_BASE + 0x08)
+#define AZX_ADSP_REG_ADSPIS		(AZX_ADSP_GEN_BASE + 0x0C)
+
+#define AZX_ADSP_ADSPIC_IPC		BIT(0)
+#define AZX_ADSP_ADSPIS_IPC		BIT(0)
 
 #define AZX_ADSPCS_CRST_MASK(cm)	(cm)
 #define AZX_ADSPCS_CSTALL_MASK(cm)	((cm) << 8)
 #define AZX_ADSPCS_SPA_MASK(cm)		((cm) << 16)
 #define AZX_ADSPCS_CPA_MASK(cm)		((cm) << 24)
+
+#define AZX_ADSP_HIPCCTL_DONE		BIT(1)
+#define AZX_ADSP_HIPCCTL_BUSY		BIT(0)
+
+/* Constants used when accessing SRAM, space shared with firmware */
+#define AVS_FW_REG_BASE(adev)		((adev)->spec->sram_base_offset)
+#define AVS_FW_REG_STATUS(adev)		(AVS_FW_REG_BASE(adev) + 0x0)
+#define AVS_FW_REG_ERROR_CODE(adev)	(AVS_FW_REG_BASE(adev) + 0x4)
+
+#define AVS_FW_REGS_SIZE		PAGE_SIZE
+#define AVS_FW_REGS_WINDOW		0
+#define AVS_UPLINK_WINDOW		AVS_FW_REGS_WINDOW
+#define AVS_DOWNLINK_WINDOW		1
+
+/* registry I/O helpers */
+#define avs_sram_offset(adev, window_idx) \
+	((adev)->spec->sram_base_offset + \
+	 (adev)->spec->sram_window_size * (window_idx))
+
+#define avs_sram_addr(adev, window_idx) \
+	((adev)->adsp_ba + avs_sram_offset(adev, window_idx))
+
+#define avs_uplink_addr(adev) \
+	(avs_sram_addr(adev, AVS_UPLINK_WINDOW) + AVS_FW_REGS_SIZE)
+#define avs_downlink_addr(adev) \
+	avs_sram_addr(adev, AVS_DOWNLINK_WINDOW)
 
 #endif /* __SOUND_SOC_INTEL_AVS_REGS_H */

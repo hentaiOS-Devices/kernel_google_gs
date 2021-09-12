@@ -11,6 +11,7 @@
 
 #include <linux/device.h>
 #include <sound/hda_codec.h>
+#include "messages.h"
 
 struct avs_dev;
 
@@ -18,6 +19,9 @@ struct avs_dsp_ops {
 	int (* const power)(struct avs_dev *, u32, bool);
 	int (* const reset)(struct avs_dev *, u32, bool);
 	int (* const stall)(struct avs_dev *, u32, bool);
+	irqreturn_t (* const irq_handler)(struct avs_dev *);
+	irqreturn_t (* const irq_thread)(struct avs_dev *);
+	void (* const int_control)(struct avs_dev *, bool);
 };
 
 #define avs_dsp_op(adev, op, ...) \
@@ -34,6 +38,18 @@ struct avs_spec {
 	const u32 master_mask;
 	const u32 init_mask;
 	const u64 attributes;
+	const u32 sram_base_offset;
+	const u32 sram_window_size;
+
+	const u32 rom_status;
+	const u32 hipc_req;
+	const u32 hipc_req_ext;
+	const u32 hipc_req_busy;
+	const u32 hipc_ack;
+	const u32 hipc_ack_done;
+	const u32 hipc_rsp;
+	const u32 hipc_rsp_busy;
+	const u32 hipc_ctl;
 };
 
 struct avs_dev {
@@ -42,6 +58,11 @@ struct avs_dev {
 
 	void __iomem *adsp_ba;
 	const struct avs_spec *spec;
+	struct avs_ipc *ipc;
+
+	struct list_head notify_sub_list;
+
+	struct completion fw_ready;
 };
 
 /* from hda_bus to avs_dev */
@@ -60,5 +81,86 @@ int avs_dsp_core_reset(struct avs_dev *adev, u32 core_mask, bool reset);
 int avs_dsp_core_stall(struct avs_dev *adev, u32 core_mask, bool stall);
 int avs_dsp_core_enable(struct avs_dev *adev, u32 core_mask);
 int avs_dsp_core_disable(struct avs_dev *adev, u32 core_mask);
+
+/* Inter Process Communication */
+
+struct avs_ipc_msg {
+	union {
+		u64 header;
+		union avs_global_msg glb;
+		union avs_reply_msg rsp;
+	};
+	void *data;
+	size_t size;
+};
+
+struct avs_ipc {
+	struct device *dev;
+
+	struct avs_ipc_msg rx;
+	u32 default_timeout;
+	bool ready;
+
+	bool completed;
+	spinlock_t lock;
+	struct mutex mutex;
+	struct completion done_completion;
+	struct completion busy_completion;
+};
+
+/*
+ * IPC handlers may return positive values which denote successful
+ * HOST <-> DSP communication yet failure to process specific request.
+ * Use below macro to convert returned non-zero values appropriately.
+ */
+#define AVS_EIPC	EREMOTEIO
+#define AVS_IPC_RET(ret) \
+	(((ret) <= 0) ? (ret) : -AVS_EIPC)
+
+static inline void avs_ipc_err(struct avs_dev *adev, struct avs_ipc_msg *tx,
+			       const char *name, int error)
+{
+	if (error == -EPERM)
+		dev_dbg(adev->dev, "%s 0x%08x 0x%08x failed: %d\n", name,
+			tx->glb.primary, tx->glb.ext.val, error);
+	else
+		dev_err(adev->dev, "%s 0x%08x 0x%08x failed: %d\n", name,
+			tx->glb.primary, tx->glb.ext.val, error);
+}
+
+irqreturn_t avs_ipc_irq_handler(struct avs_dev *adev);
+irqreturn_t avs_dsp_irq_handler(int irq, void *dev_id);
+irqreturn_t avs_dsp_irq_thread(int irq, void *dev_id);
+void avs_dsp_process_response(struct avs_dev *adev, u64 header);
+int avs_dsp_send_pm_msg_timeout(struct avs_dev *adev,
+				struct avs_ipc_msg request,
+				struct avs_ipc_msg *reply, int timeout,
+				bool wake_d0i0);
+int avs_dsp_send_pm_msg(struct avs_dev *adev,
+			struct avs_ipc_msg request,
+			struct avs_ipc_msg *reply, bool wake_d0i0);
+int avs_dsp_send_msg_timeout(struct avs_dev *adev,
+			     struct avs_ipc_msg request,
+			     struct avs_ipc_msg *reply, int timeout);
+int avs_dsp_send_msg(struct avs_dev *adev,
+		     struct avs_ipc_msg request, struct avs_ipc_msg *reply);
+int avs_dsp_send_rom_msg_timeout(struct avs_dev *adev,
+				 struct avs_ipc_msg request, int timeout);
+int avs_dsp_send_rom_msg(struct avs_dev *adev, struct avs_ipc_msg request);
+void avs_dsp_int_control(struct avs_dev *adev, bool enable);
+int avs_ipc_init(struct avs_ipc *ipc, struct device *dev);
+void avs_ipc_block(struct avs_ipc *ipc);
+
+struct avs_notify_action {
+	u32 identifier;
+	void *context;
+	void (*callback)(union avs_notify_msg, void *, size_t, void *);
+	struct list_head node;
+};
+
+int avs_notify_subscribe(struct list_head *sub_list, u32 notify_id,
+			 void (*callback)(union avs_notify_msg, void *, size_t, void *),
+			 void *context);
+int avs_notify_unsubscribe(struct list_head *sub_list, u32 notify_id, void *context);
 
 #endif /* __SOUND_SOC_INTEL_AVS_H */
