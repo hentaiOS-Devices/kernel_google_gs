@@ -52,6 +52,13 @@ struct avs_spec {
 	const u32 hipc_ctl;
 };
 
+struct avs_fw_entry {
+	char *name;
+	const struct firmware *fw;
+
+	struct list_head node;
+};
+
 struct avs_dev {
 	struct hda_bus bus;
 	struct device *dev;
@@ -60,6 +67,13 @@ struct avs_dev {
 	const struct avs_spec *spec;
 	struct avs_ipc *ipc;
 
+	struct avs_fw_cfg fw_cfg;
+	struct avs_hw_cfg hw_cfg;
+	struct avs_mods_info *mods_info;
+	struct ida **mod_idas;
+	struct mutex modres_mutex;
+	struct ida ppl_ida;
+	struct list_head fw_list;
 	struct list_head notify_sub_list;
 
 	struct completion fw_ready;
@@ -162,5 +176,19 @@ int avs_notify_subscribe(struct list_head *sub_list, u32 notify_id,
 			 void (*callback)(union avs_notify_msg, void *, size_t, void *),
 			 void *context);
 int avs_notify_unsubscribe(struct list_head *sub_list, u32 notify_id, void *context);
+
+/* Firmware resources management */
+
+int avs_get_module_entry(struct avs_dev *adev, const guid_t *uuid, struct avs_module_entry *entry);
+int avs_get_module_id_entry(struct avs_dev *adev, u32 module_id, struct avs_module_entry *entry);
+int avs_get_module_id(struct avs_dev *adev, const guid_t *uuid);
+int avs_is_module_ida_empty(struct avs_dev *adev, u32 module_id);
+
+int avs_module_info_init(struct avs_dev *adev, bool purge);
+void avs_module_info_free(struct avs_dev *adev);
+int avs_module_id_alloc(struct avs_dev *adev, u16 module_id);
+void avs_module_id_free(struct avs_dev *adev, u16 module_id, u8 instance_id);
+int avs_request_firmware(struct avs_dev *adev, const struct firmware **fw_p, const char *name);
+void avs_release_firmwares(struct avs_dev *adev);
 
 #endif /* __SOUND_SOC_INTEL_AVS_H */
