@@ -206,6 +206,7 @@ int avs_dsp_init_module(struct avs_dev *adev, u16 module_id, u8 ppl_instance_id,
 			u16 *instance_id)
 {
 	struct avs_module_entry mentry;
+	bool was_loaded = false;
 	int ret, id;
 
 	id = avs_module_id_alloc(adev, module_id);
@@ -220,6 +221,16 @@ int avs_dsp_init_module(struct avs_dev *adev, u16 module_id, u8 ppl_instance_id,
 		goto err_core;
 	}
 
+	/* Load code into memory if this is the first instance. */
+	if (!id && !avs_module_entry_is_loaded(&mentry)) {
+		ret = avs_dsp_op(adev, transfer_mods, true, &mentry, 1);
+		if (ret) {
+			dev_err(adev->dev, "load modules failed: %d\n", ret);
+			goto err_core;
+		}
+		was_loaded = true;
+	}
+
 	ret = avs_ipc_init_instance(adev, module_id, id, ppl_instance_id,
 				    core_id, domain, param, param_size);
 	if (ret) {
@@ -232,6 +243,8 @@ int avs_dsp_init_module(struct avs_dev *adev, u16 module_id, u8 ppl_instance_id,
 	return 0;
 
 err_ipc:
+	if (was_loaded)
+		avs_dsp_op(adev, transfer_mods, false, &mentry, 1);
 	avs_dsp_put_core(adev, core_id);
 err_core:
 	avs_module_id_free(adev, module_id, id);
@@ -241,6 +254,7 @@ err_core:
 void avs_dsp_delete_module(struct avs_dev *adev, u16 module_id, u16 instance_id,
 			   u8 ppl_instance_id, u8 core_id)
 {
+	struct avs_module_entry mentry;
 	int ret;
 
 	/* Unowned modules need their resources freed explicitly. */
@@ -248,6 +262,16 @@ void avs_dsp_delete_module(struct avs_dev *adev, u16 module_id, u16 instance_id,
 		avs_ipc_delete_instance(adev, module_id, instance_id);
 
 	avs_module_id_free(adev, module_id, instance_id);
+
+	ret = avs_get_module_id_entry(adev, module_id, &mentry);
+	/* Unload occupied memory if this was the last instance. */
+	if (!ret && mentry.type.load_type == AVS_MODULE_LOAD_TYPE_LOADABLE) {
+		if (avs_is_module_ida_empty(adev, module_id)) {
+			ret = avs_dsp_op(adev, transfer_mods, false, &mentry, 1);
+			if (ret)
+				dev_err(adev->dev, "unload modules failed: %d\n", ret);
+		}
+	}
 
 	ret = avs_dsp_put_core(adev, core_id);
 	if (ret)
