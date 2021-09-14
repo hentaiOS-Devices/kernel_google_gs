@@ -81,7 +81,11 @@ struct avs_dev {
 
 	struct completion fw_ready;
 
+	struct acpi_table_nhlt *nhlt;
 	struct list_head comp_list;
+	struct list_head path_list;
+	spinlock_t path_list_lock;
+	struct mutex path_mutex;
 };
 
 /* from hda_bus to avs_dev */
