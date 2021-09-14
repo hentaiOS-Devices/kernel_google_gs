@@ -9,11 +9,21 @@
 #include <linux/firmware.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <sound/hdaudio_ext.h>
 #include "avs.h"
+#include "cldma.h"
 #include "messages.h"
 #include "registers.h"
 #include "topology.h"
 
+#define AVS_ROM_STS_MASK		0xFF
+#define AVS_ROM_INIT_DONE		0x1
+#define SKL_ROM_BASEFW_ENTERED		0xF
+#define AVS_ROM_INIT_POLLING_US		5
+#define AVS_ROM_INIT_TIMEOUT_US		300000
+
+#define AVS_FW_INIT_POLLING_US		500
+#define AVS_FW_INIT_TIMEOUT_US		3000000
 #define AVS_FW_INIT_TIMEOUT_MS		3000
 
 #define AVS_ROOT_DIR			"intel/avs"
@@ -107,6 +117,150 @@ static int avs_fw_manifest_strip_verify(struct avs_dev *adev, struct firmware *f
 		if (!debug_ignore_fw_version_check)
 			return -EINVAL;
 	}
+
+	return 0;
+}
+
+int avs_cldma_load_basefw(struct avs_dev *adev, struct firmware *fw)
+{
+	const struct avs_spec *const spec = adev->spec;
+	struct hda_cldma *cl = &code_loader;
+	unsigned int reg;
+	int ret;
+
+	ret = avs_dsp_op(adev, power, spec->master_mask, true);
+	if (ret < 0) {
+		dev_err(adev->dev, "core_mask %d power on failed: %d\n",
+			spec->master_mask, ret);
+		return ret;
+	}
+
+	ret = avs_dsp_op(adev, reset, spec->master_mask, false);
+	if (ret < 0) {
+		dev_err(adev->dev, "core_mask %d unreset failed: %d\n",
+			spec->master_mask, ret);
+		return ret;
+	}
+
+	ret = hda_cldma_reset(cl);
+	if (ret < 0) {
+		dev_err(adev->dev, "cldma reset failed: %d\n", ret);
+		return ret;
+	}
+	hda_cldma_setup(cl);
+
+	ret = avs_dsp_op(adev, stall, spec->master_mask, false);
+	if (ret < 0) {
+		dev_err(adev->dev, "core_mask %d unstall failed: %d\n",
+			spec->master_mask, ret);
+		return ret;
+	}
+
+	reinit_completion(&adev->fw_ready);
+	avs_dsp_op(adev, int_control, true);
+
+	/* await ROM init */
+	ret = snd_hdac_adsp_readl_poll(adev, AVS_FW_REG_STATUS(adev), reg,
+			(reg & AVS_ROM_INIT_DONE) == AVS_ROM_INIT_DONE,
+			AVS_ROM_INIT_POLLING_US, AVS_ROM_INIT_TIMEOUT_US);
+	if (ret < 0) {
+		dev_err(adev->dev, "rom init timeout: %d\n", ret);
+		avs_dsp_core_disable(adev, spec->master_mask);
+		return ret;
+	}
+
+	hda_cldma_set_data(cl, (void *)fw->data, fw->size);
+	/* transfer firmware */
+	hda_cldma_transfer(cl, 0);
+	ret = snd_hdac_adsp_readl_poll(adev, AVS_FW_REG_STATUS(adev), reg,
+			(reg & AVS_ROM_STS_MASK) == SKL_ROM_BASEFW_ENTERED,
+			AVS_FW_INIT_POLLING_US, AVS_FW_INIT_TIMEOUT_US);
+	hda_cldma_stop(cl);
+	if (ret < 0) {
+		dev_err(adev->dev, "transfer fw failed: %d\n", ret);
+		avs_dsp_core_disable(adev, spec->master_mask);
+		return ret;
+	}
+
+	return 0;
+}
+
+int avs_cldma_load_library(struct avs_dev *adev, struct firmware *lib, u32 id)
+{
+	struct hda_cldma *cl = &code_loader;
+	int ret;
+
+	hda_cldma_set_data(cl, (void *)lib->data, lib->size);
+	/* transfer modules manifest */
+	hda_cldma_transfer(cl, msecs_to_jiffies(100));
+	/* DMA id ignored as there is only ever one code-loader DMA */
+	ret = avs_ipc_load_library(adev, 0, id);
+	hda_cldma_stop(cl);
+
+	if (ret) {
+		ret = AVS_IPC_RET(ret);
+		dev_err(adev->dev, "transfer lib %d failed: %d\n", id, ret);
+	}
+
+	return ret;
+}
+
+static int avs_cldma_load_module(struct avs_dev *adev, struct avs_module_entry *mentry)
+{
+	struct hda_cldma *cl = &code_loader;
+	const struct firmware *mod;
+	char mod_name[128];
+	int ret;
+
+	snprintf(mod_name, sizeof(mod_name), "%s/%s/dsp_mod_%pUL.bin",
+		 AVS_ROOT_DIR, adev->spec->name, mentry->uuid.b);
+
+	ret = avs_request_firmware(adev, &mod, mod_name);
+	if (ret < 0)
+		return ret;
+
+	hda_cldma_set_data(cl, (void *)mod->data, mod->size);
+	hda_cldma_transfer(cl, msecs_to_jiffies(100));
+	ret = avs_ipc_load_modules(adev, &mentry->module_id, 1);
+	hda_cldma_stop(cl);
+
+	if (ret) {
+		dev_err(adev->dev, "load module %d failed: %d\n", mentry->module_id,
+			ret);
+		return AVS_IPC_RET(ret);
+	}
+
+	return 0;
+}
+
+int avs_cldma_transfer_modules(struct avs_dev *adev, bool load,
+			       struct avs_module_entry *mods, u32 num_mods)
+{
+	u16 *mod_ids;
+	int ret, i;
+
+	/* Either load to DSP or unload them to free space. */
+	if (load) {
+		for (i = 0; i < num_mods; i++) {
+			ret = avs_cldma_load_module(adev, &mods[i]);
+			if (ret)
+				return ret;
+		}
+
+		return 0;
+	}
+
+	mod_ids = kcalloc(num_mods, sizeof(u16), GFP_KERNEL);
+	if (!mod_ids)
+		return -ENOMEM;
+
+	for (i = 0; i < num_mods; i++)
+		mod_ids[i] = mods[i].module_id;
+
+	ret = avs_ipc_unload_modules(adev, mod_ids, num_mods);
+	kfree(mod_ids);
+	if (ret)
+		return AVS_IPC_RET(ret);
 
 	return 0;
 }
@@ -265,6 +419,15 @@ reenable_gating:
 int avs_dsp_first_boot_firmware(struct avs_dev *adev)
 {
 	int ret, i;
+
+	if (avs_platattr_test(adev, CLDMA)) {
+		ret = hda_cldma_init(&code_loader, &adev->bus.core,
+				      adev->adsp_ba, CL_DEFAULT_BUFFER_SIZE);
+		if (ret < 0) {
+			dev_err(adev->dev, "cldma init failed: %d\n", ret);
+			return ret;
+		}
+	}
 
 	ret = avs_dsp_boot_firmware(adev, true);
 	if (ret < 0) {
