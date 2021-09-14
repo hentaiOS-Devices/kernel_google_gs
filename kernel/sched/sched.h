@@ -1067,7 +1067,7 @@ struct rq {
 	unsigned int		core_sched_seq;
 	struct rb_root		core_tree;
 
-	/* shared state */
+	/* shared state -- careful with sched_core_cpu_deactivate() */
 	unsigned int		core_task_seq;
 	unsigned int		core_pick_seq;
 	unsigned long		core_cookie;
@@ -1758,6 +1758,7 @@ struct sched_group {
 	unsigned int		group_weight;
 	struct sched_group_capacity *sgc;
 	int			asym_prefer_cpu;	/* CPU of highest priority in group */
+	int			flags;
 
 	/*
 	 * The CPUs this group covers.

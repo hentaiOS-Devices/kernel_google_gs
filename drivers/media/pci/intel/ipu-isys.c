@@ -1026,7 +1026,6 @@ void ipu_put_fw_mgs_buf(struct ipu_isys *isys, u64 data)
 	list_move(&msg->head, &isys->framebuflist);
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
-EXPORT_SYMBOL_GPL(ipu_put_fw_mgs_buf);
 
 static int isys_probe(struct ipu_bus_device *adev)
 {
@@ -1404,34 +1403,6 @@ int isys_isr_one(struct ipu_bus_device *adev)
 
 leave:
 	ipu_fw_isys_put_resp(isys->fwcom, IPU_BASE_MSG_RECV_QUEUES);
-	return 0;
-}
-
-static void isys_isr_poll(struct ipu_bus_device *adev)
-{
-	struct ipu_isys *isys = ipu_bus_get_drvdata(adev);
-
-	if (!isys->fwcom) {
-		dev_dbg(&isys->adev->dev,
-			"got interrupt but device not configured yet\n");
-		return;
-	}
-
-	mutex_lock(&isys->mutex);
-	isys_isr(adev);
-	mutex_unlock(&isys->mutex);
-}
-
-int ipu_isys_isr_run(void *ptr)
-{
-	struct ipu_isys *isys = ptr;
-
-	while (!kthread_should_stop()) {
-		usleep_range(500, 1000);
-		if (isys->stream_opened)
-			isys_isr_poll(isys->adev);
-	}
-
 	return 0;
 }
 

@@ -1614,7 +1614,7 @@ static int is_empty_shadow_page(u64 *spt)
  * aggregate version in order to make the slab shrinker
  * faster
  */
-static inline void kvm_mod_used_mmu_pages(struct kvm *kvm, unsigned long nr)
+static inline void kvm_mod_used_mmu_pages(struct kvm *kvm, long nr)
 {
 	kvm->arch.n_used_mmu_pages += nr;
 	percpu_counter_add(&kvm_total_used_mmu_pages, nr);
@@ -2739,11 +2739,13 @@ static void __direct_pte_prefetch(struct kvm_vcpu *vcpu,
 			if (!start)
 				continue;
 			if (direct_pte_prefetch_many(vcpu, sp, start, spte) < 0)
-				break;
+				return;
 			start = NULL;
 		} else if (!start)
 			start = spte;
 	}
+	if (start)
+		direct_pte_prefetch_many(vcpu, sp, start, spte);
 }
 
 static void direct_pte_prefetch(struct kvm_vcpu *vcpu, u64 *sptep)

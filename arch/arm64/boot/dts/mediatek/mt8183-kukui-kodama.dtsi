@@ -88,9 +88,9 @@
 	clock-frequency = <400000>;
 	vbus-supply = <&mt6358_vcn18_reg>;
 
-	eeprom@54 {
+	eeprom@50 {
 		compatible = "atmel,24c64";
-		reg = <0x54>;
+		reg = <0x50>;
 		pagesize = <32>;
 		vcc-supply = <&mt6358_vcn18_reg>;
 	};
@@ -397,6 +397,25 @@
 				remote-endpoint = <&ov02a10_endpoint>;
 			};
 		};
+	};
+};
+
+&camera_pins_cam0 {
+	pins_reset {
+		pinmux = <PINMUX_GPIO111__FUNC_GPIO111>;
+		output-low;
+	};
+};
+
+&camera_pins_cam1 {
+	pins_powerdown {
+		pinmux = <PINMUX_GPIO107__FUNC_GPIO107>;
+		output-high;
+	};
+
+	pins_reset {
+		pinmux = <PINMUX_GPIO109__FUNC_GPIO109>;
+		output-low;
 	};
 };
 

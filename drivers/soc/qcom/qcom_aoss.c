@@ -65,6 +65,7 @@ struct qmp_cooling_device {
  * @tx_lock: provides synchronization between multiple callers of qmp_send()
  * @qdss_clk: QDSS clock hw struct
  * @pd_data: genpd data
+ * @cooling_devs: thermal cooling devices
  */
 struct qmp {
 	void __iomem *msgram;
@@ -602,6 +603,7 @@ static const struct of_device_id qmp_dt_match[] = {
 	{ .compatible = "qcom,sdm845-aoss-qmp", },
 	{ .compatible = "qcom,sm8150-aoss-qmp", },
 	{ .compatible = "qcom,sm8250-aoss-qmp", },
+	{ .compatible = "qcom,sm8350-aoss-qmp", },
 	{}
 };
 MODULE_DEVICE_TABLE(of, qmp_dt_match);
