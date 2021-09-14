@@ -33,6 +33,7 @@ struct avs_dsp_ops {
 	int (* const load_lib)(struct avs_dev *, struct firmware *, u32);
 	int (* const transfer_mods)(struct avs_dev *, bool,
 				    struct avs_module_entry *, u32);
+	int (* const coredump)(struct avs_dev *, union avs_notify_msg);
 };
 
 #define avs_dsp_op(adev, op, ...) \
@@ -94,6 +95,7 @@ struct avs_dev {
 	char **lib_names;
 
 	struct completion fw_ready;
+	struct work_struct recovery_work;
 
 	struct acpi_table_nhlt *nhlt;
 	struct list_head comp_list;
@@ -204,6 +206,10 @@ int avs_notify_subscribe(struct list_head *sub_list, u32 notify_id,
 			 void (*callback)(union avs_notify_msg, void *, size_t, void *),
 			 void *context);
 int avs_notify_unsubscribe(struct list_head *sub_list, u32 notify_id, void *context);
+
+void avs_dsp_recovery_work(struct work_struct *work);
+void avs_dsp_exception_caught(union avs_notify_msg msg, void *data,
+			      size_t data_size, void *context);
 
 /* Firmware resources management */
 

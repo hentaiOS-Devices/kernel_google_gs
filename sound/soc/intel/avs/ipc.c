@@ -65,6 +65,79 @@ int avs_notify_unsubscribe(struct list_head *sub_list, u32 notify_id, void *cont
 	return 0;
 }
 
+static void avs_dsp_recovery(struct avs_dev *adev)
+{
+	struct avs_soc_component *acomp;
+	unsigned int core_mask;
+	int ret;
+
+	/* disconnect all running streams */
+	list_for_each_entry(acomp, &adev->comp_list, node) {
+		struct snd_soc_pcm_runtime *rtd;
+		struct snd_soc_card *card;
+
+		card = acomp->base.card;
+		if (!card)
+			continue;
+
+		for_each_card_rtds(card, rtd) {
+			struct snd_pcm *pcm;
+			int dir;
+
+			pcm = rtd->pcm;
+			if (!pcm || rtd->dai_link->no_pcm)
+				continue;
+
+			for_each_pcm_streams(dir) {
+				struct snd_pcm_substream *substream;
+
+				substream = pcm->streams[dir].substream;
+				if (!substream || !substream->runtime)
+					continue;
+
+				snd_pcm_stop(substream, SNDRV_PCM_STATE_DISCONNECTED);
+			}
+		}
+	}
+
+	/* forcibly shutdown all cores */
+	core_mask = GENMASK(adev->hw_cfg.dsp_cores - 1, 0);
+	avs_dsp_core_disable(adev, core_mask);
+
+	/* attempt dsp reboot */
+	ret = avs_dsp_boot_firmware(adev, true);
+	if (ret < 0)
+		dev_err(adev->dev, "firmware reboot failed: %d\n", ret);
+
+	pm_runtime_mark_last_busy(adev->dev);
+	pm_runtime_enable(adev->dev);
+	pm_request_autosuspend(adev->dev);
+}
+
+void avs_dsp_recovery_work(struct work_struct *work)
+{
+	struct avs_dev *adev = container_of(work, struct avs_dev, recovery_work);
+
+	avs_dsp_recovery(adev);
+}
+
+void avs_dsp_exception_caught(union avs_notify_msg msg, void *data,
+			      size_t data_size, void *context)
+{
+	struct avs_dev *adev = context;
+
+	dev_err(adev->dev, "dsp core exception caught\n");
+
+	/* Re-enabled on recovery completion. */
+	avs_ipc_block(adev->ipc);
+	pm_runtime_disable(adev->dev);
+
+	/* Process received notification. */
+	avs_dsp_op(adev, coredump, msg);
+
+	schedule_work(&adev->recovery_work);
+}
+
 static void avs_dsp_receive_rx(struct avs_dev *adev, u64 header)
 {
 	struct avs_ipc *ipc = adev->ipc;
@@ -104,6 +177,9 @@ static void avs_dsp_process_notification(struct avs_dev *adev, u64 header)
 
 	case AVS_NOTIFY_RESOURCE_EVENT:
 		data_size = sizeof(struct avs_notify_res_data);
+		break;
+
+	case AVS_NOTIFY_EXCEPTION_CAUGHT:
 		break;
 
 	case AVS_NOTIFY_MODULE_EVENT:
@@ -304,7 +380,11 @@ static int avs_dsp_do_send_msg(struct avs_dev *adev, struct avs_ipc_msg request,
 			dev_crit(adev->dev, "communication severed: %d, rebooting dsp..\n",
 				 ret);
 
+			/* Re-enabled on recovery completion. */
 			avs_ipc_block(ipc);
+			pm_runtime_disable(adev->dev);
+
+			schedule_work(&adev->recovery_work);
 		}
 		goto exit;
 	}
