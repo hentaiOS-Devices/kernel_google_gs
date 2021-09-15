@@ -9,6 +9,7 @@
 #include <sound/hdaudio_ext.h>
 #include "avs.h"
 #include "registers.h"
+#include "trace.h"
 
 #define AVS_ADSPCS_INTERVAL_MS		500
 #define AVS_ADSPCS_TIMEOUT_MS		50000
@@ -18,6 +19,7 @@ int avs_dsp_core_power(struct avs_dev *adev, u32 core_mask, bool active)
 	u32 value, mask, reg;
 
 	value = snd_hdac_adsp_readl(adev, AZX_ADSP_REG_ADSPCS);
+	trace_avs_dsp_core_op(value, core_mask, "power", active);
 
 	mask = AZX_ADSPCS_SPA_MASK(core_mask);
 	value = active ? mask : 0;
@@ -37,6 +39,7 @@ int avs_dsp_core_reset(struct avs_dev *adev, u32 core_mask, bool reset)
 	u32 value, mask, reg;
 
 	value = snd_hdac_adsp_readl(adev, AZX_ADSP_REG_ADSPCS);
+	trace_avs_dsp_core_op(value, core_mask, "reset", reset);
 
 	mask = AZX_ADSPCS_CRST_MASK(core_mask);
 	value = reset ? mask : 0;
@@ -54,6 +57,7 @@ int avs_dsp_core_stall(struct avs_dev *adev, u32 core_mask, bool stall)
 	u32 value, mask, reg;
 
 	value = snd_hdac_adsp_readl(adev, AZX_ADSP_REG_ADSPCS);
+	trace_avs_dsp_core_op(value, core_mask, "stall", stall);
 
 	mask = AZX_ADSPCS_CSTALL_MASK(core_mask);
 	value = stall ? mask : 0;

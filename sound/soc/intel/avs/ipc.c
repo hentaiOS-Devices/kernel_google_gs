@@ -11,6 +11,7 @@
 #include "avs.h"
 #include "messages.h"
 #include "registers.h"
+#include "trace.h"
 
 #define AVS_IPC_TIMEOUT_MS	300
 #define AVS_D0IX_DELAY_MS	300
@@ -229,6 +230,10 @@ static void avs_dsp_receive_rx(struct avs_dev *adev, u64 header)
 {
 	struct avs_ipc *ipc = adev->ipc;
 	union avs_reply_msg msg = AVS_MSG(header);
+	u64 reg;
+
+	reg = readq(avs_sram_addr(adev, AVS_FW_REGS_WINDOW));
+	trace_avs_ipc_reply_msg(header, reg);
 
 	ipc->rx.header = header;
 	if (!msg.status) {
@@ -239,6 +244,7 @@ static void avs_dsp_receive_rx(struct avs_dev *adev, u64 header)
 
 		memcpy_fromio(ipc->rx.data, avs_uplink_addr(adev),
 			      ipc->rx.size);
+		trace_avs_msg_payload(ipc->rx.data, ipc->rx.size);
 	}
 }
 
@@ -248,6 +254,10 @@ static void avs_dsp_process_notification(struct avs_dev *adev, u64 header)
 	union avs_notify_msg msg = AVS_MSG(header);
 	size_t data_size = 0;
 	void *data = NULL;
+	u64 reg;
+
+	reg = readq(avs_sram_addr(adev, AVS_FW_REGS_WINDOW));
+	trace_avs_ipc_notify_msg(header, reg);
 
 	switch (msg.notify_msg_type) {
 		struct avs_notify_mod_data mod_data;
@@ -287,6 +297,7 @@ static void avs_dsp_process_notification(struct avs_dev *adev, u64 header)
 			return;
 
 		memcpy_fromio(data, avs_uplink_addr(adev), data_size);
+		trace_avs_msg_payload(data, data_size);
 	}
 
 	list_for_each_entry(action, &adev->notify_sub_list, node)
@@ -434,9 +445,15 @@ static void avs_ipc_msg_init(struct avs_ipc *ipc, struct avs_ipc_msg request,
 	reinit_completion(&ipc->busy_completion);
 }
 
-static void avs_dsp_send_tx(struct avs_dev *adev, const struct avs_ipc_msg *tx)
+static void avs_dsp_send_tx(struct avs_dev *adev, const struct avs_ipc_msg *tx,
+			    bool read_fwregs)
 {
 	const struct avs_spec *const spec = adev->spec;
+	u64 reg = ULONG_MAX;
+
+	if (read_fwregs)
+		reg = readq(avs_sram_addr(adev, AVS_FW_REGS_WINDOW));
+	trace_avs_request(tx, reg);
 
 	if (tx->size)
 		memcpy_toio(avs_downlink_addr(adev), tx->data, tx->size);
@@ -459,7 +476,7 @@ static int avs_dsp_do_send_msg(struct avs_dev *adev, struct avs_ipc_msg request,
 
 	spin_lock_irqsave(&ipc->lock, flags);
 	avs_ipc_msg_init(ipc, request, reply);
-	avs_dsp_send_tx(adev, &request);
+	avs_dsp_send_tx(adev, &request, true);
 	spin_unlock_irqrestore(&ipc->lock, flags);
 
 	ret = avs_ipc_wait_busy_completion(ipc, timeout);
@@ -560,7 +577,11 @@ static int avs_dsp_do_send_rom_msg(struct avs_dev *adev, struct avs_ipc_msg requ
 
 	spin_lock_irqsave(&ipc->lock, flags);
 	avs_ipc_msg_init(ipc, request, NULL);
-	avs_dsp_send_tx(adev, &request);
+	/*
+	 * with hw still stalled, memory windows may not be
+	 * configured properly so avoid accessing SRAM
+	 */
+	avs_dsp_send_tx(adev, &request, false);
 	spin_unlock_irqrestore(&ipc->lock, flags);
 
 	/* ROM messages must be sent before master core is unstalled */
