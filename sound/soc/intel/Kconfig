@@ -226,5 +226,8 @@ config SND_SOC_INTEL_AVS
 	  Apollolake. This is a recommended option.
 	  Say Y or m if you have such device.
 
+# Machine board drivers
+source "sound/soc/intel/avs/boards/Kconfig"
+
 # ASoC codec drivers
 source "sound/soc/intel/boards/Kconfig"
