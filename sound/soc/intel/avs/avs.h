@@ -47,6 +47,8 @@ struct avs_dsp_ops {
 #define avs_dsp_op(adev, op, ...) \
 	((adev)->spec->dops->op(adev, ## __VA_ARGS__))
 
+extern const struct avs_dsp_ops skl_dsp_ops;
+
 #define AVS_PLATATTR_CLDMA		BIT_ULL(0)
 #define AVS_PLATATTR_IMR		BIT_ULL(1)
 
@@ -240,6 +242,9 @@ void avs_dsp_exception_caught(union avs_notify_msg msg, void *data,
 
 int avs_dsp_disable_d0ix(struct avs_dev *adev);
 int avs_dsp_enable_d0ix(struct avs_dev *adev);
+
+irqreturn_t skl_dsp_irq_thread(struct avs_dev *adev);
+unsigned int skl_log_buffer_offset(struct avs_dev *adev, u32 core);
 
 /* Firmware resources management */
 
