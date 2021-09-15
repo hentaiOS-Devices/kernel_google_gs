@@ -22,6 +22,7 @@ struct avs_dev;
 struct avs_tplg;
 struct avs_tplg_library;
 struct avs_soc_component;
+struct avs_ipc_msg;
 
 struct avs_dsp_ops {
 	int (* const power)(struct avs_dev *, u32, bool);
@@ -39,6 +40,8 @@ struct avs_dsp_ops {
 	unsigned int (* const log_buffer_offset)(struct avs_dev *, u32);
 	int (* const log_buffer_status)(struct avs_dev *, union avs_notify_msg);
 	int (* const coredump)(struct avs_dev *, union avs_notify_msg);
+	bool (* const d0ix_toggle)(struct avs_dev *, struct avs_ipc_msg *, bool);
+	int (* const set_d0ix)(struct avs_dev *, bool);
 };
 
 #define avs_dsp_op(adev, op, ...) \
@@ -167,6 +170,10 @@ struct avs_ipc {
 	struct mutex mutex;
 	struct completion done_completion;
 	struct completion busy_completion;
+
+	struct delayed_work d0ix_work;
+	atomic_t d0ix_disable_depth;
+	bool in_d0ix;
 };
 
 /*
@@ -229,6 +236,9 @@ void avs_dsp_log_buffer_status(union avs_notify_msg msg, void *data,
 void avs_dsp_recovery_work(struct work_struct *work);
 void avs_dsp_exception_caught(union avs_notify_msg msg, void *data,
 			      size_t data_size, void *context);
+
+int avs_dsp_disable_d0ix(struct avs_dev *adev);
+int avs_dsp_enable_d0ix(struct avs_dev *adev);
 
 /* Firmware resources management */
 
