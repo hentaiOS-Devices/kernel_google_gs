@@ -33,7 +33,9 @@
 #define BASEFW_FILENAME			"dsp_basefw.bin"
 #define EXT_MANIFEST_MAGIC		0x31454124
 #define CAVS15_MANIFEST_MAGIC		0x00000006
+#define CAVS18_MANIFEST_MAGIC		0x44504324
 #define CAVS15_ADSPFW_OFFSET		0x284
+#define CAVS18_ADSPFW_OFFSET		0x2000
 
 static bool debug_ignore_fw_version_check;
 module_param_named(ignore_fw_version, debug_ignore_fw_version_check, bool, 0444);
@@ -83,6 +85,8 @@ static int avs_fw_manifest_offset(struct firmware *fw)
 	switch (magic) {
 	case CAVS15_MANIFEST_MAGIC:
 		return CAVS15_ADSPFW_OFFSET;
+	case CAVS18_MANIFEST_MAGIC:
+		return CAVS18_ADSPFW_OFFSET;
 	default:
 		return -EINVAL;
 	}
