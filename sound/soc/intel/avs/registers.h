@@ -43,6 +43,7 @@
 #define AVS_FW_REGS_WINDOW		0
 #define AVS_UPLINK_WINDOW		AVS_FW_REGS_WINDOW
 #define AVS_DOWNLINK_WINDOW		1
+#define AVS_DEBUG_WINDOW		2
 
 /* registry I/O helpers */
 #define avs_sram_offset(adev, window_idx) \

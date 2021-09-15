@@ -65,6 +65,14 @@ int avs_notify_unsubscribe(struct list_head *sub_list, u32 notify_id, void *cont
 	return 0;
 }
 
+void avs_dsp_log_buffer_status(union avs_notify_msg msg, void *data,
+			       size_t data_size, void *context)
+{
+	struct avs_dev *adev = context;
+
+	avs_dsp_op(adev, log_buffer_status, msg);
+}
+
 static void avs_dsp_recovery(struct avs_dev *adev)
 {
 	struct avs_soc_component *acomp;
@@ -179,6 +187,7 @@ static void avs_dsp_process_notification(struct avs_dev *adev, u64 header)
 		data_size = sizeof(struct avs_notify_res_data);
 		break;
 
+	case AVS_NOTIFY_LOG_BUFFER_STATUS:
 	case AVS_NOTIFY_EXCEPTION_CAUGHT:
 		break;
 

@@ -11,6 +11,7 @@
 
 #include <linux/device.h>
 #include <linux/firmware.h>
+#include <linux/kfifo.h>
 #include <sound/hda_codec.h>
 #include <sound/hda_register.h>
 #include <sound/soc-component.h>
@@ -33,6 +34,10 @@ struct avs_dsp_ops {
 	int (* const load_lib)(struct avs_dev *, struct firmware *, u32);
 	int (* const transfer_mods)(struct avs_dev *, bool,
 				    struct avs_module_entry *, u32);
+	int (* const enable_logs)(struct avs_dev *, enum avs_log_enable,
+				  u32, u32, unsigned long, u32 *);
+	unsigned int (* const log_buffer_offset)(struct avs_dev *, u32);
+	int (* const log_buffer_status)(struct avs_dev *, union avs_notify_msg);
 	int (* const coredump)(struct avs_dev *, union avs_notify_msg);
 };
 
@@ -75,6 +80,16 @@ struct avs_fw_entry {
 	struct list_head node;
 };
 
+struct avs_debug {
+	struct kfifo trace_fifo;
+	spinlock_t fifo_lock;
+	spinlock_t trace_lock;
+	wait_queue_head_t trace_waitq;
+	u32 aging_timer_period;
+	u32 fifo_full_timer_period;
+	u32 logged_res;
+};
+
 struct avs_dev {
 	struct hda_bus bus;
 	struct device *dev;
@@ -103,6 +118,8 @@ struct avs_dev {
 	struct list_head path_list;
 	spinlock_t path_list_lock;
 	struct mutex path_mutex;
+
+	struct avs_debug dbg;
 };
 
 /* from hda_bus to avs_dev */
@@ -207,6 +224,8 @@ int avs_notify_subscribe(struct list_head *sub_list, u32 notify_id,
 			 void *context);
 int avs_notify_unsubscribe(struct list_head *sub_list, u32 notify_id, void *context);
 
+void avs_dsp_log_buffer_status(union avs_notify_msg msg, void *data,
+			       size_t data_size, void *context);
 void avs_dsp_recovery_work(struct work_struct *work);
 void avs_dsp_exception_caught(union avs_notify_msg msg, void *data,
 			      size_t data_size, void *context);
@@ -273,5 +292,17 @@ int avs_dmic_platform_register(struct avs_dev *adev, const char *name);
 int avs_ssp_platform_register(struct avs_dev *adev, const char *name,
 			      unsigned long port_mask, unsigned long *tdms);
 int avs_hda_platform_register(struct avs_dev *adev, const char *name);
+
+/* Firmware tracing helpers */
+
+unsigned int __kfifo_fromio_locked(struct kfifo *fifo, const void __iomem *src,
+				   unsigned int len, spinlock_t *lock);
+
+#define avs_log_buffer_size(adev) \
+	((adev)->fw_cfg.trace_log_bytes / (adev)->hw_cfg.dsp_cores)
+
+#define avs_log_buffer_addr(adev, core) \
+	(avs_sram_addr(adev, AVS_DEBUG_WINDOW) + \
+	 avs_dsp_op(adev, log_buffer_offset, core))
 
 #endif /* __SOUND_SOC_INTEL_AVS_H */
