@@ -302,7 +302,6 @@ void intel_gt_suspend_prepare(struct intel_gt *gt)
 	wait_for_suspend(gt);
 
 	intel_pxp_suspend_prepare(&gt->pxp);
-	intel_uc_suspend(&gt->uc);
 }
 
 static suspend_state_t pm_suspend_target(void)
@@ -326,6 +325,7 @@ void intel_gt_suspend_late(struct intel_gt *gt)
 
 	GEM_BUG_ON(gt->awake);
 
+	intel_uc_suspend(&gt->uc);
 	intel_pxp_suspend(&gt->pxp);
 
 	/*
