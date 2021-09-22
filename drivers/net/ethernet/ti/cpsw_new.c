@@ -1811,12 +1811,7 @@ static int cpsw_register_devlink(struct cpsw_common *cpsw)
 	dl_priv = devlink_priv(cpsw->devlink);
 	dl_priv->cpsw = cpsw;
 
-	ret = devlink_register(cpsw->devlink, dev);
-	if (ret) {
-		dev_err(dev, "DL reg fail ret:%d\n", ret);
-		goto dl_free;
-	}
-
+	devlink_register(cpsw->devlink, dev);
 	ret = devlink_params_register(cpsw->devlink, cpsw_devlink_params,
 				      ARRAY_SIZE(cpsw_devlink_params));
 	if (ret) {
@@ -1829,7 +1824,6 @@ static int cpsw_register_devlink(struct cpsw_common *cpsw)
 
 dl_unreg:
 	devlink_unregister(cpsw->devlink);
-dl_free:
 	devlink_free(cpsw->devlink);
 	return ret;
 }

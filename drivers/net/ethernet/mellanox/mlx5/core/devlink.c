@@ -380,10 +380,7 @@ int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
 {
 	int err;
 
-	err = devlink_register(devlink, dev);
-	if (err)
-		return err;
-
+	devlink_register(devlink, dev);
 	err = devlink_params_register(devlink, mlx5_devlink_params,
 				      ARRAY_SIZE(mlx5_devlink_params));
 	if (err)

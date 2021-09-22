@@ -8001,7 +8001,7 @@ EXPORT_SYMBOL_GPL(devlink_alloc);
  *	@devlink: devlink
  *	@dev: parent device
  */
-int devlink_register(struct devlink *devlink, struct device *dev)
+void devlink_register(struct devlink *devlink, struct device *dev)
 {
 	devlink->dev = dev;
 	devlink->registered = true;
@@ -8009,7 +8009,6 @@ int devlink_register(struct devlink *devlink, struct device *dev)
 	list_add_tail(&devlink->list, &devlink_list);
 	devlink_notify(devlink, DEVLINK_CMD_NEW);
 	mutex_unlock(&devlink_mutex);
-	return 0;
 }
 EXPORT_SYMBOL_GPL(devlink_register);
 

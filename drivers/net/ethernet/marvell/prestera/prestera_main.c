@@ -586,9 +586,7 @@ static int prestera_switch_init(struct prestera_switch *sw)
 	if (err)
 		goto err_handlers_register;
 
-	err = prestera_devlink_register(sw);
-	if (err)
-		goto err_dl_register;
+	prestera_devlink_register(sw);
 
 	err = prestera_create_ports(sw);
 	if (err)
@@ -598,7 +596,6 @@ static int prestera_switch_init(struct prestera_switch *sw)
 
 err_ports_create:
 	prestera_devlink_unregister(sw);
-err_dl_register:
 	prestera_event_handlers_unregister(sw);
 err_handlers_register:
 	prestera_rxtx_switch_fini(sw);
