@@ -928,6 +928,8 @@ static int mtk_dip_video_device_v4l2_register(struct mtk_dip_pipe *pipe,
 	vbq->min_buffers_needed = 0;
 	vbq->drv_priv = pipe;
 	vbq->lock = &node->dev_q.lock;
+	if (node->desc->cached_mmap)
+		vbq->allow_cache_hints = 1;
 
 	ret = vb2_queue_init(vbq);
 	if (ret) {
@@ -1817,6 +1819,7 @@ queues_setting[MTK_DIP_VIDEO_NODE_ID_TOTAL_NUM] = {
 		.ops = &mtk_dip_v4l2_video_cap_ioctl_ops,
 		.vb2_ops = &mtk_dip_vb2_video_ops,
 		.description = "Output quality enhanced image",
+		.cached_mmap = true,
 	},
 	{
 		.id = MTK_DIP_VIDEO_NODE_ID_MDP1_CAPTURE,
