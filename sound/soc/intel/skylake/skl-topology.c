@@ -3605,7 +3605,7 @@ static int skl_manifest_load(struct snd_soc_component *cmpnt, int index,
 	return 0;
 }
 
-static void skl_tplg_complete(struct snd_soc_component *component)
+static int skl_tplg_complete(struct snd_soc_component *component)
 {
 	struct snd_soc_dobj *dobj;
 	struct snd_soc_acpi_mach *mach;
@@ -3614,7 +3614,7 @@ static void skl_tplg_complete(struct snd_soc_component *component)
 
 	val = kmalloc(sizeof(*val), GFP_KERNEL);
 	if (!val)
-		return;
+		return -ENOMEM;
 
 	mach = dev_get_platdata(component->card->dev);
 	list_for_each_entry(dobj, &component->dobj_list, list) {
@@ -3639,7 +3639,9 @@ static void skl_tplg_complete(struct snd_soc_component *component)
 			}
 		}
 	}
+
 	kfree(val);
+	return 0;
 }
 
 static struct snd_soc_tplg_ops skl_tplg_ops  = {
