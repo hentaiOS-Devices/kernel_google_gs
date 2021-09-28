@@ -375,6 +375,17 @@ static void ath11k_hw_ipq8074_rx_desc_set_msdu_len(struct hal_rx_desc *desc, u16
 	desc->u.ipq8074.msdu_start.info1 = __cpu_to_le32(info);
 }
 
+static bool ath11k_hw_ipq8074_rx_desc_mac_addr2_valid(struct hal_rx_desc *desc)
+{
+	return __le32_to_cpu(desc->u.ipq8074.mpdu_start.info1) &
+	       RX_MPDU_START_INFO1_MAC_ADDR2_VALID;
+}
+
+static u8 *ath11k_hw_ipq8074_rx_desc_mpdu_start_addr2(struct hal_rx_desc *desc)
+{
+	return desc->u.ipq8074.mpdu_start.addr2;
+}
+
 static
 struct rx_attention *ath11k_hw_ipq8074_rx_desc_get_attention(struct hal_rx_desc *desc)
 {
@@ -546,6 +557,17 @@ static u8 *ath11k_hw_qcn9074_rx_desc_get_msdu_payload(struct hal_rx_desc *desc)
 	return &desc->u.qcn9074.msdu_payload[0];
 }
 
+static bool ath11k_hw_ipq9074_rx_desc_mac_addr2_valid(struct hal_rx_desc *desc)
+{
+	return __le32_to_cpu(desc->u.qcn9074.mpdu_start.info11) &
+	       RX_MPDU_START_INFO11_MAC_ADDR2_VALID;
+}
+
+static u8 *ath11k_hw_ipq9074_rx_desc_mpdu_start_addr2(struct hal_rx_desc *desc)
+{
+	return desc->u.qcn9074.mpdu_start.addr2;
+}
+
 static bool ath11k_hw_wcn6855_rx_desc_get_first_msdu(struct hal_rx_desc *desc)
 {
 	return !!FIELD_GET(RX_MSDU_END_INFO2_FIRST_MSDU_WCN6855,
@@ -706,6 +728,17 @@ static u8 *ath11k_hw_wcn6855_rx_desc_get_msdu_payload(struct hal_rx_desc *desc)
 	return &desc->u.wcn6855.msdu_payload[0];
 }
 
+static bool ath11k_hw_wcn6855_rx_desc_mac_addr2_valid(struct hal_rx_desc *desc)
+{
+	return __le32_to_cpu(desc->u.wcn6855.mpdu_start.info1) &
+	       RX_MPDU_START_INFO1_MAC_ADDR2_VALID;
+}
+
+static u8 *ath11k_hw_wcn6855_rx_desc_mpdu_start_addr2(struct hal_rx_desc *desc)
+{
+	return desc->u.wcn6855.mpdu_start.addr2;
+}
+
 static void ath11k_hw_wcn6855_reo_setup(struct ath11k_base *ab)
 {
 	u32 reo_base = HAL_SEQ_WCSS_UMAC_REO_REG;
@@ -802,6 +835,8 @@ const struct ath11k_hw_ops ipq8074_ops = {
 	.rx_desc_get_msdu_payload = ath11k_hw_ipq8074_rx_desc_get_msdu_payload,
 	.reo_setup = ath11k_hw_ipq8074_reo_setup,
 	.mpdu_info_get_peerid = ath11k_hw_ipq8074_mpdu_info_get_peerid,
+	.rx_desc_mac_addr2_valid = ath11k_hw_ipq8074_rx_desc_mac_addr2_valid,
+	.rx_desc_mpdu_start_addr2 = ath11k_hw_ipq8074_rx_desc_mpdu_start_addr2,
 };
 
 const struct ath11k_hw_ops ipq6018_ops = {
@@ -838,6 +873,8 @@ const struct ath11k_hw_ops ipq6018_ops = {
 	.rx_desc_get_msdu_payload = ath11k_hw_ipq8074_rx_desc_get_msdu_payload,
 	.reo_setup = ath11k_hw_ipq8074_reo_setup,
 	.mpdu_info_get_peerid = ath11k_hw_ipq8074_mpdu_info_get_peerid,
+	.rx_desc_mac_addr2_valid = ath11k_hw_ipq8074_rx_desc_mac_addr2_valid,
+	.rx_desc_mpdu_start_addr2 = ath11k_hw_ipq8074_rx_desc_mpdu_start_addr2,
 };
 
 const struct ath11k_hw_ops qca6390_ops = {
@@ -874,6 +911,8 @@ const struct ath11k_hw_ops qca6390_ops = {
 	.rx_desc_get_msdu_payload = ath11k_hw_ipq8074_rx_desc_get_msdu_payload,
 	.reo_setup = ath11k_hw_ipq8074_reo_setup,
 	.mpdu_info_get_peerid = ath11k_hw_ipq8074_mpdu_info_get_peerid,
+	.rx_desc_mac_addr2_valid = ath11k_hw_ipq8074_rx_desc_mac_addr2_valid,
+	.rx_desc_mpdu_start_addr2 = ath11k_hw_ipq8074_rx_desc_mpdu_start_addr2,
 };
 
 const struct ath11k_hw_ops qcn9074_ops = {
@@ -910,6 +949,8 @@ const struct ath11k_hw_ops qcn9074_ops = {
 	.rx_desc_get_msdu_payload = ath11k_hw_qcn9074_rx_desc_get_msdu_payload,
 	.reo_setup = ath11k_hw_ipq8074_reo_setup,
 	.mpdu_info_get_peerid = ath11k_hw_ipq8074_mpdu_info_get_peerid,
+	.rx_desc_mac_addr2_valid = ath11k_hw_ipq9074_rx_desc_mac_addr2_valid,
+	.rx_desc_mpdu_start_addr2 = ath11k_hw_ipq9074_rx_desc_mpdu_start_addr2,
 };
 
 const struct ath11k_hw_ops wcn6855_ops = {
@@ -946,6 +987,8 @@ const struct ath11k_hw_ops wcn6855_ops = {
 	.rx_desc_get_msdu_payload = ath11k_hw_wcn6855_rx_desc_get_msdu_payload,
 	.reo_setup = ath11k_hw_wcn6855_reo_setup,
 	.mpdu_info_get_peerid = ath11k_hw_wcn6855_mpdu_info_get_peerid,
+	.rx_desc_mac_addr2_valid = ath11k_hw_wcn6855_rx_desc_mac_addr2_valid,
+	.rx_desc_mpdu_start_addr2 = ath11k_hw_wcn6855_rx_desc_mpdu_start_addr2,
 };
 
 #define ATH11K_TX_RING_MASK_0 0x1
