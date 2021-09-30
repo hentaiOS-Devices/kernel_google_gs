@@ -7536,11 +7536,10 @@ encoder_retry:
 
 		ret = encoder->compute_config(encoder, pipe_config,
 					      connector_state);
+		if (ret == -EDEADLK)
+			return ret;
 		if (ret < 0) {
-			if (ret != -EDEADLK)
-				drm_dbg_kms(&i915->drm,
-					    "Encoder config failure: %d\n",
-					    ret);
+			drm_dbg_kms(&i915->drm, "Encoder config failure: %d\n", ret);
 			return ret;
 		}
 	}
