@@ -1604,7 +1604,6 @@ static void read_bulk_callback(struct urb *urb)
 		netif_device_detach(tp->netdev);
 		return;
 	case -ENOENT:
-	case -EPROTO:
 		return;	/* the urb is in unlink state */
 	case -ETIME:
 		if (net_ratelimit())
