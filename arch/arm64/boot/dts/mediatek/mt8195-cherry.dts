@@ -37,3 +37,19 @@
 &rt1019p {
 	status = "okay";
 };
+
+&disp_dpi1 {
+	status = "okay";
+};
+
+&hdmi_phy {
+	status = "okay";
+};
+
+&hdmiddc0 {
+	status = "okay";
+};
+
+&hdmi0 {
+	status = "okay";
+};
