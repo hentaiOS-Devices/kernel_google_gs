@@ -1446,6 +1446,11 @@ static const struct panel_desc lg_lp120up1 = {
 		.width = 267,
 		.height = 183,
 	},
+	.delay = {
+		.prepare_to_enable = 200,
+		.enable = 50,
+		.unprepare = 500,
+	},
 };
 
 static const struct drm_display_mode lg_lp129qe_mode = {
