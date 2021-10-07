@@ -47,7 +47,6 @@ extern "C" {
 #define DRM_VIRTGPU_WAIT     0x08
 #define DRM_VIRTGPU_GET_CAPS  0x09
 #define DRM_VIRTGPU_RESOURCE_CREATE_BLOB 0x0a
-#define DRM_VIRTGPU_CONTEXT_INIT 0x0b
 
 #define VIRTGPU_EXECBUF_FENCE_FD_IN	0x01
 #define VIRTGPU_EXECBUF_FENCE_FD_OUT	0x02
@@ -76,8 +75,6 @@ struct drm_virtgpu_execbuffer {
 #define VIRTGPU_PARAM_RESOURCE_BLOB 3 /* DRM_VIRTGPU_RESOURCE_CREATE_BLOB */
 #define VIRTGPU_PARAM_HOST_VISIBLE 4 /* Host blob resources are mappable */
 #define VIRTGPU_PARAM_CROSS_DEVICE 5 /* Cross virtio-device resource sharing  */
-#define VIRTGPU_PARAM_CONTEXT_INIT 6 /* DRM_VIRTGPU_CONTEXT_INIT */
-#define VIRTGPU_PARAM_SUPPORTED_CAPSET_IDs 7 /* Bitmask of supported capability set ids */
 
 struct drm_virtgpu_getparam {
 	__u64 param;
@@ -204,20 +201,6 @@ struct drm_virtgpu_resource_create_blob {
 	__u64 blob_id;
 };
 
-#define VIRTGPU_CONTEXT_PARAM_CAPSET_ID 0x0001
-struct drm_virtgpu_context_set_param {
-	__u64 param;
-	__u64 value;
-};
-
-struct drm_virtgpu_context_init {
-	__u32 num_params;
-	__u32 pad;
-
-	/* pointer to drm_virtgpu_context_set_param array */
-	__u64 ctx_set_params;
-};
-
 #define DRM_IOCTL_VIRTGPU_MAP \
 	DRM_IOWR(DRM_COMMAND_BASE + DRM_VIRTGPU_MAP, struct drm_virtgpu_map)
 
@@ -261,10 +244,6 @@ struct drm_virtgpu_context_init {
 #define DRM_IOCTL_VIRTGPU_RESOURCE_CREATE_BLOB				\
 	DRM_IOWR(DRM_COMMAND_BASE + DRM_VIRTGPU_RESOURCE_CREATE_BLOB,	\
 		struct drm_virtgpu_resource_create_blob)
-
-#define DRM_IOCTL_VIRTGPU_CONTEXT_INIT					\
-	DRM_IOWR(DRM_COMMAND_BASE + DRM_VIRTGPU_CONTEXT_INIT,		\
-		struct drm_virtgpu_context_init)
 
 #if defined(__cplusplus)
 }
