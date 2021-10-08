@@ -57,9 +57,6 @@
  * GENPD_FLAG_RPM_ALWAYS_ON:	Instructs genpd to always keep the PM domain
  *				powered on except for system suspend.
  *
- * GENPD_FLAG_SUSPEND_ON:	Instructs genpd to keep the PM domain powered
- *				on during suspend and runtime PM controlled
- *				otherwise.
  * GENPD_FLAG_MIN_RESIDENCY:	Enable the genpd governor to consider its
  *				components' next wakeup when determining the
  *				optimal idle state.
@@ -70,8 +67,7 @@
 #define GENPD_FLAG_ACTIVE_WAKEUP (1U << 3)
 #define GENPD_FLAG_CPU_DOMAIN	 (1U << 4)
 #define GENPD_FLAG_RPM_ALWAYS_ON (1U << 5)
-#define GENPD_FLAG_SUSPEND_ON	 (1U << 6)
-#define GENPD_FLAG_MIN_RESIDENCY (1U << 7)
+#define GENPD_FLAG_MIN_RESIDENCY (1U << 6)
 
 enum gpd_status {
 	GENPD_STATE_ON = 0,	/* PM domain is on */
