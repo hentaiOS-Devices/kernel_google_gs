@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 MediaTek Inc.
+ */
+
+&cros_ec {
+	mt_pmic_vmc_ldo_reg: regulator@0 {
+		compatible = "google,cros-ec-regulator";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <3600000>;
+		reg = <0>;
+	};
+	mt_pmic_vmch_ldo_reg: regulator@1 {
+		compatible = "google,cros-ec-regulator";
+		regulator-min-microvolt = <2700000>;
+		regulator-max-microvolt = <3600000>;
+		reg = <1>;
+	};
+};
