@@ -10,3 +10,12 @@
 	model = "MediaTek Tomato board";
 	compatible = "google,tomato-rev2", "google,tomato", "mediatek,mt8195";
 };
+
+&sound {
+	compatible = "mediatek,mt8195_mt6359_rt1019_rt5682";
+	mediatek,dptx-codec = <&dp_tx>;
+};
+
+&rt1019p {
+	status = "okay";
+};
