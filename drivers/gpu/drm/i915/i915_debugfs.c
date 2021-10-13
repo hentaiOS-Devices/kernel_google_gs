@@ -48,7 +48,7 @@
 #include "i915_scheduler.h"
 #include "i915_trace.h"
 #include "intel_pm.h"
-#include "intel_sideband.h"
+#include "vlv_sideband.h"
 
 static inline struct drm_i915_private *node_to_i915(struct drm_info_node *node)
 {
