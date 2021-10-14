@@ -167,6 +167,7 @@
 	display-subsystem {
 		compatible = "rockchip,display-subsystem";
 		ports = <&vopl_out>, <&vopb_out>;
+		devfreq = <&dmc>;
 	};
 
 	pmu_a53 {

@@ -15,6 +15,7 @@
 #include <linux/interrupt.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
+#include <linux/notifier.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_opp.h>
@@ -24,6 +25,8 @@
 #include <linux/suspend.h>
 #include <linux/workqueue.h>
 
+#include <soc/rockchip/rk3399_ddrclk.h>
+#include <soc/rockchip/rk3399_dmc.h>
 #include <soc/rockchip/rk3399_grf.h>
 #include <soc/rockchip/rockchip_sip.h>
 
@@ -56,6 +59,9 @@ struct rk3399_dmcfreq {
 	struct clk *dmc_clk;
 	struct devfreq_event_dev *edev;
 	struct mutex lock;
+	struct mutex en_lock;
+	int num_sync_nb;
+	int disable_count;
 	struct regulator *vdd_center;
 	struct regmap *regmap_pmu;
 	unsigned long rate, target_rate;
@@ -415,6 +421,14 @@ static int rk3399_dmcfreq_target(struct device *dev, unsigned long *freq,
 	}
 
 	/*
+	 * Setting the dpll is asynchronous since clk_set_rate grabs a global
+	 * common clk lock and set_rate for the dpll takes up to one display
+	 * frame to complete. We still need to wait for the set_rate to complete
+	 * here, though, before we change voltage.
+	 */
+	rockchip_ddrclk_wait_set_rate(dmcfreq->dmc_clk);
+
+	/*
 	 * Check the dpll rate,
 	 * There only two result we will get,
 	 * 1. Ddr frequency scaling fail, we still get the old rate.
@@ -513,6 +527,98 @@ static __maybe_unused int rk3399_dmcfreq_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(rk3399_dmcfreq_pm, rk3399_dmcfreq_suspend,
 			 rk3399_dmcfreq_resume);
 
+int rockchip_dmcfreq_register_clk_sync_nb(struct devfreq *devfreq,
+					  struct notifier_block *nb)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	int ret;
+
+	mutex_lock(&dmcfreq->en_lock);
+	/*
+	 * We have a short amount of time (~1ms or less typically) to run
+	 * dmcfreq after we sync with the notifier, so syncing with more than
+	 * one notifier is not generally possible. Thus, if more than one sync
+	 * notifier is registered, disable dmcfreq.
+	 */
+	if (dmcfreq->num_sync_nb == 1 && dmcfreq->disable_count <= 0) {
+		rockchip_ddrclk_set_timeout_en(dmcfreq->dmc_clk, false);
+		devfreq_suspend_device(devfreq);
+	}
+
+	ret = rockchip_ddrclk_register_sync_nb(dmcfreq->dmc_clk, nb);
+	if (ret == 0)
+		dmcfreq->num_sync_nb++;
+	else if (dmcfreq->num_sync_nb == 1 && dmcfreq->disable_count <= 0) {
+		rockchip_ddrclk_set_timeout_en(dmcfreq->dmc_clk, true);
+		devfreq_resume_device(devfreq);
+	}
+
+	mutex_unlock(&dmcfreq->en_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rockchip_dmcfreq_register_clk_sync_nb);
+
+int rockchip_dmcfreq_unregister_clk_sync_nb(struct devfreq *devfreq,
+					    struct notifier_block *nb)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	int ret;
+
+	mutex_lock(&dmcfreq->en_lock);
+	ret = rockchip_ddrclk_unregister_sync_nb(dmcfreq->dmc_clk, nb);
+	if (ret == 0) {
+		dmcfreq->num_sync_nb--;
+		if (dmcfreq->num_sync_nb == 1 && dmcfreq->disable_count <= 0) {
+			rockchip_ddrclk_set_timeout_en(dmcfreq->dmc_clk, true);
+			devfreq_resume_device(devfreq);
+		}
+	}
+
+	mutex_unlock(&dmcfreq->en_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rockchip_dmcfreq_unregister_clk_sync_nb);
+
+int rockchip_dmcfreq_block(struct devfreq *devfreq)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	int ret = 0;
+
+	mutex_lock(&dmcfreq->en_lock);
+	if (dmcfreq->num_sync_nb <= 1 && dmcfreq->disable_count <= 0) {
+		rockchip_ddrclk_set_timeout_en(dmcfreq->dmc_clk, false);
+		ret = devfreq_suspend_device(devfreq);
+	}
+
+	if (!ret)
+		dmcfreq->disable_count++;
+	mutex_unlock(&dmcfreq->en_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rockchip_dmcfreq_block);
+
+int rockchip_dmcfreq_unblock(struct devfreq *devfreq)
+{
+	struct rk3399_dmcfreq *dmcfreq = dev_get_drvdata(devfreq->dev.parent);
+	int ret = 0;
+
+	mutex_lock(&dmcfreq->en_lock);
+	if (dmcfreq->num_sync_nb <= 1 && dmcfreq->disable_count == 1) {
+		rockchip_ddrclk_set_timeout_en(dmcfreq->dmc_clk, true);
+		ret = devfreq_resume_device(devfreq);
+	}
+
+	if (!ret)
+		dmcfreq->disable_count--;
+	WARN_ON(dmcfreq->disable_count < 0);
+	mutex_unlock(&dmcfreq->en_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rockchip_dmcfreq_unblock);
+
 static int rk3399_dmcfreq_of_props(struct rk3399_dmcfreq *data,
 				   struct device_node *np)
 {
@@ -593,6 +699,7 @@ static int rk3399_dmcfreq_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	mutex_init(&data->lock);
+	mutex_init(&data->en_lock);
 
 	data->vdd_center = devm_regulator_get(dev, "center");
 	if (IS_ERR(data->vdd_center))
