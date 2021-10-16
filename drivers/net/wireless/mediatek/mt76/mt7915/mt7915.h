@@ -36,8 +36,6 @@
 
 #define MT7915_CFEND_RATE_DEFAULT	0x49	/* OFDM 24M */
 #define MT7915_CFEND_RATE_11B		0x03	/* 11B LP, 11M */
-#define MT7915_5G_RATE_DEFAULT		0x4b	/* OFDM 6M */
-#define MT7915_2G_RATE_DEFAULT		0x0	/* CCK 1M */
 
 #define MT7915_THERMAL_THROTTLE_MAX	100
 
@@ -57,20 +55,11 @@ enum mt7915_txq_id {
 };
 
 enum mt7915_rxq_id {
-	MT7915_RXQ_BAND0 = 0,
+	MT7915_RXQ_BAND0,
 	MT7915_RXQ_BAND1,
 	MT7915_RXQ_MCU_WM = 0,
 	MT7915_RXQ_MCU_WA,
 	MT7915_RXQ_MCU_WA_EXT,
-};
-
-struct mt7915_sta_stats {
-	struct rate_info prob_rate;
-	struct rate_info tx_rate;
-
-	unsigned long per;
-	unsigned long changed;
-	unsigned long jiffies;
 };
 
 struct mt7915_sta_key_conf {
@@ -83,13 +72,12 @@ struct mt7915_sta {
 
 	struct mt7915_vif *vif;
 
-	struct list_head stats_list;
 	struct list_head poll_list;
 	struct list_head rc_list;
 	u32 airtime_ac[8];
 
-	struct mt7915_sta_stats stats;
-
+	unsigned long changed;
+	unsigned long jiffies;
 	unsigned long ampdu_state;
 
 	struct mt7915_sta_key_conf bip;
@@ -134,6 +122,7 @@ struct mt7915_phy {
 
 	struct thermal_cooling_device *cdev;
 	u8 throttle_state;
+	u32 throttle_temp[2]; /* 0: critical high, 1: maximum */
 
 	u32 rxfilter;
 	u64 omac_mask;
@@ -151,9 +140,6 @@ struct mt7915_phy {
 
 	struct mib_stats mib;
 	struct mt76_channel_state state_ts;
-	struct list_head stats_list;
-
-	u8 sta_work_count;
 
 #ifdef CONFIG_NL80211_TESTMODE
 	struct {
@@ -206,7 +192,7 @@ struct mt7915_dev {
 };
 
 enum {
-	HW_BSSID_0 = 0x0,
+	HW_BSSID_0,
 	HW_BSSID_1,
 	HW_BSSID_2,
 	HW_BSSID_3,
@@ -248,13 +234,6 @@ enum mt7915_rdd_cmd {
 	RDD_READ_PULSE,
 	RDD_RESUME_BF,
 	RDD_IRQ_OFF,
-};
-
-enum {
-	RATE_CTRL_RU_INFO,
-	RATE_CTRL_FIXED_RATE_INFO,
-	RATE_CTRL_DUMP_INFO,
-	RATE_CTRL_MU_INFO,
 };
 
 static inline struct mt7915_phy *
@@ -328,13 +307,11 @@ int mt7915_mcu_add_key(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 		       struct mt7915_sta *msta, struct ieee80211_key_conf *key,
 		       enum set_key_cmd cmd);
 int mt7915_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-			  int enable);
+			  bool enable);
 int mt7915_mcu_add_obss_spr(struct mt7915_dev *dev, struct ieee80211_vif *vif,
-                            bool enable);
+			    bool enable);
 int mt7915_mcu_add_rate_ctrl(struct mt7915_dev *dev, struct ieee80211_vif *vif,
-			     struct ieee80211_sta *sta);
-int mt7915_mcu_add_he(struct mt7915_dev *dev, struct ieee80211_vif *vif,
-		      struct ieee80211_sta *sta);
+			     struct ieee80211_sta *sta, bool changed);
 int mt7915_mcu_add_smps(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 			struct ieee80211_sta *sta);
 int mt7915_set_channel(struct mt7915_phy *phy);
@@ -367,7 +344,6 @@ int mt7915_mcu_apply_tx_dpd(struct mt7915_phy *phy);
 int mt7915_mcu_get_chan_mib_info(struct mt7915_phy *phy, bool chan_switch);
 int mt7915_mcu_get_temperature(struct mt7915_phy *phy);
 int mt7915_mcu_set_thermal_throttling(struct mt7915_phy *phy, u8 state);
-int mt7915_mcu_get_tx_rate(struct mt7915_dev *dev, u32 cmd, u16 wlan_idx);
 int mt7915_mcu_get_rx_rate(struct mt7915_phy *phy, struct ieee80211_vif *vif,
 			   struct ieee80211_sta *sta, struct rate_info *rate);
 int mt7915_mcu_rdd_cmd(struct mt7915_dev *dev, enum mt7915_rdd_cmd cmd,

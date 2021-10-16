@@ -266,19 +266,6 @@ static int dwc3_core_soft_reset(struct dwc3 *dwc)
 {
 	u32		reg;
 	int		retries = 1000;
-	int		ret;
-
-	usb_phy_init(dwc->usb2_phy);
-	usb_phy_init(dwc->usb3_phy);
-	ret = phy_init(dwc->usb2_generic_phy);
-	if (ret < 0)
-		return ret;
-
-	ret = phy_init(dwc->usb3_generic_phy);
-	if (ret < 0) {
-		phy_exit(dwc->usb2_generic_phy);
-		return ret;
-	}
 
 	/*
 	 * We're resetting only the device side because, if we're in host mode,
@@ -311,9 +298,6 @@ static int dwc3_core_soft_reset(struct dwc3 *dwc)
 		else
 			udelay(1);
 	} while (--retries);
-
-	phy_exit(dwc->usb3_generic_phy);
-	phy_exit(dwc->usb2_generic_phy);
 
 	return -ETIMEDOUT;
 
@@ -981,9 +965,21 @@ static int dwc3_core_init(struct dwc3 *dwc)
 		dwc->phys_ready = true;
 	}
 
+	usb_phy_init(dwc->usb2_phy);
+	usb_phy_init(dwc->usb3_phy);
+	ret = phy_init(dwc->usb2_generic_phy);
+	if (ret < 0)
+		goto err0a;
+
+	ret = phy_init(dwc->usb3_generic_phy);
+	if (ret < 0) {
+		phy_exit(dwc->usb2_generic_phy);
+		goto err0a;
+	}
+
 	ret = dwc3_core_soft_reset(dwc);
 	if (ret)
-		goto err0a;
+		goto err1;
 
 	if (hw_mode == DWC3_GHWPARAMS0_MODE_DRD &&
 	    !DWC3_VER_IS_WITHIN(DWC3, ANY, 194A)) {
@@ -1731,12 +1727,6 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 		break;
 	case DWC3_GCTL_PRTCAP_HOST:
 		dwc3_set_phy_speed_flags(dwc);
-		if (!PMSG_IS_AUTO(msg)) {
-			if (usb_wakeup_enabled_descendants(hcd->self.root_hub))
-				dwc->need_phy_for_wakeup = true;
-			else
-				dwc->need_phy_for_wakeup = false;
-		}
 
 		/* Let controller to suspend HSPHY before PHY driver suspends */
 		if (dwc->dis_u2_susphy_quirk ||
@@ -1752,6 +1742,16 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 
 		phy_pm_runtime_put_sync(dwc->usb2_generic_phy);
 		phy_pm_runtime_put_sync(dwc->usb3_generic_phy);
+
+		if (!PMSG_IS_AUTO(msg)) {
+			if (device_may_wakeup(&dwc->xhci->dev) &&
+			    usb_wakeup_enabled_descendants(hcd->self.root_hub)) {
+				dwc->need_phy_for_wakeup = true;
+			} else {
+				dwc->need_phy_for_wakeup = false;
+				dwc3_core_exit(dwc);
+			}
+		}
 		break;
 	case DWC3_GCTL_PRTCAP_OTG:
 		/* do nothing during runtime_suspend */
@@ -1800,7 +1800,6 @@ static int dwc3_resume_common(struct dwc3 *dwc, pm_message_t msg)
 				if (ret)
 					return ret;
 				dwc3_set_prtcap(dwc, DWC3_GCTL_PRTCAP_HOST);
-				break;
 			}
 		}
 		/* Restore GUSB2PHYCFG bits that were modified in suspend */

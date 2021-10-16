@@ -275,6 +275,16 @@ i915-y += \
 
 i915-y += i915_perf.o
 
+# Protected execution platform (PXP) support
+i915-$(CONFIG_DRM_I915_PXP) += \
+	pxp/intel_pxp.o \
+	pxp/intel_pxp_cmd.o \
+	pxp/intel_pxp_debugfs.o \
+	pxp/intel_pxp_irq.o \
+	pxp/intel_pxp_pm.o \
+	pxp/intel_pxp_session.o \
+	pxp/intel_pxp_tee.o
+
 # Post-mortem debug and GPU hang state capture
 i915-$(CONFIG_DRM_I915_CAPTURE_ERROR) += i915_gpu_error.o
 i915-$(CONFIG_DRM_I915_SELFTEST) += \

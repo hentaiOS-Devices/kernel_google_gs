@@ -1018,7 +1018,6 @@ config HARDLOCKUP_DETECTOR
 	select LOCKUP_DETECTOR
 	select HARDLOCKUP_DETECTOR_CORE
 	select HARDLOCKUP_DETECTOR_PERF if HAVE_HARDLOCKUP_DETECTOR_PERF
-	select HARDLOCKUP_DETECTOR_ARCH if HAVE_HARDLOCKUP_DETECTOR_ARCH
 	help
 	  Say Y here to enable the kernel to act as a watchdog to detect
 	  hard lockups.
@@ -1919,7 +1918,7 @@ config KCOV
 	depends on CC_HAS_SANCOV_TRACE_PC || GCC_PLUGINS
 	select DEBUG_FS
 	select GCC_PLUGIN_SANCOV if !CC_HAS_SANCOV_TRACE_PC
-	select SKB_EXTENSIONS
+	select SKB_EXTENSIONS if NET
 	help
 	  KCOV exposes kernel code coverage information in a form suitable
 	  for coverage-guided fuzzing (randomized testing).
@@ -2495,16 +2494,6 @@ config HYPERV_TESTING
 	  Select this option to enable Hyper-V vmbus testing.
 
 endmenu # "Kernel Testing and Coverage"
-
-config ERROR_ON_WARNING
-	bool "Treat compiler warnings as errors"
-	depends on !COMPILE_TEST
-	help
-	  If you say Y here, the Makefile will pass the "-Werror" option to the
-	  compiler.  This will cause the compiler to fail on any warning, as if
-	  it were an error.
-
-	  If unsure, say N.
 
 source "Documentation/Kconfig"
 

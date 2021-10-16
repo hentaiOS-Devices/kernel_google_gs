@@ -5,6 +5,32 @@
 #include "eeprom.h"
 
 static int
+mt7921_reg_set(void *data, u64 val)
+{
+	struct mt7921_dev *dev = data;
+
+	mt7921_mutex_acquire(dev);
+	mt76_wr(dev, dev->mt76.debugfs_reg, val);
+	mt7921_mutex_release(dev);
+
+	return 0;
+}
+
+static int
+mt7921_reg_get(void *data, u64 *val)
+{
+	struct mt7921_dev *dev = data;
+
+	mt7921_mutex_acquire(dev);
+	*val = mt76_rr(dev, dev->mt76.debugfs_reg);
+	mt7921_mutex_release(dev);
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_regval, mt7921_reg_get, mt7921_reg_set,
+			 "0x%08llx\n");
+static int
 mt7921_fw_debug_set(void *data, u64 val)
 {
 	struct mt7921_dev *dev = data;
@@ -229,17 +255,24 @@ mt7921_txpwr(struct seq_file *s, void *data)
 	return 0;
 }
 
+static void
+mt7921_pm_interface_iter(void *priv, u8 *mac, struct ieee80211_vif *vif)
+{
+	struct mt7921_dev *dev = priv;
+
+	mt7921_mcu_set_beacon_filter(dev, vif, dev->pm.enable);
+}
+
 static int
 mt7921_pm_set(void *data, u64 val)
 {
 	struct mt7921_dev *dev = data;
 	struct mt76_connac_pm *pm = &dev->pm;
-	struct mt76_phy *mphy = dev->phy.mt76;
-
-	if (val == pm->enable)
-		return 0;
 
 	mt7921_mutex_acquire(dev);
+
+	if (val == pm->enable)
+		goto out;
 
 	if (!pm->enable) {
 		pm->stats.last_wake_event = jiffies;
@@ -247,12 +280,13 @@ mt7921_pm_set(void *data, u64 val)
 	}
 	pm->enable = val;
 
-	ieee80211_iterate_active_interfaces(mphy->hw,
+	ieee80211_iterate_active_interfaces(mt76_hw(dev),
 					    IEEE80211_IFACE_ITER_RESUME_ALL,
-					    mt7921_pm_interface_iter, mphy->priv);
+					    mt7921_pm_interface_iter, dev);
 
 	mt76_connac_mcu_set_deep_sleep(&dev->mt76, pm->ds_enable);
 
+out:
 	mt7921_mutex_release(dev);
 
 	return 0;
@@ -373,7 +407,7 @@ int mt7921_init_debugfs(struct mt7921_dev *dev)
 {
 	struct dentry *dir;
 
-	dir = mt76_register_debugfs(&dev->mt76);
+	dir = mt76_register_debugfs_fops(&dev->mt76, &fops_regval);
 	if (!dir)
 		return -ENOMEM;
 
