@@ -345,6 +345,9 @@ int mt7921_dma_init(struct mt7921_dev *dev)
 	int rx_buf_size = MT_RX_BUF_SIZE * 2;
 	int ret;
 
+	dev->phy.dev = dev;
+	dev->phy.mt76 = &dev->mt76.phy;
+	dev->mt76.phy.priv = &dev->phy;
 	dev->bus_ops = dev->mt76.bus;
 	bus_ops = devm_kmemdup(dev->mt76.dev, dev->bus_ops, sizeof(*bus_ops),
 			       GFP_KERNEL);
