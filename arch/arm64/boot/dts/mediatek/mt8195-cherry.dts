@@ -30,11 +30,16 @@
 
 &sound {
 	compatible = "mediatek,mt8195_mt6359_rt1019_rt5682";
+	model = "mt8195_r1019_5682";
 	mediatek,dptx-codec = <&dp_tx>;
 	mediatek,hdmi-codec = <&hdmi0>;
 };
 
 &rt1019p {
+	status = "okay";
+};
+
+&rt5682 {
 	status = "okay";
 };
 
