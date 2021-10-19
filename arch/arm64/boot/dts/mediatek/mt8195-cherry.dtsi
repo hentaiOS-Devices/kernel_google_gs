@@ -131,6 +131,15 @@
                status = "disabled";
 	};
 
+	rt5682s: rt5682s@1a {
+               compatible = "realtek,rt5682s";
+               reg = <0x1a>;
+               interrupt-parent = <&pio>;
+               interrupts = <89 IRQ_TYPE_EDGE_BOTH>;
+               realtek,jd-src = <1>;
+               status = "disabled";
+	};
+
 	rt1011_l: rt1011@38 {
 		compatible = "realtek,rt1011";
 		reg = <0x38>;
