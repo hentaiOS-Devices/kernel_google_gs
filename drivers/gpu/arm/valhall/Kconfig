@@ -130,6 +130,7 @@ config MALI_VALHALL_CORESTACK
 config MALI_VALHALL_DEBUG
 	bool "Debug build"
 	depends on MALI_VALHALL && MALI_VALHALL_EXPERT
+	depends on !COMPILE_TEST
 	default n
 	help
 	  Select this option for increased checking and reporting of errors.
