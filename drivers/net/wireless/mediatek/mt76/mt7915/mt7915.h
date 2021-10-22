@@ -62,6 +62,11 @@ enum mt7915_rxq_id {
 	MT7915_RXQ_MCU_WA_EXT,
 };
 
+struct mt7915_sta_stats {
+	unsigned long changed;
+	unsigned long jiffies;
+};
+
 struct mt7915_sta_key_conf {
 	s8 keyidx;
 	u8 key[16];
@@ -76,8 +81,8 @@ struct mt7915_sta {
 	struct list_head rc_list;
 	u32 airtime_ac[8];
 
-	unsigned long changed;
-	unsigned long jiffies;
+	struct mt7915_sta_stats stats;
+
 	unsigned long ampdu_state;
 
 	struct mt7915_sta_key_conf bip;
