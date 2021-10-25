@@ -223,45 +223,6 @@ struct mtk_ddp_comp *mtk_drm_ddp_comp_for_plane(struct drm_crtc *crtc,
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 static void ddp_cmdq_cb(struct cmdq_cb_data data)
 {
-	struct cmdq_pkt *pkt = (struct cmdq_pkt *)data.data;
-	struct mtk_drm_crtc *mtk_crtc = (struct mtk_drm_crtc *)pkt->crtc;
-	struct mtk_crtc_state *state = to_mtk_crtc_state(mtk_crtc->base.state);
-	unsigned int i;
-
-	if (data.sta == CMDQ_CB_ERROR)
-		goto destroy_pkt;
-
-	if (state->pending_config) {
-		state->pending_config = false;
-	}
-
-	if (mtk_crtc->pending_planes) {
-		for (i = 0; i < mtk_crtc->layer_nr; i++) {
-			struct drm_plane *plane = &mtk_crtc->planes[i];
-			struct mtk_plane_state *plane_state;
-
-			plane_state = to_mtk_plane_state(plane->state);
-
-			if (plane_state->pending.config)
-				plane_state->pending.config = false;
-		}
-		mtk_crtc->pending_planes = false;
-	}
-
-	if (mtk_crtc->pending_async_planes) {
-		for (i = 0; i < mtk_crtc->layer_nr; i++) {
-			struct drm_plane *plane = &mtk_crtc->planes[i];
-			struct mtk_plane_state *plane_state;
-
-			plane_state = to_mtk_plane_state(plane->state);
-
-			if (plane_state->pending.async_config)
-				plane_state->pending.async_config = false;
-		}
-		mtk_crtc->pending_async_planes = false;
-	}
-
-destroy_pkt:
 	cmdq_pkt_destroy(data.data);
 }
 #endif
@@ -415,8 +376,8 @@ static void mtk_crtc_ddp_config(struct drm_crtc *crtc,
 				    state->pending_height,
 				    state->pending_vrefresh, 0,
 				    cmdq_handle);
-		if (!cmdq_handle)
-			state->pending_config = false;
+
+		state->pending_config = false;
 	}
 
 	if (mtk_crtc->pending_planes) {
@@ -436,11 +397,9 @@ static void mtk_crtc_ddp_config(struct drm_crtc *crtc,
 				mtk_ddp_comp_layer_config(comp, local_layer,
 							  plane_state,
 							  cmdq_handle);
-			if (!cmdq_handle)
-				plane_state->pending.config = false;
+			plane_state->pending.config = false;
 		}
-		if (!cmdq_handle)
-			mtk_crtc->pending_planes = false;
+		mtk_crtc->pending_planes = false;
 	}
 
 	if (mtk_crtc->pending_async_planes) {
@@ -460,11 +419,9 @@ static void mtk_crtc_ddp_config(struct drm_crtc *crtc,
 				mtk_ddp_comp_layer_config(comp, local_layer,
 							  plane_state,
 							  cmdq_handle);
-			if (!cmdq_handle)
-				plane_state->pending.async_config = false;
+			plane_state->pending.async_config = false;
 		}
-		if (!cmdq_handle)
-			mtk_crtc->pending_async_planes = false;
+		mtk_crtc->pending_async_planes = false;
 	}
 }
 
@@ -517,7 +474,6 @@ static void mtk_drm_crtc_update_config(struct mtk_drm_crtc *mtk_crtc,
 		cmdq_pkt_wfe(cmdq_handle, mtk_crtc->cmdq_event, false);
 		mtk_crtc_ddp_config(crtc, cmdq_handle);
 		cmdq_pkt_finalize(cmdq_handle);
-		cmdq_handle->crtc = mtk_crtc;
 		cmdq_pkt_flush_async(cmdq_handle, ddp_cmdq_cb, cmdq_handle);
 	}
 #endif
