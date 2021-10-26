@@ -45,7 +45,7 @@ static int ccci_tty_write(struct tty_struct *tty, const unsigned char *buf, int 
 	return tty_ctlb->ccci_ops->send_pkt(tty->index, buf, count);
 }
 
-static unsigned int ccci_tty_write_room(struct tty_struct *tty)
+static int ccci_tty_write_room(struct tty_struct *tty)
 {
 	return CCCI_MTU;
 }
