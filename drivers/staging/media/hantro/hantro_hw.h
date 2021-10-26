@@ -77,6 +77,50 @@ struct hantro_h1_vp8_enc_reg_params {
 };
 
 /**
+ * struct rk3399_vp8_enc_reg_params - low level encoding parameters
+ * TODO: Create abstract structures for more generic controls or just
+ *       remove unused fields.
+ */
+struct rk3399_vp8_enc_reg_params {
+	u32 is_intra;
+	u32 frm_hdr_size;
+
+	u32 qp;
+
+	s32 mv_prob[2][19];
+	s32 intra_prob;
+
+	u32 bool_enc_value;
+	u32 bool_enc_value_bits;
+	u32 bool_enc_range;
+
+	u32 filterDisable;
+	u32 filter_sharpness;
+	u32 filter_level;
+
+	s32 intra_frm_delta;
+	s32 last_frm_delta;
+	s32 golden_frm_delta;
+	s32 altref_frm_delta;
+
+	s32 bpred_mode_delta;
+	s32 zero_mode_delta;
+	s32 newmv_mode_delta;
+	s32 splitmv_mode_delta;
+};
+
+/**
+ * struct hantro_reg_params - low level encoding parameters
+ */
+struct hantro_reg_params {
+	/* Mode-specific data. */
+	union {
+		const struct hantro_h1_vp8_enc_reg_params hantro_h1_vp8_enc;
+		const struct rk3399_vp8_enc_reg_params rk3399_vp8_enc;
+	};
+};
+
+/**
  * struct hantro_aux_buf - auxiliary DMA buffer for hardware data
  * @cpu:	CPU pointer to the buffer.
  * @dma:	DMA address of the buffer.
@@ -142,6 +186,8 @@ struct hantro_vp8_enc_hw_ctx {
 	struct hantro_aux_buf priv_dst;
 
 	struct hantro_vp8_enc_buf_data buf_data;
+
+	const struct rk3399_vp8_enc_reg_params *params;
 
 	struct v4l2_rect src_crop;
 
@@ -278,6 +324,11 @@ void hantro_vp8_enc_assemble_bitstream(struct hantro_ctx *ctx,
 				       struct vb2_buffer *vb);
 void hantro_vp8_enc_exit(struct hantro_ctx *ctx);
 void hantro_vp8_enc_done(struct hantro_ctx *ctx);
+
+void rk3399_vpu_vp8_enc_run(struct hantro_ctx *ctx);
+int rk3399_vpu_vp8_enc_init(struct hantro_ctx *ctx);
+void rk3399_vpu_vp8_enc_done(struct hantro_ctx *ctx);
+void rk3399_vpu_vp8_enc_exit(struct hantro_ctx *ctx);
 
 dma_addr_t hantro_h264_get_ref_buf(struct hantro_ctx *ctx,
 				   unsigned int dpb_idx);

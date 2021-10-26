@@ -324,7 +324,7 @@ static const struct hantro_ctrl controls[] = {
 			.id = V4L2_CID_PRIVATE_HANTRO_REG_PARAMS,
 			.name = "Hantro Private Reg Params",
 			.type = V4L2_CTRL_TYPE_PRIVATE,
-			.elem_size = sizeof(struct hantro_h1_vp8_enc_reg_params),
+			.elem_size = sizeof(struct hantro_reg_params),
 		}
 	}, {
 		.codec = HANTRO_VP8_ENCODER,

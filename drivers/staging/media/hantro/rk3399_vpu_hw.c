@@ -53,6 +53,19 @@ static const struct hantro_fmt rk3399_vpu_enc_fmts[] = {
 			.step_height = MB_DIM,
 		},
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_VP8,
+		.codec_mode = HANTRO_MODE_VP8_ENC,
+		.max_depth = 2,
+		.frmsize = {
+			.min_width = 96,
+			.max_width = 1920,
+			.step_width = MB_DIM,
+			.min_height = 96,
+			.max_height = 1088,
+			.step_height = MB_DIM,
+		},
+	},
 };
 
 static const struct hantro_fmt rk3399_vpu_dec_fmts[] = {
@@ -161,6 +174,13 @@ static const struct hantro_codec_ops rk3399_vpu_codec_ops[] = {
 		.done = rk3399_vpu_jpeg_enc_done,
 		.exit = hantro_jpeg_enc_exit,
 	},
+	[HANTRO_MODE_VP8_ENC] = {
+		.run = rk3399_vpu_vp8_enc_run,
+		.reset = rk3399_vpu_enc_reset,
+		.init = hantro_vp8_enc_init,
+		.done = rk3399_vpu_vp8_enc_done,
+		.exit = hantro_vp8_enc_exit,
+	},
 	[HANTRO_MODE_MPEG2_DEC] = {
 		.run = rk3399_vpu_mpeg2_dec_run,
 		.reset = rk3399_vpu_dec_reset,
@@ -195,8 +215,8 @@ const struct hantro_variant rk3399_vpu_variant = {
 	.dec_offset = 0x400,
 	.dec_fmts = rk3399_vpu_dec_fmts,
 	.num_dec_fmts = ARRAY_SIZE(rk3399_vpu_dec_fmts),
-	.codec = HANTRO_JPEG_ENCODER | HANTRO_MPEG2_DECODER |
-		 HANTRO_VP8_DECODER,
+	.codec = HANTRO_JPEG_ENCODER | HANTRO_VP8_ENCODER |
+		 HANTRO_MPEG2_DECODER | HANTRO_VP8_DECODER,
 	.codec_ops = rk3399_vpu_codec_ops,
 	.irqs = rk3399_irqs,
 	.num_irqs = ARRAY_SIZE(rk3399_irqs),
