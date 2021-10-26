@@ -1643,7 +1643,22 @@ static void soc_check_tplg_fes(struct snd_soc_card *card)
 match:
 		/* machine matches, so override the rtd data */
 		for_each_card_prelinks(card, i, dai_link) {
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_MTK_TOPLEVEL)
+			struct snd_soc_dai_link_component *dlc;
+			struct snd_soc_dai *dai;
 
+			/*
+			 * ignore dailinks exposed by other components, with the
+			 * assumption that all cpu_dais are exposed by the same
+			 * component
+			 */
+			dlc = asoc_link_to_cpu(dai_link, 0);
+			dai = snd_soc_find_dai(dlc);
+
+			if (!dai || dai->component != component)
+				continue;
+
+#endif
 			/* ignore this FE */
 			if (dai_link->dynamic) {
 				dai_link->ignore = true;
