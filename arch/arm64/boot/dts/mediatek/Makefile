@@ -51,4 +51,5 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-cherry.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-evb.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-tomato-rev1.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-tomato-rev2.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-tomato-rev3.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8516-pumpkin.dtb
