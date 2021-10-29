@@ -94,6 +94,7 @@ struct io_tlb_mem {
 	unsigned long nslabs;
 	unsigned long used;
 	unsigned int index;
+	unsigned int io_tlb_segsize;
 	spinlock_t lock;
 	struct dentry *debugfs;
 	bool late_alloc;
