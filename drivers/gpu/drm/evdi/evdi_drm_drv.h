@@ -14,6 +14,7 @@
 #define EVDI_DRV_H
 
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/version.h>
 #include <linux/device.h>
 #if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE || defined(EL8)
@@ -58,6 +59,8 @@ struct evdi_device {
 struct evdi_gem_object {
 	struct drm_gem_object base;
 	struct page **pages;
+	unsigned int pages_pin_count;
+	struct mutex pages_lock;
 	void *vmapping;
 	struct sg_table *sg;
 #if KERNEL_VERSION(5, 4, 0) <= LINUX_VERSION_CODE || defined(EL8)
