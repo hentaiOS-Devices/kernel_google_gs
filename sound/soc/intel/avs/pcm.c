@@ -28,6 +28,13 @@ struct avs_dma_data {
 	 * host stream assigned
 	 */
 	struct hdac_ext_stream *host_stream;
+
+	bool suspended; /* used to differentiate suspend flow from setup flow */
+	bool is_fe;	/* used to maintain order of operations in suspend/resume flow */
+	/* data needed to perform resume */
+	struct snd_pcm_substream *substream;
+	const struct snd_soc_dai_ops *ops;
+	struct snd_pcm_hw_params *hw_params;
 };
 
 static struct avs_tplg_path_template *
@@ -166,6 +173,8 @@ static void avs_dai_nonhda_be_shutdown(struct snd_pcm_substream *substream, stru
 	kfree(data);
 }
 
+static const struct snd_soc_dai_ops avs_dai_nonhda_be_ops;
+
 static int avs_dai_nonhda_be_hw_params(struct snd_pcm_substream *substream,
 				       struct snd_pcm_hw_params *hw_params, struct snd_soc_dai *dai)
 {
@@ -174,6 +183,13 @@ static int avs_dai_nonhda_be_hw_params(struct snd_pcm_substream *substream,
 	data = snd_soc_dai_get_dma_data(dai, substream);
 	if (data->path)
 		return 0;
+
+	if (!data->suspended) {
+		data->is_fe = false;
+		data->substream = substream;
+		data->ops = &avs_dai_nonhda_be_ops;
+		data->hw_params = kmemdup(hw_params, sizeof(struct snd_pcm_hw_params), GFP_KERNEL);
+	}
 
 	/* Actual port-id comes from topology. */
 	return avs_dai_be_hw_params(substream, hw_params, dai, 0);
@@ -202,30 +218,43 @@ static int avs_dai_nonhda_be_prepare(struct snd_pcm_substream *substream, struct
 static int avs_dai_nonhda_be_trigger(struct snd_pcm_substream *substream, int cmd,
 				     struct snd_soc_dai *dai)
 {
+	struct snd_soc_pcm_runtime *rtd = snd_pcm_substream_chip(substream);
 	struct avs_dma_data *data;
 	int ret = 0;
 
 	data = snd_soc_dai_get_dma_data(dai, substream);
 
 	switch (cmd) {
+	case SNDRV_PCM_TRIGGER_RESUME:
+		if (rtd->dai_link->ignore_suspend)
+			break;
+		fallthrough;
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		ret = avs_path_pause(data->path);
+		if (ret < 0) {
+			dev_err(dai->dev, "pause BE path failed: %d\n", ret);
+			break;
+		}
+
 		ret = avs_path_run(data->path, AVS_TPLG_TRIGGER_AUTO);
 		if (ret < 0)
 			dev_err(dai->dev, "run BE path failed: %d\n", ret);
 		break;
 
+	case SNDRV_PCM_TRIGGER_SUSPEND:
+		if (rtd->dai_link->ignore_suspend)
+			break;
+		fallthrough;
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
 	case SNDRV_PCM_TRIGGER_STOP:
 		ret = avs_path_pause(data->path);
 		if (ret < 0)
 			dev_err(dai->dev, "pause BE path failed: %d\n", ret);
 
-		if (cmd == SNDRV_PCM_TRIGGER_STOP) {
-			ret = avs_path_reset(data->path);
-			if (ret < 0)
-				dev_err(dai->dev, "reset BE path failed: %d\n", ret);
-		}
+		ret = avs_path_reset(data->path);
+		if (ret < 0)
+			dev_err(dai->dev, "reset BE path failed: %d\n", ret);
 		break;
 
 	default:
@@ -255,6 +284,8 @@ static void avs_dai_hda_be_shutdown(struct snd_pcm_substream *substream, struct 
 	return avs_dai_nonhda_be_shutdown(substream, dai);
 }
 
+static const struct snd_soc_dai_ops avs_dai_hda_be_ops;
+
 static int avs_dai_hda_be_hw_params(struct snd_pcm_substream *substream,
 				    struct snd_pcm_hw_params *hw_params, struct snd_soc_dai *dai)
 {
@@ -265,6 +296,12 @@ static int avs_dai_hda_be_hw_params(struct snd_pcm_substream *substream,
 	if (data->path)
 		return 0;
 
+	if (!data->suspended) {
+		data->is_fe = false;
+		data->substream = substream;
+		data->ops = &avs_dai_hda_be_ops;
+		data->hw_params = kmemdup(hw_params, sizeof(struct snd_pcm_hw_params), GFP_KERNEL);
+	}
 	link_stream = substream->runtime->private_data;
 
 	return avs_dai_be_hw_params(substream, hw_params, dai,
@@ -343,6 +380,7 @@ static int avs_dai_hda_be_prepare(struct snd_pcm_substream *substream, struct sn
 static int avs_dai_hda_be_trigger(struct snd_pcm_substream *substream, int cmd,
 				  struct snd_soc_dai *dai)
 {
+	struct snd_soc_pcm_runtime *rtd = snd_pcm_substream_chip(substream);
 	struct hdac_ext_stream *link_stream;
 	struct avs_dma_data *data;
 	int ret = 0;
@@ -353,15 +391,29 @@ static int avs_dai_hda_be_trigger(struct snd_pcm_substream *substream, int cmd,
 	link_stream = substream->runtime->private_data;
 
 	switch (cmd) {
+	case SNDRV_PCM_TRIGGER_RESUME:
+		if (rtd->dai_link->ignore_suspend)
+			break;
+		fallthrough;
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		snd_hdac_ext_link_stream_start(link_stream);
+
+		ret = avs_path_pause(data->path);
+		if (ret < 0) {
+			dev_err(dai->dev, "pause BE path failed: %d\n", ret);
+			break;
+		}
 
 		ret = avs_path_run(data->path, AVS_TPLG_TRIGGER_AUTO);
 		if (ret < 0)
 			dev_err(dai->dev, "run BE path failed: %d\n", ret);
 		break;
 
+	case SNDRV_PCM_TRIGGER_SUSPEND:
+		if (rtd->dai_link->ignore_suspend)
+			break;
+		fallthrough;
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
 	case SNDRV_PCM_TRIGGER_STOP:
 		ret = avs_path_pause(data->path);
@@ -370,11 +422,9 @@ static int avs_dai_hda_be_trigger(struct snd_pcm_substream *substream, int cmd,
 
 		snd_hdac_ext_link_stream_clear(link_stream);
 
-		if (cmd == SNDRV_PCM_TRIGGER_STOP) {
-			ret = avs_path_reset(data->path);
-			if (ret < 0)
-				dev_err(dai->dev, "reset BE path failed: %d\n", ret);
-		}
+		ret = avs_path_reset(data->path);
+		if (ret < 0)
+			dev_err(dai->dev, "reset BE path failed: %d\n", ret);
 		break;
 
 	default:
@@ -452,6 +502,8 @@ static void avs_dai_fe_shutdown(struct snd_pcm_substream *substream, struct snd_
 	kfree(data);
 }
 
+const struct snd_soc_dai_ops avs_dai_fe_ops;
+
 static int avs_dai_fe_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *hw_params, struct snd_soc_dai *dai)
 {
@@ -465,6 +517,13 @@ static int avs_dai_fe_hw_params(struct snd_pcm_substream *substream,
 	data = snd_soc_dai_get_dma_data(dai, substream);
 	if (data->path)
 		return 0;
+
+	if (!data->suspended) {
+		data->is_fe = true;
+		data->substream = substream;
+		data->ops = &avs_dai_fe_ops;
+		data->hw_params = kmemdup(hw_params, sizeof(struct snd_pcm_hw_params), GFP_KERNEL);
+	}
 
 	host_stream = data->host_stream;
 
@@ -523,9 +582,11 @@ static int avs_dai_fe_hw_free(struct snd_pcm_substream *substream, struct snd_so
 	snd_hdac_stream_cleanup(hdac_stream(host_stream));
 	hdac_stream(host_stream)->prepared = false;
 
-	ret = snd_pcm_lib_free_pages(substream);
-	if (ret < 0)
-		dev_dbg(dai->dev, "Failed to free pages!\n");
+	if (!data->suspended) {
+		ret = snd_pcm_lib_free_pages(substream);
+		if (ret < 0)
+			dev_dbg(dai->dev, "Failed to free pages!\n");
+	}
 
 	return ret;
 }
@@ -571,6 +632,7 @@ static int avs_dai_fe_prepare(struct snd_pcm_substream *substream, struct snd_so
 
 static int avs_dai_fe_trigger(struct snd_pcm_substream *substream, int cmd, struct snd_soc_dai *dai)
 {
+	struct snd_soc_pcm_runtime *rtd = snd_pcm_substream_chip(substream);
 	struct avs_dma_data *data;
 	struct hdac_ext_stream *host_stream;
 	struct hdac_bus *bus;
@@ -582,17 +644,31 @@ static int avs_dai_fe_trigger(struct snd_pcm_substream *substream, int cmd, stru
 	bus = hdac_stream(host_stream)->bus;
 
 	switch (cmd) {
+	case SNDRV_PCM_TRIGGER_RESUME:
+		if (rtd->dai_link->ignore_suspend)
+			break;
+		fallthrough;
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		spin_lock_irqsave(&bus->reg_lock, flags);
 		snd_hdac_stream_start(hdac_stream(host_stream), true);
 		spin_unlock_irqrestore(&bus->reg_lock, flags);
 
+		ret = avs_path_pause(data->path);
+		if (ret < 0) {
+			dev_err(dai->dev, "pause FE path failed: %d\n", ret);
+			break;
+		}
+
 		ret = avs_path_run(data->path, AVS_TPLG_TRIGGER_AUTO);
 		if (ret < 0)
 			dev_err(dai->dev, "run FE path failed: %d\n", ret);
 		break;
 
+	case SNDRV_PCM_TRIGGER_SUSPEND:
+		if (rtd->dai_link->ignore_suspend)
+			break;
+		fallthrough;
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
 	case SNDRV_PCM_TRIGGER_STOP:
 		ret = avs_path_pause(data->path);
@@ -603,11 +679,9 @@ static int avs_dai_fe_trigger(struct snd_pcm_substream *substream, int cmd, stru
 		snd_hdac_stream_stop(hdac_stream(host_stream));
 		spin_unlock_irqrestore(&bus->reg_lock, flags);
 
-		if (cmd == SNDRV_PCM_TRIGGER_STOP) {
-			ret = avs_path_reset(data->path);
-			if (ret < 0)
-				dev_err(dai->dev, "reset FE path failed: %d\n", ret);
-		}
+		ret = avs_path_reset(data->path);
+		if (ret < 0)
+			dev_err(dai->dev, "reset FE path failed: %d\n", ret);
 		break;
 
 	default:
@@ -776,6 +850,7 @@ static int avs_component_open(struct snd_soc_component *component,
 			SNDRV_PCM_INFO_MMAP_VALID |
 			SNDRV_PCM_INFO_INTERLEAVED |
 			SNDRV_PCM_INFO_PAUSE |
+			SNDRV_PCM_INFO_RESUME |
 			SNDRV_PCM_INFO_NO_PERIOD_WAKEUP;
 
 	hwparams.formats = SNDRV_PCM_FMTBIT_S16_LE |
@@ -846,10 +921,168 @@ static int avs_component_construct(struct snd_soc_component *component,
 	return 0;
 }
 
+static int avs_comp_dai_hw_params(struct snd_soc_dai *dai, struct avs_dma_data *data, bool fe)
+{
+	int ret = 0;
+
+	if (data->suspended && !(fe ^ data->is_fe)) {
+		ret = data->ops->hw_params(data->substream, data->hw_params, dai);
+		if (ret < 0)
+			dev_err(dai->dev, "hw_params on resume failed: %d\n", ret);
+	}
+
+	return ret;
+}
+
+static int avs_comp_dai_prepare(struct snd_soc_dai *dai, struct avs_dma_data *data, bool fe)
+{
+	int ret = 0;
+
+	if (data->suspended && !(fe ^ data->is_fe)) {
+		ret = data->ops->prepare(data->substream, dai);
+		if (ret < 0) {
+			dev_err(dai->dev, "prepare on resume failed: %d\n", ret);
+			return ret;
+		}
+		data->suspended = false;
+	}
+
+	return ret;
+}
+
+static int avs_comp_dai_hw_free(struct snd_soc_dai *dai, struct avs_dma_data *data, bool fe)
+{
+	struct snd_soc_pcm_runtime *rtd;
+	int ret = 0;
+
+	rtd = snd_pcm_substream_chip(data->substream);
+
+	if (data->path && !(fe ^ data->is_fe) && !rtd->dai_link->ignore_suspend) {
+		data->suspended = true;
+		ret = data->ops->hw_free(data->substream, dai);
+		if (ret < 0)
+			dev_err(dai->dev, "hw_free on suspend failed: %d\n", ret);
+	}
+
+	return ret;
+}
+
+static int avs_component_resume_hw_params(struct snd_soc_component *component, bool fe)
+{
+	struct snd_soc_dai *dai;
+	int ret = 0;
+
+	for_each_component_dais(component, dai) {
+		if (dai->playback_dma_data)
+			ret = avs_comp_dai_hw_params(dai, dai->playback_dma_data, fe);
+		if (ret < 0)
+			break;
+
+		if (dai->capture_dma_data)
+			ret = avs_comp_dai_hw_params(dai, dai->capture_dma_data, fe);
+		if (ret < 0)
+			break;
+	}
+
+	return ret;
+}
+
+static int avs_component_resume_prepare(struct snd_soc_component *component, bool fe)
+{
+	struct snd_soc_dai *dai;
+	int ret = 0;
+
+	for_each_component_dais(component, dai) {
+		if (dai->playback_dma_data)
+			ret = avs_comp_dai_prepare(dai, dai->playback_dma_data, fe);
+		if (ret < 0)
+			break;
+
+		if (dai->capture_dma_data)
+			ret = avs_comp_dai_prepare(dai, dai->capture_dma_data, fe);
+		if (ret < 0)
+			break;
+	}
+
+	return ret;
+}
+
+static int avs_component_suspend_hw_free(struct snd_soc_component *component, bool fe)
+{
+	struct snd_soc_dai *dai;
+	int ret = 0;
+
+	for_each_component_dais(component, dai) {
+		if (dai->playback_dma_data)
+			ret = avs_comp_dai_hw_free(dai, dai->playback_dma_data, fe);
+		if (ret < 0)
+			break;
+
+		if (dai->capture_dma_data)
+			ret = avs_comp_dai_hw_free(dai, dai->capture_dma_data, fe);
+		if (ret < 0)
+			break;
+	}
+
+	return ret;
+}
+
+static int avs_component_suspend(struct snd_soc_component *component)
+{
+	int ret;
+
+	/*
+	 * When freeing paths, FEs need to be freed _first_ as they perform
+	 * path unbinding.
+	 */
+
+	ret = avs_component_suspend_hw_free(component, true);
+	if (ret)
+		return ret;
+
+	ret = avs_component_suspend_hw_free(component, false);
+	return ret;
+}
+
+
+static int avs_component_resume(struct snd_soc_component *component)
+{
+	int ret;
+
+	/*
+	 * When creating paths, FEs need to be _last_ as they perform
+	 * path binding.
+	 */
+
+	ret = avs_component_resume_hw_params(component, false);
+	if (ret)
+		return ret;
+
+	ret = avs_component_resume_hw_params(component, true);
+	if (ret)
+		return ret;
+
+	/*
+	 * Prepare callback is called by ASoC for FE _first_ and BE _last_, so
+	 * recreate behavior even though order shouldn't matter in this case.
+	 */
+	ret = avs_component_resume_prepare(component, true);
+	if (ret)
+		return ret;
+
+	ret = avs_component_resume_prepare(component, false);
+	if (ret)
+		return ret;
+
+	return ret;
+}
+
 static const struct snd_soc_component_driver avs_component_driver = {
 	.name			= "avs-pcm",
 	.probe			= avs_component_probe,
 	.remove			= avs_component_remove,
+	.suspend		= avs_component_suspend,
+	.resume			= avs_component_resume,
 	.open			= avs_component_open,
 	.pointer		= avs_component_pointer,
 	.mmap			= avs_component_mmap,
@@ -1168,6 +1401,8 @@ static const struct snd_soc_component_driver avs_hda_component_driver = {
 	.name			= "avs-hda-pcm",
 	.probe			= avs_component_hda_probe,
 	.remove			= avs_component_hda_remove,
+	.suspend		= avs_component_suspend,
+	.resume			= avs_component_resume,
 	.open			= avs_component_hda_open,
 	.close			= avs_component_hda_close,
 	.pointer		= avs_component_pointer,
