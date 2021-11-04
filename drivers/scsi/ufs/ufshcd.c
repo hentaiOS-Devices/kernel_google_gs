@@ -6978,6 +6978,7 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 		goto release;
 	}
 
+	lrbp->cmd = NULL;
 	err = SUCCESS;
 
 release:
