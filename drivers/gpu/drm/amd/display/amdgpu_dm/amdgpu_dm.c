@@ -110,10 +110,8 @@ MODULE_FIRMWARE(FIRMWARE_VANGOGH_DMUB);
 MODULE_FIRMWARE(FIRMWARE_DIMGREY_CAVEFISH_DMUB);
 #define FIRMWARE_BEIGE_GOBY_DMUB "amdgpu/beige_goby_dmcub.bin"
 MODULE_FIRMWARE(FIRMWARE_BEIGE_GOBY_DMUB);
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 #define FIRMWARE_YELLOW_CARP_DMUB "amdgpu/yellow_carp_dmcub.bin"
 MODULE_FIRMWARE(FIRMWARE_YELLOW_CARP_DMUB);
-#endif
 
 #define FIRMWARE_RAVEN_DMCU		"amdgpu/raven_dmcu.bin"
 MODULE_FIRMWARE(FIRMWARE_RAVEN_DMCU);
@@ -1149,16 +1147,10 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
 		if (ASICREV_IS_GREEN_SARDINE(adev->external_rev_id))
 			init_data.flags.disable_dmcu = true;
 		break;
-#if defined(CONFIG_DRM_AMD_DC_DCN)
 	case CHIP_VANGOGH:
-		init_data.flags.gpu_vm_support = true;
-		break;
-#endif
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case CHIP_YELLOW_CARP:
 		init_data.flags.gpu_vm_support = true;
 		break;
-#endif
 	default:
 		break;
 	}
@@ -1171,6 +1163,9 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
 
 	if (amdgpu_dc_feature_mask & DC_DISABLE_FRACTIONAL_PWM_MASK)
 		init_data.flags.disable_fractional_pwm = true;
+
+	if (amdgpu_dc_feature_mask & DC_EDP_NO_POWER_SEQUENCING)
+		init_data.flags.edp_no_power_sequencing = true;
 
 	init_data.flags.power_down_display_on_boot = true;
 
@@ -1415,9 +1410,7 @@ static int load_dmcu_fw(struct amdgpu_device *adev)
 	case CHIP_DIMGREY_CAVEFISH:
 	case CHIP_BEIGE_GOBY:
 	case CHIP_VANGOGH:
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case CHIP_YELLOW_CARP:
-#endif
 		return 0;
 	case CHIP_NAVI12:
 		fw_name_dmcu = FIRMWARE_NAVI12_DMCU;
@@ -1536,12 +1529,10 @@ static int dm_dmub_sw_init(struct amdgpu_device *adev)
 		dmub_asic = DMUB_ASIC_DCN303;
 		fw_name_dmub = FIRMWARE_BEIGE_GOBY_DMUB;
 		break;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case CHIP_YELLOW_CARP:
 		dmub_asic = DMUB_ASIC_DCN31;
 		fw_name_dmub = FIRMWARE_YELLOW_CARP_DMUB;
 		break;
-#endif
 
 	default:
 		/* ASIC doesn't support DMUB. */
@@ -2236,7 +2227,7 @@ static int dm_resume(void *handle)
 					= 0xffffffff;
 			}
 		}
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
+#if defined(CONFIG_DRM_AMD_DC_DCN)
 		/*
 		 * Resource allocation happens for link encoders for newer ASIC in
 		 * dc_validate_global_state, so we need to revalidate it.
@@ -3790,9 +3781,7 @@ static int amdgpu_dm_initialize_drm_device(struct amdgpu_device *adev)
 	switch (adev->asic_type) {
 	case CHIP_SIENNA_CICHLID:
 	case CHIP_NAVY_FLOUNDER:
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case CHIP_YELLOW_CARP:
-#endif
 	case CHIP_RENOIR:
 		if (register_outbox_irq_handlers(dm->adev)) {
 			DRM_ERROR("DM: Failed to initialize IRQ\n");
@@ -3897,9 +3886,7 @@ static int amdgpu_dm_initialize_drm_device(struct amdgpu_device *adev)
 	case CHIP_DIMGREY_CAVEFISH:
 	case CHIP_BEIGE_GOBY:
 	case CHIP_VANGOGH:
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case CHIP_YELLOW_CARP:
-#endif
 		if (dcn10_register_irq_handlers(dm->adev)) {
 			DRM_ERROR("DM: Failed to initialize IRQ\n");
 			goto fail;
@@ -4071,13 +4058,11 @@ static int dm_early_init(void *handle)
 		adev->mode_info.num_hpd = 6;
 		adev->mode_info.num_dig = 6;
 		break;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case CHIP_YELLOW_CARP:
 		adev->mode_info.num_crtc = 4;
 		adev->mode_info.num_hpd = 4;
 		adev->mode_info.num_dig = 4;
 		break;
-#endif
 	case CHIP_NAVI14:
 	case CHIP_DIMGREY_CAVEFISH:
 		adev->mode_info.num_crtc = 5;
@@ -4332,9 +4317,7 @@ fill_gfx9_tiling_info_from_device(const struct amdgpu_device *adev,
 	    adev->asic_type == CHIP_NAVY_FLOUNDER ||
 	    adev->asic_type == CHIP_DIMGREY_CAVEFISH ||
 	    adev->asic_type == CHIP_BEIGE_GOBY ||
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	    adev->asic_type == CHIP_YELLOW_CARP ||
-#endif
 	    adev->asic_type == CHIP_VANGOGH)
 		tiling_info->gfx9.num_pkrs = adev->gfx.config.gb_addr_config_fields.num_pkrs;
 }
@@ -9605,7 +9588,12 @@ static int dm_update_crtc_state(struct amdgpu_display_manager *dm,
 		} else if (amdgpu_freesync_vid_mode && aconnector &&
 			   is_freesync_video_mode(&new_crtc_state->mode,
 						  aconnector)) {
-			set_freesync_fixed_config(dm_new_crtc_state);
+			struct drm_display_mode *high_mode;
+
+			high_mode = get_highest_refresh_rate_mode(aconnector, false);
+			if (!drm_mode_equal(&new_crtc_state->mode, high_mode)) {
+				set_freesync_fixed_config(dm_new_crtc_state);
+			}
 		}
 
 		ret = dm_atomic_get_state(state, &dm_state);
