@@ -542,10 +542,6 @@
 	vqmmc-supply = <&mt_pmic_vmc_ldo_reg>;
 };
 
-&mt6359_vaud18_ldo_reg {
-	regulator-always-on;
-};
-
 /* for CPU-L */
 &mt6359_vcore_buck_reg {
 	regulator-always-on;
