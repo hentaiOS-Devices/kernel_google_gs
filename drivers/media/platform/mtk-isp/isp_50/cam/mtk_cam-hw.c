@@ -475,8 +475,8 @@ static int isp_setup_scp_rproc(struct mtk_isp_p1_device *p1_dev,
 	 * This reserved memory is also be used by ISP P1 HW.
 	 * Need to get iova address for ISP P1 DMA.
 	 */
-	addr = dma_map_resource(dev, addr, MTK_ISP_COMPOSER_MEM_SIZE,
-				DMA_BIDIRECTIONAL, DMA_ATTR_SKIP_CPU_SYNC);
+	addr = dma_map_single(dev, phys_to_virt(addr), MTK_ISP_COMPOSER_MEM_SIZE,
+				DMA_BIDIRECTIONAL);
 	if (dma_mapping_error(dev, addr)) {
 		dev_err(dev, "failed to map scp iova\n");
 		ret = -ENOMEM;
@@ -691,9 +691,8 @@ static int mtk_isp_remove(struct platform_device *pdev)
 	mtk_cam_dev_cleanup(&p1_dev->cam_dev);
 	pm_runtime_dont_use_autosuspend(dev);
 	pm_runtime_disable(dev);
-	dma_unmap_page_attrs(dev, p1_dev->composer_iova,
-			     MTK_ISP_COMPOSER_MEM_SIZE, DMA_BIDIRECTIONAL,
-			     DMA_ATTR_SKIP_CPU_SYNC);
+	dma_unmap_single(dev, p1_dev->composer_iova,
+			     MTK_ISP_COMPOSER_MEM_SIZE, DMA_BIDIRECTIONAL);
 	isp_teardown_scp_rproc(p1_dev);
 
 	return 0;

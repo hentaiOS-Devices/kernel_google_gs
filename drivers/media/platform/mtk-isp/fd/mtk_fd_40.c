@@ -1050,8 +1050,8 @@ static int mtk_fd_hw_get_scp_mem(struct mtk_fd_dev *fd)
 	 * This reserved memory is also be used by FD HW.
 	 * Need to get iova address for FD DMA.
 	 */
-	addr = dma_map_resource(dev, addr, MTK_FD_HW_WORK_BUF_SIZE,
-				DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+	addr = dma_map_single(dev, phys_to_virt(addr), MTK_FD_HW_WORK_BUF_SIZE,
+				DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, addr)) {
 		dev_err(dev, "Failed to map scp iova\n");
 		ret = -ENOMEM;
@@ -1162,11 +1162,10 @@ static int mtk_fd_remove(struct platform_device *pdev)
 
 	mtk_fd_dev_v4l2_release(fd);
 	pm_runtime_disable(&pdev->dev);
-	dma_unmap_page_attrs(fd->dev,
+	dma_unmap_single(fd->dev,
 			     fd->scp_mem.dma_addr,
 			     MTK_FD_HW_WORK_BUF_SIZE,
-			     DMA_TO_DEVICE,
-			     DMA_ATTR_SKIP_CPU_SYNC);
+			     DMA_TO_DEVICE);
 	dma_free_coherent(scp_get_device(fd->scp),
 			  MTK_FD_HW_WORK_BUF_SIZE,
 			  fd->scp_mem_virt_addr,
