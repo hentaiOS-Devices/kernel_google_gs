@@ -149,9 +149,8 @@ int rk3399_vpu_jpeg_enc_run(struct hantro_ctx *ctx)
 
 	rk3399_vpu_set_src_img_ctrl(vpu, ctx);
 	rk3399_vpu_jpeg_enc_set_buffers(vpu, ctx, &src_buf->vb2_buf);
-	rk3399_vpu_jpeg_enc_set_qtable(vpu,
-				       hantro_jpeg_get_qtable(0),
-				       hantro_jpeg_get_qtable(1));
+	rk3399_vpu_jpeg_enc_set_qtable(vpu, jpeg_ctx.hw_luma_qtable,
+				       jpeg_ctx.hw_chroma_qtable);
 
 	reg = VEPU_REG_OUTPUT_SWAP32
 		| VEPU_REG_OUTPUT_SWAP16
