@@ -111,6 +111,7 @@
 		scp_mem_reserved: scp_mem_region {
 			compatible = "restricted-dma-pool";
 			reg = <0 0x50000000 0 0x2900000>;
+			io-tlb-segsize = <4096>;
 		};
 	};
 
