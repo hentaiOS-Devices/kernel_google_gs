@@ -578,7 +578,7 @@ exit:
 	kfree(event);
 }
 
-void sap_hk_wq(struct work_struct *work)
+static void sap_hk_wq(struct work_struct *work)
 {
 	struct mtk_modem *md = container_of(work, struct mtk_modem, sap_handshake_work);
         struct core_sys_info *core_info;
