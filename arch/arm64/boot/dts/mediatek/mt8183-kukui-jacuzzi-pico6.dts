@@ -43,4 +43,19 @@
 	};
 };
 
+&mmc1_pins_default {
+	pins_cmd_dat {
+		drive-strength = <MTK_DRIVE_6mA>;
+	};
+	pins_clk {
+		drive-strength = <MTK_DRIVE_6mA>;
+	};
+};
+
+&mmc1_pins_uhs {
+	pins_clk {
+		drive-strength = <MTK_DRIVE_6mA>;
+	};
+};
+
 /delete-node/ &bluetooth;
