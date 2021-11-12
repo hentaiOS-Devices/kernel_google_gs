@@ -211,6 +211,8 @@ int btintel_configure_setup(struct hci_dev *hdev);
 void btintel_bootup(struct hci_dev *hdev, const void *ptr, unsigned int len);
 void btintel_secure_send_result(struct hci_dev *hdev,
 				const void *ptr, unsigned int len);
+bool btintel_is_quality_report_evt(struct sk_buff *skb);
+bool btintel_pull_quality_report_data(struct sk_buff *skb);
 #else
 
 static inline int btintel_check_bdaddr(struct hci_dev *hdev)
@@ -305,5 +307,15 @@ static inline void btintel_bootup(struct hci_dev *hdev,
 static inline void btintel_secure_send_result(struct hci_dev *hdev,
 				const void *ptr, unsigned int len)
 {
+}
+
+static inline bool btintel_is_quality_report_evt(struct sk_buff *skb)
+{
+	return false;
+}
+
+static inline bool btintel_pull_quality_report_data(struct sk_buff *skb);
+{
+	return false;
 }
 #endif
