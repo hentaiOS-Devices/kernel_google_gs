@@ -174,7 +174,7 @@ void first_save_s51xx_status(struct pci_dev *pdev)
 	if (s51xx_pcie->pci_saved_configs == NULL)
 		mif_err("MSI-DBG: s51xx pcie.pci_saved_configs is NULL(s51xx config NOT saved)\n");
 	else
-		mif_err("first s51xx config status save: done\n");
+		mif_info("first s51xx config status save: done\n");
 }
 
 void s51xx_pcie_save_state(struct pci_dev *pdev)
@@ -194,6 +194,9 @@ void s51xx_pcie_save_state(struct pci_dev *pdev)
 	s51xx_pcie_l1ss_ctrl(0, s51xx_pcie->pcie_channel_num);
 
 	pci_clear_master(pdev);
+
+	if (s51xx_pcie->pci_saved_configs)
+		kfree(s51xx_pcie->pci_saved_configs);
 
 	pci_save_state(pdev);
 
@@ -337,7 +340,7 @@ static int s51xx_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *en
 	struct pci_bus *bus = pdev->bus;
 	struct pci_dev *bus_self = bus->self;
 	struct resource *tmp_rsc;
-	int resno = 8;
+	int resno = PCI_BRIDGE_MEM_WINDOW;
 	u32 val, db_addr;
 
 	dev_info(dev, "%s EP driver Probe(%s), chNum: %d\n",
@@ -454,7 +457,12 @@ void print_msi_register(struct pci_dev *pdev)
 
 static void s51xx_pcie_remove(struct pci_dev *pdev)
 {
+	struct s51xx_pcie *s51xx_pcie = pci_get_drvdata(pdev);
+
 	pr_err("s51xx PCIe Remove!!!\n");
+
+	if (s51xx_pcie->pci_saved_configs)
+		kfree(s51xx_pcie->pci_saved_configs);
 
 	pci_release_regions(pdev);
 }
