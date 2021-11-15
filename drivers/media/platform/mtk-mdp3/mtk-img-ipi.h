@@ -23,6 +23,11 @@
 #define IMG_IPI_FRAME   3
 #define IMG_IPI_DEBUG   4
 
+struct img_timeval {
+	int32_t tv_sec;
+	int32_t tv_usec;
+} __attribute__ ((__packed__));
+
 struct img_addr {
 	u64 va; /* Used for Linux OS access */
 	u32 pa; /* Used for CM4 access */
@@ -34,7 +39,6 @@ struct tuning_addr {
 	u32	pa;	/* Used for CM4 access */
 	u32	iova;	/* Used for IOMMU HW access */
 } __attribute__ ((__packed__));
-
 
 struct img_sw_addr {
 	u64 va; /* Used for APMCU access */
@@ -95,7 +99,7 @@ struct img_output {
 struct img_ipi_frameparam {
 	u32 index;
 	u32 frame_no;
-	u64 timestamp;
+	struct img_timeval timestamp;
 	u8 type; /* enum mdp_stream_type */
 	u8 state;
 	u8 num_inputs;
