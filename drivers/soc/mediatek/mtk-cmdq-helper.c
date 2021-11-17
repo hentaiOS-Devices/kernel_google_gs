@@ -82,6 +82,7 @@ struct cmdq_client *cmdq_mbox_create(struct device *dev, int index)
 	client->client.tx_block = false;
 	client->client.knows_txdone = true;
 	client->chan = mbox_request_channel(&client->client, index);
+	mutex_init(&client->mutex);
 
 	if (IS_ERR(client->chan)) {
 		long err;
@@ -453,11 +454,15 @@ int cmdq_pkt_flush_async(struct cmdq_pkt *pkt, cmdq_async_flush_cb cb,
 	dma_sync_single_for_device(client->chan->mbox->dev, pkt->pa_base,
 				   pkt->cmd_buf_size, DMA_TO_DEVICE);
 
+	mutex_lock(&client->mutex);
 	err = mbox_send_message(client->chan, pkt);
-	if (err < 0)
+	if (err < 0) {
+		mutex_unlock(&client->mutex);
 		return err;
+	}
 	/* We can send next packet immediately, so just call txdone. */
 	mbox_client_txdone(client->chan, 0);
+	mutex_unlock(&client->mutex);
 
 	return 0;
 }
