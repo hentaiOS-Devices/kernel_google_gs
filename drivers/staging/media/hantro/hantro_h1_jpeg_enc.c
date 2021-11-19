@@ -144,7 +144,7 @@ void hantro_h1_jpeg_enc_run(struct hantro_ctx *ctx)
 	vepu_write(vpu, reg, H1_REG_ENC_CTRL);
 }
 
-void hantro_jpeg_enc_done(struct hantro_ctx *ctx)
+void hantro_h1_jpeg_enc_done(struct hantro_ctx *ctx)
 {
 	struct hantro_dev *vpu = ctx->dev;
 	u32 bytesused = vepu_read(vpu, H1_REG_STR_BUF_LIMIT) / 8;

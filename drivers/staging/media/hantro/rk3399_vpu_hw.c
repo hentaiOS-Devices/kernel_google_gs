@@ -158,6 +158,7 @@ static const struct hantro_codec_ops rk3399_vpu_codec_ops[] = {
 		.run = rk3399_vpu_jpeg_enc_run,
 		.reset = rk3399_vpu_enc_reset,
 		.init = hantro_jpeg_enc_init,
+		.done = rk3399_vpu_jpeg_enc_done,
 		.exit = hantro_jpeg_enc_exit,
 	},
 	[HANTRO_MODE_MPEG2_DEC] = {
