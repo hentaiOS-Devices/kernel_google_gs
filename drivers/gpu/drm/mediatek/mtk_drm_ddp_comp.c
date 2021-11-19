@@ -41,6 +41,12 @@
 
 #define UFO_BYPASS				BIT(2)
 
+#define DISP_POSTMASK_EN			0x0000
+#define POSTMASK_EN				BIT(0)
+#define DISP_POSTMASK_CFG			0x0020
+#define POSTMASK_RELAY_MODE			BIT(0)
+#define DISP_POSTMASK_SIZE			0x0030
+
 #define DISP_DITHERING				BIT(2)
 #define DITHER_LSB_ERR_SHIFT_R(x)		(((x) & 0x7) << 28)
 #define DITHER_ADD_LSHIFT_R(x)			(((x) & 0x7) << 20)
@@ -49,12 +55,6 @@
 #define DITHER_ADD_LSHIFT_B(x)			(((x) & 0x7) << 20)
 #define DITHER_LSB_ERR_SHIFT_G(x)		(((x) & 0x7) << 12)
 #define DITHER_ADD_LSHIFT_G(x)			(((x) & 0x7) << 4)
-
-#define DISP_POSTMASK_EN			0x0000
-#define POSTMASK_EN					BIT(0)
-#define DISP_POSTMASK_CFG			0x0020
-#define POSTMASK_RELAY_MODE				BIT(0)
-#define DISP_POSTMASK_SIZE			0x0030
 
 struct mtk_ddp_comp_dev {
 	struct clk *clk;
@@ -181,32 +181,6 @@ static void mtk_ufoe_start(struct device *dev)
 	writel(UFO_BYPASS, priv->regs + DISP_REG_UFO_START);
 }
 
-static void mtk_dither_config(struct device *dev, unsigned int w,
-			      unsigned int h, unsigned int vrefresh,
-			      unsigned int bpc, struct cmdq_pkt *cmdq_pkt)
-{
-	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
-
-	mtk_ddp_write(cmdq_pkt, h << 16 | w, &priv->cmdq_reg, priv->regs, DISP_DITHER_SIZE);
-	mtk_ddp_write(cmdq_pkt, DITHER_RELAY_MODE, &priv->cmdq_reg, priv->regs, DISP_DITHER_CFG);
-	mtk_dither_set_common(priv->regs, &priv->cmdq_reg, bpc, DISP_DITHER_CFG,
-			      DITHER_ENGINE_EN, cmdq_pkt);
-}
-
-static void mtk_dither_start(struct device *dev)
-{
-	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
-
-	writel(DITHER_EN, priv->regs + DISP_DITHER_EN);
-}
-
-static void mtk_dither_stop(struct device *dev)
-{
-	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
-
-	writel_relaxed(0x0, priv->regs + DISP_DITHER_EN);
-}
-
 static void mtk_postmask_config(struct device *dev, unsigned int w,
 				unsigned int h, unsigned int vrefresh,
 				unsigned int bpc, struct cmdq_pkt *cmdq_pkt)
@@ -231,6 +205,32 @@ static void mtk_postmask_stop(struct device *dev)
 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
 
 	writel_relaxed(0x0, priv->regs + DISP_POSTMASK_EN);
+}
+
+static void mtk_dither_config(struct device *dev, unsigned int w,
+			      unsigned int h, unsigned int vrefresh,
+			      unsigned int bpc, struct cmdq_pkt *cmdq_pkt)
+{
+	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
+
+	mtk_ddp_write(cmdq_pkt, h << 16 | w, &priv->cmdq_reg, priv->regs, DISP_DITHER_SIZE);
+	mtk_ddp_write(cmdq_pkt, DITHER_RELAY_MODE, &priv->cmdq_reg, priv->regs, DISP_DITHER_CFG);
+	mtk_dither_set_common(priv->regs, &priv->cmdq_reg, bpc, DISP_DITHER_CFG,
+			      DITHER_ENGINE_EN, cmdq_pkt);
+}
+
+static void mtk_dither_start(struct device *dev)
+{
+	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
+
+	writel(DITHER_EN, priv->regs + DISP_DITHER_EN);
+}
+
+static void mtk_dither_stop(struct device *dev)
+{
+	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
+
+	writel_relaxed(0x0, priv->regs + DISP_DITHER_EN);
 }
 
 static const struct mtk_ddp_comp_funcs ddp_aal = {
