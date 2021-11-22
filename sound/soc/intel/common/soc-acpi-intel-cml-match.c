@@ -75,6 +75,12 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_cml_machines[] = {
 		.quirk_data = &max98390_spk_codecs,
 		.sof_tplg_filename = "sof-cml-da7219-max98390.tplg",
 	},
+	{
+		.id = "ESSX8336",
+		.drv_name = "sof-essx8336",
+		.sof_fw_filename = "sof-cml.ri",
+		.sof_tplg_filename = "sof-cml-es8336.tplg",
+	},
 	{},
 };
 EXPORT_SYMBOL_GPL(snd_soc_acpi_intel_cml_machines);
