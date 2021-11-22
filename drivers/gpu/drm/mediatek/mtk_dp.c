@@ -1412,6 +1412,9 @@ static void mtk_dp_power_enable(struct mtk_dp *mtk_dp)
 	usleep_range(10, 200);
 	mtk_dp_update_bits(mtk_dp, MTK_DP_TOP_RESET_AND_PROBE, SW_RST_B_PHYD,
 			   SW_RST_B_PHYD);
+	mtk_dp_update_bits(mtk_dp, MTK_DP_TOP_PWR_STATE,
+			   DP_PWR_STATE_BANDGAP_TPLL,
+			   DP_PWR_STATE_MASK);
 }
 
 static void mtk_dp_power_disable(struct mtk_dp *mtk_dp)
