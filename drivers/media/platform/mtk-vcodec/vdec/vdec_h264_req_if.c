@@ -400,8 +400,7 @@ static int vdec_h264_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	vpu_dec_end(vpu);
 
 	memcpy(&inst->vsi_ctx, inst->vpu.vsi, sizeof(inst->vsi_ctx));
-	mtk_vcodec_debug(inst, "\n - NALU[%d] type=%d -\n", inst->num_nalu,
-			 nal_type);
+	mtk_vcodec_debug(inst, "\n - NALU[%d] -\n", inst->num_nalu);
 
 	inst->ctx->dev->vdec_pdata->cap_to_disp(inst->ctx, fb, 0);
 	return 0;
