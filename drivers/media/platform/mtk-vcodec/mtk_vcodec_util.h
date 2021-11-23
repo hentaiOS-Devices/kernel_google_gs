@@ -28,6 +28,7 @@ struct mtk_vcodec_dev;
 extern int mtk_v4l2_dbg_level;
 extern bool mtk_vcodec_dbg;
 
+#define DEBUG	1
 
 #define mtk_v4l2_err(fmt, args...)                \
 	pr_err("[MTK_V4L2][ERROR] %s:%d: " fmt "\n", __func__, __LINE__, \
