@@ -163,6 +163,20 @@
 	regulator-always-on;
 };
 
+&nor_flash {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&nor_pins_default>;
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <52000000>;
+		spi-rx-bus-width = <2>;
+		spi-tx-bus-width = <2>;
+	};
+};
+
 &pcie0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie0_pins_default>;
@@ -307,6 +321,22 @@
 			pinmux = <PINMUX_GPIO120__FUNC_MSDC0_RSTB>;
 			drive-strength = <MTK_DRIVE_8mA>;
 			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+	};
+
+	nor_pins_default: nor {
+		pins0 {
+			pinmux = <PINMUX_GPIO142__FUNC_SPINOR_IO0>,
+				 <PINMUX_GPIO141__FUNC_SPINOR_CK>,
+				 <PINMUX_GPIO143__FUNC_SPINOR_IO1>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-down;
+		};
+
+		pins1 {
+			pinmux = <PINMUX_GPIO140__FUNC_SPINOR_CS>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up;
 		};
 	};
 
