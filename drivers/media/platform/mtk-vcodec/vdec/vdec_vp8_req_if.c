@@ -40,6 +40,7 @@
  * @wait_key_frame    : wait key frame coming
  * @crc               : Used to check whether hardware's status is right
  * @timeout           : Decode timeout: 1 timeout, 0 no timeount
+ * @reserved          : reserved, currently unused
  */
 struct vdec_vp8_slice_info {
 	uint64_t vld_wrapper_dma;
@@ -303,7 +304,7 @@ static int vdec_vp8_slice_init(struct mtk_vcodec_ctx *ctx)
 	if (err)
 		goto error_deinit;
 
-	mtk_vcodec_debug(inst, "vp8 struct size = %ld vsi: %ld\n",
+	mtk_vcodec_debug(inst, "vp8 struct size = %zd vsi: %zd\n",
 		sizeof(struct v4l2_ctrl_vp8_frame),
 		sizeof(struct vdec_vp8_slice_vsi));
 	mtk_vcodec_debug(inst, "vp8:%p, codec_type = 0x%x vsi: 0x%p",
@@ -325,7 +326,6 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	struct vdec_vp8_slice_inst *inst = h_vdec;
 	struct vdec_vpu_inst *vpu = &inst->vpu;
 	struct mtk_video_dec_buf *src_buf_info, *dst_buf_info;
-	unsigned char *bs_va;
 	unsigned int data;
 	uint64_t y_fb_dma, c_fb_dma;
 	int err;
@@ -354,12 +354,11 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	inst->vsi->dec.cur_y_fb_dma = y_fb_dma;
 	inst->vsi->dec.cur_c_fb_dma = c_fb_dma;
 
-	mtk_vcodec_debug(inst, "frame[%d] bs(%ld 0x%lx) y/c(0x%llx 0x%llx)",
+	mtk_vcodec_debug(inst, "frame[%d] bs(%zu 0x%lx) y/c(0x%llx 0x%llx)",
 		inst->ctx->decoded_frame_cnt,
 		bs->size, (unsigned long)bs->dma_addr,
 		y_fb_dma, c_fb_dma);
 
-	bs_va = (unsigned char *)bs->va;
 	v4l2_m2m_buf_copy_metadata(&src_buf_info->m2m_buf.vb,
 			&dst_buf_info->m2m_buf.vb, true);
 
@@ -389,7 +388,7 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	err = vpu_dec_end(vpu);
 	if (err) {
 		mtk_vcodec_debug(inst, "error while calling vpu_dec_end: %d",
-			inst->ctx->decoded_frame_cnt, err);
+				 err);
 		goto error;
 	}
 
