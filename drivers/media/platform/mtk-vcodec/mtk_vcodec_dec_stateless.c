@@ -467,13 +467,12 @@ static void mtk_init_vdec_params(struct mtk_vcodec_ctx *ctx)
 	src_vq = v4l2_m2m_get_vq(ctx->m2m_ctx,
 				 V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
 
-	if (ctx->dev->vdec_pdata->hw_arch != MTK_VDEC_PURE_SINGLE_CORE) {
+	if (ctx->dev->vdec_pdata->hw_arch != MTK_VDEC_PURE_SINGLE_CORE)
 		v4l2_m2m_set_dst_buffered(ctx->m2m_ctx, 1);
-		mtk_vcodec_get_supported_formats(ctx);
-	} else {
-		mtk_vcodec_add_formats(V4L2_PIX_FMT_H264_SLICE, ctx);
-		mtk_vcodec_add_formats(V4L2_PIX_FMT_MM21, ctx);
-	}
+	else
+		ctx->dev->dec_capability |=
+			MTK_VDEC_FORMAT_H264_SLICE | MTK_VDEC_FORMAT_MM21;
+	mtk_vcodec_get_supported_formats(ctx);
 
 	/* Support request api for output plane */
 	src_vq->supports_requests = true;
