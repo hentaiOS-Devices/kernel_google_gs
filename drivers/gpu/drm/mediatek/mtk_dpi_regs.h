@@ -41,6 +41,7 @@
 #define FAKE_DE_RODD			BIT(22)
 #define FAKE_DE_REVEN			BIT(23)
 #define DPINTF_YUV422_EN		BIT(24)
+#define DPINTF_CSC_ENABLE		BIT(26)
 #define DPINTF_INPUT_2P_EN		BIT(29)
 
 #define DPI_OUTPUT_SETTING	0x14
@@ -229,4 +230,29 @@
 
 #define EDGE_SEL_EN			BIT(5)
 #define H_FRE_2N			BIT(25)
+
+#define DPI_MATRIX_SET	0xB4
+#define INT_MATRIX_SEL			BIT(0)
+#define INT_MATRIX_SEL_MASK		(0x1F << 0)
+#define RGB_TO_JPEG			0x00
+#define RGB_TO_FULL709			0x01
+#define RGB_TO_BT601			0x02
+#define RGB_TO_BT709			0x03
+#define JPEG_TO_RGB			0x04
+#define FULL709_TO_RGB			0x05
+#define BT601_TO_RGB			0x06
+#define BT709_TO_RGB			0x07
+#define JPEG_TO_BT601			0x08
+#define JPEG_TO_BT709			0x09
+#define BT601_TO_JPEG			0xA
+#define BT709_TO_JPEG			0xB
+#define BT709_TO_BT601			0xC
+#define BT601_TO_BT709			0xD
+#define JPEG_TO_CERGB			0x14
+#define FULL709_TO_CERGB		0x15
+#define BT601_TO_CERGB			0x16
+#define BT709_TO_CERGB			0x17
+#define RGB_TO_CERGB			0x1C
+#define MATRIX_BIT			BIT(8)
+#define EXT_MATRIX_EN			BIT(12)
 #endif /* __MTK_DPI_REGS_H */

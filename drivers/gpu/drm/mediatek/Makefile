@@ -13,8 +13,9 @@ mediatek-drm-y := mtk_disp_aal.o \
 		  mtk_drm_drv.o \
 		  mtk_drm_gem.o \
 		  mtk_drm_plane.o \
-		  mtk_dsi.o \
+		  mtk_dp.o \
 		  mtk_dpi.o \
+		  mtk_dsi.o \
 		  mtk_ethdr.o \
 		  mtk_mdp_rdma.o
 
