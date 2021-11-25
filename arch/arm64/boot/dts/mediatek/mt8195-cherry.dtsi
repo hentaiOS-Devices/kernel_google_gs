@@ -74,6 +74,12 @@
 			reg = <0 0x50000000 0 0x2900000>;
 			no-map;
 		};
+
+		snd_dma_mem_reserved: snd_dma_mem_region {
+			compatible = "shared-dma-pool";
+			reg = <0 0x60000000 0 0x1100000>;
+			no-map;
+		};
 	};
 
 	rt1019p: rt1019p {
@@ -224,6 +230,7 @@
 };
 
 &afe {
+	memory-region = <&snd_dma_mem_reserved>;
 	mediatek,etdm-in2-cowork-source = <2>;
 	mediatek,etdm-out2-cowork-source = <0>;
 	status = "okay";
