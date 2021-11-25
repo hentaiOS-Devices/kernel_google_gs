@@ -115,6 +115,18 @@ struct hantro_vp8_enc_buf_data {
 };
 
 /**
+ * struct hantro_vp8_enc_ctrl_buf - hardware control buffer layout
+ * @ext_hdr_size:	Ext header size in bytes (written by hardware).
+ * @dct_size:		DCT partition size (written by hardware).
+ * @rsvd:		Reserved for hardware.
+ */
+struct hantro_vp8_enc_ctrl_buf {
+	u32 ext_hdr_size;
+	u32 dct_size;
+	u8 reserved[1016];
+};
+
+/**
  * struct hantro_vp8_enc_hw_ctx - Context private data specific to codec mode.
  * @ctrl_buf:		VP8 control buffer.
  * @ext_buf:		VP8 ext data buffer.
