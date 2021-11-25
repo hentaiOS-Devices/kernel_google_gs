@@ -280,6 +280,18 @@ static int hantro_enc_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 	/* The only volatile ctrl is V4L2_CID_PRIVATE_HANTRO_RET_PARAMS. */
 	vpu_debug(4, "ctrl id %d\n", ctrl->id);
 
+	if (ctx->vpu_dst_fmt->codec_mode == HANTRO_MODE_H264_ENC) {
+		/* Encoder not initialized yet. */
+		if (!ctx->h264_enc.feedback.cpu)
+			return -EIO;
+
+		/* Only sizeof(struct hantro_h264_enc_feedback) is used */
+		memcpy(ctrl->p_new.p, ctx->h264_enc.feedback.cpu,
+		       HANTRO_VP8_RET_PARAMS_SIZE);
+
+		return 0;
+	}
+
 	/* Encoder not initialized yet. */
 	if (!ctx->vp8_enc.priv_dst.cpu)
 		return -EIO;
@@ -311,7 +323,7 @@ static const struct hantro_ctrl controls[] = {
 			.ops = &hantro_jpeg_ctrl_ops,
 		},
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_PRIVATE_HANTRO_HEADER,
 			.name = "Hantro Private Header",
@@ -335,7 +347,7 @@ static const struct hantro_ctrl controls[] = {
 			.elem_size = HANTRO_VP8_HW_PARAMS_SIZE,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_PRIVATE_HANTRO_RET_PARAMS,
 			.name = "Hantro Private Ret Params",
@@ -346,7 +358,7 @@ static const struct hantro_ctrl controls[] = {
 			.elem_size = HANTRO_VP8_RET_PARAMS_SIZE,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_FRAME_RC_ENABLE,
 			.type = V4L2_CTRL_TYPE_BOOLEAN,
@@ -354,7 +366,7 @@ static const struct hantro_ctrl controls[] = {
 			.step = 1,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_BITRATE,
 			.type = V4L2_CTRL_TYPE_INTEGER,
@@ -364,7 +376,7 @@ static const struct hantro_ctrl controls[] = {
 			.def = 2097152,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_MB_RC_ENABLE,
 			.type = V4L2_CTRL_TYPE_BOOLEAN,
@@ -372,7 +384,7 @@ static const struct hantro_ctrl controls[] = {
 			.step = 1,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE,
 			.type = V4L2_CTRL_TYPE_INTEGER,
@@ -382,7 +394,7 @@ static const struct hantro_ctrl controls[] = {
 			.def = 30,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_MFC51_VIDEO_RC_REACTION_COEFF,
 			.type = V4L2_CTRL_TYPE_INTEGER,
@@ -393,7 +405,7 @@ static const struct hantro_ctrl controls[] = {
 			.def = 1,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_MFC51_VIDEO_RC_FIXED_TARGET_BIT,
 			.type = V4L2_CTRL_TYPE_BOOLEAN,
@@ -403,11 +415,91 @@ static const struct hantro_ctrl controls[] = {
 			.menu_skip_mask = 0,
 		}
 	}, {
-		.codec = HANTRO_VP8_ENCODER,
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_FORCE_KEY_FRAME,
 			.type = V4L2_CTRL_TYPE_BUTTON,
 		}
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_LEVEL,
+			.min = V4L2_MPEG_VIDEO_H264_LEVEL_1_0,
+			.max = V4L2_MPEG_VIDEO_H264_LEVEL_4_1,
+			.def = V4L2_MPEG_VIDEO_H264_LEVEL_1_0,
+		}
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP,
+			.max = 51,
+			.step = 1,
+			.def = 30,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP,
+			.max = 51,
+			.step = 1,
+			.def = 18,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_8X8_TRANSFORM,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_CPB_SIZE,
+			.max = 288000,
+			.step = 1,
+			.def = 30000,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_SEI_FRAME_PACKING,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.max = 1,
+			.step = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_B_FRAMES,
+			.max = 2,
+			.step = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_B_FRAME_QP,
+			.max = 51,
+			.step = 1,
+			.def = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_PREPEND_SPSPPS_TO_IDR,
+			.max = 1,
+			.step = 1,
+			.def = 0,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_LOOP_FILTER_MODE,
+			.max = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE,
+			.max = 1,
+		},
 	}, {
 		.codec = HANTRO_MPEG2_DECODER,
 		.cfg = {
@@ -461,7 +553,7 @@ static const struct hantro_ctrl controls[] = {
 			.max = V4L2_STATELESS_H264_START_CODE_ANNEX_B,
 		},
 	}, {
-		.codec = HANTRO_H264_DECODER,
+		.codec = HANTRO_H264_DECODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE,
 			.min = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE,

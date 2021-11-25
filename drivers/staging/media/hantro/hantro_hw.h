@@ -24,6 +24,13 @@
 #define HANTRO_VP8_HW_PARAMS_SIZE	5487
 #define HANTRO_VP8_RET_PARAMS_SIZE	488
 
+/* Support up to High Profile, so no 4:4:4 or 10-bit */
+#define HANTRO_H264_QP_NUM		52
+#define HANTRO_H264_CABAC_CV_NUM	460
+/* XXX: not sure why it needs four extra entries beyond the standard 460 */
+#define HANTRO_H264_CABAC_TABLE_SIZE   (HANTRO_H264_QP_NUM * 2 * \
+					(HANTRO_H264_CABAC_CV_NUM + 4))
+
 struct hantro_dev;
 struct hantro_ctx;
 struct hantro_buf;
@@ -77,6 +84,39 @@ struct hantro_h1_vp8_enc_reg_params {
 };
 
 /**
+ * struct hantro_h264_enc_reg_params - low level encoding parameters
+ * TODO: Create abstract structures for more generic controls or just
+ *       remove unused fields.
+ */
+struct hantro_h264_enc_reg_params {
+	u32 frame_coding_type;
+	s32 pic_init_qp;
+	s32 slice_alpha_offset;
+	s32 slice_beta_offset;
+	s32 chroma_qp_index_offset;
+	s32 filter_disable;
+	u16 idr_pic_id;
+	s32 pps_id;
+	s32 frame_num;
+	s32 slice_size_mb_rows;
+	s32 h264_inter4x4_disabled;
+	s32 enable_cabac;
+	s32 transform8x8_mode;
+	s32 cabac_init_idc;
+
+	/* rate control relevant */
+	s32 qp;
+	s32 mad_qp_delta;
+	s32 mad_threshold;
+	s32 qp_min;
+	s32 qp_max;
+	s32 cp_distance_mbs;
+	s32 cp_target[10];
+	s32 target_error[7];
+	s32 delta_qp[7];
+};
+
+/**
  * struct rk3399_vp8_enc_reg_params - low level encoding parameters
  * TODO: Create abstract structures for more generic controls or just
  *       remove unused fields.
@@ -116,6 +156,7 @@ struct hantro_reg_params {
 	/* Mode-specific data. */
 	union {
 		const struct hantro_h1_vp8_enc_reg_params hantro_h1_vp8_enc;
+		const struct hantro_h264_enc_reg_params hantro_h264_enc;
 		const struct rk3399_vp8_enc_reg_params rk3399_vp8_enc;
 	};
 };
@@ -140,6 +181,21 @@ struct hantro_aux_buf {
  */
 struct hantro_jpeg_enc_hw_ctx {
 	struct hantro_aux_buf bounce_buffer;
+};
+
+/**
+ * struct hantro_h264_enc_hw_ctx - Context private data specific to
+ * codec mode.
+ * @ctrl_buf:		H264 control buffer.
+ * @ext_buf:		H264 ext data buffer.
+ * @ref_rec_ptr:	Bit flag for swapping ref and rec buffers every frame.
+ */
+struct hantro_h264_enc_hw_ctx {
+	struct hantro_aux_buf cabac_tbl[3];
+	struct hantro_aux_buf ext_buf;
+	struct hantro_aux_buf feedback;
+
+	u8 ref_rec_ptr:1;
 };
 
 /**
@@ -327,6 +383,11 @@ void rk3399_vpu_vp8_enc_run(struct hantro_ctx *ctx);
 int rk3399_vpu_vp8_enc_init(struct hantro_ctx *ctx);
 void rk3399_vpu_vp8_enc_done(struct hantro_ctx *ctx);
 void rk3399_vpu_vp8_enc_exit(struct hantro_ctx *ctx);
+
+void rk3399_vpu_h264_enc_run(struct hantro_ctx *ctx);
+int rk3399_vpu_h264_enc_init(struct hantro_ctx *ctx);
+void rk3399_vpu_h264_enc_done(struct hantro_ctx *ctx);
+void rk3399_vpu_h264_enc_exit(struct hantro_ctx *ctx);
 
 dma_addr_t hantro_h264_get_ref_buf(struct hantro_ctx *ctx,
 				   unsigned int dpb_idx);

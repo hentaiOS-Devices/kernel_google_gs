@@ -31,6 +31,7 @@ struct hantro_codec_ops;
 
 #define HANTRO_JPEG_ENCODER	BIT(0)
 #define HANTRO_VP8_ENCODER	BIT(1)
+#define HANTRO_H264_ENCODER	BIT(2)
 #define HANTRO_ENCODERS		0x0000ffff
 #define HANTRO_MPEG2_DECODER	BIT(16)
 #define HANTRO_VP8_DECODER	BIT(17)
@@ -111,6 +112,7 @@ struct hantro_variant {
 /**
  * enum hantro_codec_mode - codec operating mode.
  * @HANTRO_MODE_NONE:  No operating mode. Used for RAW video formats.
+ * @HANTRO_MODE_H264_ENC: H264 encoder.
  * @HANTRO_MODE_JPEG_ENC: JPEG encoder.
  * @HANTRO_MODE_VP8_ENC: VP8 encoder.
  * @HANTRO_MODE_H264_DEC: H264 decoder.
@@ -119,6 +121,7 @@ struct hantro_variant {
  */
 enum hantro_codec_mode {
 	HANTRO_MODE_NONE = -1,
+	HANTRO_MODE_H264_ENC,
 	HANTRO_MODE_JPEG_ENC,
 	HANTRO_MODE_VP8_ENC,
 	HANTRO_MODE_H264_DEC,
@@ -232,6 +235,7 @@ struct hantro_dev {
  *
  * @codec_ops:		Set of operations related to codec mode.
  * @postproc:		Post-processing context.
+ * @h264_enc:		H.264-encoding context.
  * @jpeg_enc:		JPEG-encoding context.
  * @mpeg2_dec:		MPEG-2-decoding context.
  * @vp8_dec:		VP8-decoding context.
@@ -260,6 +264,7 @@ struct hantro_ctx {
 	/* Specific for particular codec modes. */
 	union {
 		struct hantro_h264_dec_hw_ctx h264_dec;
+		struct hantro_h264_enc_hw_ctx h264_enc;
 		struct hantro_jpeg_enc_hw_ctx jpeg_enc;
 		struct hantro_mpeg2_dec_hw_ctx mpeg2_dec;
 		struct hantro_vp8_dec_hw_ctx vp8_dec;
