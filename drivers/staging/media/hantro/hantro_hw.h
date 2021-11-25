@@ -189,8 +189,6 @@ struct hantro_vp8_enc_hw_ctx {
 
 	const struct rk3399_vp8_enc_reg_params *params;
 
-	struct v4l2_rect src_crop;
-
 	u8 ref_rec_ptr:1;
 };
 

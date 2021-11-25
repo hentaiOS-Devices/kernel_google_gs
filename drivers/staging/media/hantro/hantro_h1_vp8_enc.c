@@ -101,7 +101,7 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu,
 static inline u32 enc_in_img_ctrl(struct hantro_ctx *ctx)
 {
 	struct v4l2_pix_format_mplane *pix_fmt = &ctx->src_fmt;
-	struct v4l2_rect *crop = &ctx->vp8_enc.src_crop;
+	struct v4l2_rect *crop = &ctx->src_crop;
 	unsigned int bytes_per_line, overfill_r, overfill_b;
 
 	/*

@@ -223,7 +223,7 @@ static inline u32 enc_in_img_ctrl(struct hantro_ctx *ctx)
 	struct v4l2_pix_format_mplane *pix_fmt = &ctx->src_fmt;
 	const struct rk3399_vp8_enc_reg_params *params =
 		hantro_get_ctrl(ctx, V4L2_CID_PRIVATE_HANTRO_REG_PARAMS);
-	struct v4l2_rect *crop = &ctx->vp8_enc.src_crop;
+	struct v4l2_rect *crop = &ctx->src_crop;
 	unsigned int overfill_r, overfill_b;
 	u32 first_free_bits = (params->frm_hdr_size & 7) * 8;
 

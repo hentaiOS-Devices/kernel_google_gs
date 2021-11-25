@@ -561,7 +561,7 @@ static int vidioc_g_selection(struct file *file, void *priv,
 		sel->r.height = ctx->src_fmt.height;
 		break;
 	case V4L2_SEL_TGT_CROP:
-		sel->r = ctx->vp8_enc.src_crop;
+		sel->r = ctx->src_crop;
 		break;
 	default:
 		return -EINVAL;
@@ -608,7 +608,7 @@ static int vidioc_s_selection(struct file *file, void *priv,
 		rect->width = round_up(rect->width, 4);
 	}
 
-	ctx->vp8_enc.src_crop = *rect;
+	ctx->src_crop = *rect;
 
 	return 0;
 }
