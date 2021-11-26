@@ -1251,6 +1251,13 @@ static const u32 msrs_to_save_all[] = {
 	MSR_ARCH_PERFMON_EVENTSEL0 + 12, MSR_ARCH_PERFMON_EVENTSEL0 + 13,
 	MSR_ARCH_PERFMON_EVENTSEL0 + 14, MSR_ARCH_PERFMON_EVENTSEL0 + 15,
 	MSR_ARCH_PERFMON_EVENTSEL0 + 16, MSR_ARCH_PERFMON_EVENTSEL0 + 17,
+
+	MSR_K7_EVNTSEL0, MSR_K7_EVNTSEL1, MSR_K7_EVNTSEL2, MSR_K7_EVNTSEL3,
+	MSR_K7_PERFCTR0, MSR_K7_PERFCTR1, MSR_K7_PERFCTR2, MSR_K7_PERFCTR3,
+	MSR_F15H_PERF_CTL0, MSR_F15H_PERF_CTL1, MSR_F15H_PERF_CTL2,
+	MSR_F15H_PERF_CTL3, MSR_F15H_PERF_CTL4, MSR_F15H_PERF_CTL5,
+	MSR_F15H_PERF_CTR0, MSR_F15H_PERF_CTR1, MSR_F15H_PERF_CTR2,
+	MSR_F15H_PERF_CTR3, MSR_F15H_PERF_CTR4, MSR_F15H_PERF_CTR5,
 };
 
 static u32 msrs_to_save[ARRAY_SIZE(msrs_to_save_all)];
@@ -1279,6 +1286,7 @@ static const u32 emulated_msrs_all[] = {
 
 	MSR_KVM_ASYNC_PF_EN, MSR_KVM_STEAL_TIME,
 	MSR_KVM_PV_EOI_EN, MSR_KVM_ASYNC_PF_INT, MSR_KVM_ASYNC_PF_ACK,
+	MSR_KVM_HOST_SUSPEND_TIME,
 
 	MSR_IA32_TSC_ADJUST,
 	MSR_IA32_TSCDEADLINE,
@@ -2060,6 +2068,7 @@ static atomic_t kvm_guest_has_master_clock = ATOMIC_INIT(0);
 #endif
 
 static DEFINE_PER_CPU(unsigned long, cpu_tsc_khz);
+static DEFINE_PER_CPU(unsigned long, cpu_tsc_khz_changed);
 static unsigned long max_tsc_khz;
 
 static u32 adjust_tsc_khz(u32 khz, s32 ppm)
@@ -2698,6 +2707,14 @@ static int kvm_guest_time_update(struct kvm_vcpu *v)
 		kvm_make_request(KVM_REQ_CLOCK_UPDATE, v);
 		return 1;
 	}
+	/*
+	 * Use the refined tsc_khz instead of the tsc_khz at boot (which was
+	 * not refined yet when we got it), if the tsc frequency hasn't changed.
+	 * If the frequency does change, it does not get refined any further,
+	 * so it is safe ot use the one gotten from the notifiers.
+	 */
+	if (!__this_cpu_read(cpu_tsc_khz_changed))
+		tgt_tsc_khz = tsc_khz;
 	if (!use_master_clock) {
 		host_tsc = rdtsc();
 		kernel_ns = get_kvmclock_base_ns();
@@ -3117,6 +3134,10 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 			if (!msr_info->host_initiated) {
 				s64 adj = data - vcpu->arch.ia32_tsc_adjust_msr;
 				adjust_tsc_offset_guest(vcpu, adj);
+				/* Before back to guest, tsc_timestamp must be adjusted
+				 * as well, otherwise guest's percpu pvclock time could jump.
+				 */
+				kvm_make_request(KVM_REQ_CLOCK_UPDATE, vcpu);
 			}
 			vcpu->arch.ia32_tsc_adjust_msr = data;
 		}
@@ -3206,7 +3227,7 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 			return 1;
 		break;
 	case MSR_KVM_ASYNC_PF_ACK:
-		if (!guest_pv_has(vcpu, KVM_FEATURE_ASYNC_PF))
+		if (!guest_pv_has(vcpu, KVM_FEATURE_ASYNC_PF_INT))
 			return 1;
 		if (data & 0x1) {
 			vcpu->arch.apf.pageready_pending = false;
@@ -3249,7 +3270,15 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 
 		vcpu->arch.msr_kvm_poll_control = data;
 		break;
+	case MSR_KVM_HOST_SUSPEND_TIME:
+		if (!(data & KVM_MSR_ENABLED))
+			break;
 
+		if (kvm_init_suspend_time_ghc(vcpu->kvm, data & ~1ULL))
+			return 1;
+
+		vcpu->kvm->arch.msr_suspend_time = data;
+		break;
 	case MSR_IA32_MCG_CTL:
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MC0_CTL ... MSR_IA32_MCx_CTL(KVM_MAX_MCE_BANKS) - 1:
@@ -3535,7 +3564,7 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		msr_info->data = vcpu->arch.apf.msr_int_val;
 		break;
 	case MSR_KVM_ASYNC_PF_ACK:
-		if (!guest_pv_has(vcpu, KVM_FEATURE_ASYNC_PF))
+		if (!guest_pv_has(vcpu, KVM_FEATURE_ASYNC_PF_INT))
 			return 1;
 
 		msr_info->data = 0;
@@ -3557,6 +3586,9 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 			return 1;
 
 		msr_info->data = vcpu->arch.msr_kvm_poll_control;
+		break;
+	case MSR_KVM_HOST_SUSPEND_TIME:
+		msr_info->data = vcpu->kvm->arch.msr_suspend_time;
 		break;
 	case MSR_IA32_P5_MC_ADDR:
 	case MSR_IA32_P5_MC_TYPE:
@@ -4101,8 +4133,17 @@ static int kvm_cpu_accept_dm_intr(struct kvm_vcpu *vcpu)
 
 static int kvm_vcpu_ready_for_interrupt_injection(struct kvm_vcpu *vcpu)
 {
-	return kvm_arch_interrupt_allowed(vcpu) &&
-		kvm_cpu_accept_dm_intr(vcpu);
+	/*
+	 * Do not cause an interrupt window exit if an exception
+	 * is pending or an event needs reinjection; userspace
+	 * might want to inject the interrupt manually using KVM_SET_REGS
+	 * or KVM_SET_SREGS.  For that to work, we must be at an
+	 * instruction boundary and with no events half-injected.
+	 */
+	return (kvm_arch_interrupt_allowed(vcpu) &&
+		kvm_cpu_accept_dm_intr(vcpu) &&
+		!kvm_event_needs_reinjection(vcpu) &&
+		!vcpu->arch.exception.pending);
 }
 
 static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
@@ -7050,6 +7091,11 @@ static void init_emulate_ctxt(struct kvm_vcpu *vcpu)
 	BUILD_BUG_ON(HF_SMM_MASK != X86EMUL_SMM_MASK);
 	BUILD_BUG_ON(HF_SMM_INSIDE_NMI_MASK != X86EMUL_SMM_INSIDE_NMI_MASK);
 
+	ctxt->interruptibility = 0;
+	ctxt->have_exception = false;
+	ctxt->exception.vector = -1;
+	ctxt->perm_ok = false;
+
 	init_decode_cache(ctxt);
 	vcpu->arch.emulate_regs_need_sync_from_vcpu = false;
 }
@@ -7367,6 +7413,37 @@ static bool is_vmware_backdoor_opcode(struct x86_emulate_ctxt *ctxt)
 	return false;
 }
 
+/*
+ * Decode to be emulated instruction. Return EMULATION_OK if success.
+ */
+int x86_decode_emulated_instruction(struct kvm_vcpu *vcpu, int emulation_type,
+				    void *insn, int insn_len)
+{
+	int r = EMULATION_OK;
+	struct x86_emulate_ctxt *ctxt = vcpu->arch.emulate_ctxt;
+
+	init_emulate_ctxt(vcpu);
+
+	/*
+	 * We will reenter on the same instruction since we do not set
+	 * complete_userspace_io. This does not handle watchpoints yet,
+	 * those would be handled in the emulate_ops.
+	 */
+	if (!(emulation_type & EMULTYPE_SKIP) &&
+	    kvm_vcpu_check_breakpoint(vcpu, &r))
+		return r;
+
+	ctxt->ud = emulation_type & EMULTYPE_TRAP_UD;
+
+	r = x86_decode_insn(ctxt, insn, insn_len);
+
+	trace_kvm_emulate_insn_start(vcpu);
+	++vcpu->stat.insn_emulation;
+
+	return r;
+}
+EXPORT_SYMBOL_GPL(x86_decode_emulated_instruction);
+
 int x86_emulate_instruction(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
 			    int emulation_type, void *insn, int insn_len)
 {
@@ -7386,32 +7463,12 @@ int x86_emulate_instruction(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
 	 */
 	write_fault_to_spt = vcpu->arch.write_fault_to_shadow_pgtable;
 	vcpu->arch.write_fault_to_shadow_pgtable = false;
-	kvm_clear_exception_queue(vcpu);
 
 	if (!(emulation_type & EMULTYPE_NO_DECODE)) {
-		init_emulate_ctxt(vcpu);
+		kvm_clear_exception_queue(vcpu);
 
-		/*
-		 * We will reenter on the same instruction since
-		 * we do not set complete_userspace_io.  This does not
-		 * handle watchpoints yet, those would be handled in
-		 * the emulate_ops.
-		 */
-		if (!(emulation_type & EMULTYPE_SKIP) &&
-		    kvm_vcpu_check_breakpoint(vcpu, &r))
-			return r;
-
-		ctxt->interruptibility = 0;
-		ctxt->have_exception = false;
-		ctxt->exception.vector = -1;
-		ctxt->perm_ok = false;
-
-		ctxt->ud = emulation_type & EMULTYPE_TRAP_UD;
-
-		r = x86_decode_insn(ctxt, insn, insn_len);
-
-		trace_kvm_emulate_insn_start(vcpu);
-		++vcpu->stat.insn_emulation;
+		r = x86_decode_emulated_instruction(vcpu, emulation_type,
+						    insn, insn_len);
 		if (r != EMULATION_OK)  {
 			if ((emulation_type & EMULTYPE_TRAP_UD) ||
 			    (emulation_type & EMULTYPE_TRAP_UD_FORCED)) {
@@ -7672,6 +7729,8 @@ static void tsc_khz_changed(void *data)
 		khz = freq->new;
 	else if (!boot_cpu_has(X86_FEATURE_CONSTANT_TSC))
 		khz = cpufreq_quick_get(raw_smp_processor_id());
+	if (khz)
+		__this_cpu_write(cpu_tsc_khz_changed, true);
 	if (!khz)
 		khz = tsc_khz;
 	__this_cpu_write(cpu_tsc_khz, khz);
@@ -8848,6 +8907,93 @@ void __kvm_request_immediate_exit(struct kvm_vcpu *vcpu)
 }
 EXPORT_SYMBOL_GPL(__kvm_request_immediate_exit);
 
+#ifdef CONFIG_KVM_VIRT_SUSPEND_TIMING
+bool virt_suspend_time_enabled(struct kvm *kvm)
+{
+	return kvm->arch.msr_suspend_time & KVM_MSR_ENABLED;
+}
+
+/*
+ * Do per-vcpu suspend time adjustment (tsc) and
+ * make an interrupt to notify it.
+ */
+static void vcpu_do_suspend_time_adjustment(struct kvm_vcpu *vcpu,
+					    u64 total_ns)
+{
+	struct kvm_lapic_irq irq = {
+		.delivery_mode = APIC_DM_FIXED,
+		.vector = HYPERVISOR_CALLBACK_VECTOR
+	};
+	u64 last_suspend_duration = 0;
+	s64 adj;
+
+	spin_lock(&vcpu->suspend_time_ns_lock);
+	if (total_ns > vcpu->suspend_time_ns) {
+		last_suspend_duration = total_ns - vcpu->suspend_time_ns;
+		vcpu->suspend_time_ns = total_ns;
+	}
+	spin_unlock(&vcpu->suspend_time_ns_lock);
+
+	if (!last_suspend_duration) {
+		/* It looks like the suspend is not happened yet. Retry. */
+		kvm_make_request(KVM_REQ_SUSPEND_TIME_ADJ, vcpu);
+		return;
+	}
+
+	adj = __this_cpu_read(cpu_tsc_khz) *
+		(last_suspend_duration / 1000000);
+	adjust_tsc_offset_host(vcpu, -adj);
+	/*
+	 * This request should be processed before
+	 * the first vmenter after resume to avoid
+	 * an unadjusted TSC value is observed.
+	 */
+	kvm_make_request(KVM_REQ_MASTERCLOCK_UPDATE, vcpu);
+	kvm_write_suspend_time(vcpu->kvm);
+	if (!kvm_apic_set_irq(vcpu, &irq, NULL))
+		pr_err("kvm: failed to set suspend time irq\n");
+}
+
+/*
+ * Do kvm-wide suspend time adjustment (kvm-clock).
+ */
+static void kvm_do_suspend_time_adjustment(struct kvm *kvm, u64 total_ns)
+{
+	spin_lock(&kvm->suspend_time_ns_lock);
+	if (total_ns > kvm->suspend_time_ns) {
+		u64 last_suspend_duration = total_ns - kvm->suspend_time_ns;
+		/*
+		 * Move the offset of kvm_clock here as if it is stopped
+		 * during the suspension.
+		 */
+		kvm->arch.kvmclock_offset -= last_suspend_duration;
+
+		/* suspend_time is accumulated per VM. */
+		kvm->suspend_time_ns += last_suspend_duration;
+		/*
+		 * This adjustment will be reflected to the struct provided
+		 * from the guest via MSR_KVM_HOST_SUSPEND_TIME before
+		 * the notification interrupt is injected.
+		 */
+		kvm_make_all_cpus_request(kvm, KVM_REQ_CLOCK_UPDATE);
+	}
+	spin_unlock(&kvm->suspend_time_ns_lock);
+}
+
+static void kvm_adjust_suspend_time(struct kvm_vcpu *vcpu)
+{
+	u64 total_ns = kvm_total_suspend_time(vcpu->kvm);
+	/* Do kvm-wide adjustment (kvm-clock) */
+	kvm_do_suspend_time_adjustment(vcpu->kvm, total_ns);
+	/* Do per-vcpu adjustment (tsc) */
+	vcpu_do_suspend_time_adjustment(vcpu, total_ns);
+}
+#else
+static void kvm_adjust_suspend_time(struct kvm_vcpu *vcpu)
+{
+}
+#endif
+
 /*
  * Returns 1 to let vcpu_run() continue the guest execution loop without
  * exiting to the userspace.  Otherwise, the value will be returned to the
@@ -8870,6 +9016,8 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 				goto out;
 			}
 		}
+		if (kvm_check_request(KVM_REQ_SUSPEND_TIME_ADJ, vcpu))
+			kvm_adjust_suspend_time(vcpu);
 		if (kvm_check_request(KVM_REQ_MMU_RELOAD, vcpu))
 			kvm_mmu_unload(vcpu);
 		if (kvm_check_request(KVM_REQ_MIGRATE_TIMER, vcpu))
@@ -10401,8 +10549,14 @@ void kvm_arch_free_vm(struct kvm *kvm)
 
 int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 {
+	int ret;
+
 	if (type)
 		return -EINVAL;
+
+	ret = kvm_page_track_init(kvm);
+	if (ret)
+		return ret;
 
 	INIT_HLIST_HEAD(&kvm->arch.mask_notifier_list);
 	INIT_LIST_HEAD(&kvm->arch.active_mmu_pages);
@@ -10430,7 +10584,6 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 	INIT_DELAYED_WORK(&kvm->arch.kvmclock_sync_work, kvmclock_sync_fn);
 
 	kvm_hv_init_vm(kvm);
-	kvm_page_track_init(kvm);
 	kvm_mmu_init_vm(kvm);
 
 	return kvm_x86_ops.vm_init(kvm);

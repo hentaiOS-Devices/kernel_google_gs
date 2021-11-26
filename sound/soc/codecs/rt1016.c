@@ -490,7 +490,7 @@ static int rt1016_set_component_pll(struct snd_soc_component *component,
 
 	ret = rl6231_pll_calc(freq_in, freq_out * 4, &pll_code);
 	if (ret < 0) {
-		dev_err(component->dev, "Unsupport input clock %d\n", freq_in);
+		dev_err(component->dev, "Unsupported input clock %d\n", freq_in);
 		return ret;
 	}
 
@@ -623,7 +623,7 @@ MODULE_DEVICE_TABLE(of, rt1016_of_match);
 #endif
 
 #ifdef CONFIG_ACPI
-static struct acpi_device_id rt1016_acpi_match[] = {
+static const struct acpi_device_id rt1016_acpi_match[] = {
 	{"10EC1016", 0,},
 	{},
 };

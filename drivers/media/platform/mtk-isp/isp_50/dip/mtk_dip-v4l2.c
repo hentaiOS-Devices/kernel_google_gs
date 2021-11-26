@@ -284,11 +284,10 @@ static int mtk_dip_vb2_meta_buf_init(struct vb2_buffer *vb)
 
 	dev_buf->scp_daddr[0] = vb2_dma_contig_plane_dma_addr(vb, 0);
 	buf_paddr = dev_buf->scp_daddr[0];
-	dev_buf->isp_daddr[0] =	dma_map_resource(pipe->dip_dev->dev,
-						 buf_paddr,
+	dev_buf->isp_daddr[0] =	dma_map_single(pipe->dip_dev->dev,
+						 phys_to_virt(buf_paddr),
 						 vb->planes[0].length,
-						 DMA_BIDIRECTIONAL,
-						 DMA_ATTR_SKIP_CPU_SYNC);
+						 DMA_BIDIRECTIONAL);
 	if (dma_mapping_error(pipe->dip_dev->dev,
 			      dev_buf->isp_daddr[0])) {
 		dev_err(pipe->dip_dev->dev,
@@ -327,9 +326,8 @@ static void mtk_dip_vb2_queue_meta_buf_cleanup(struct vb2_buffer *vb)
 	struct mtk_dip_dev_buffer *dev_buf = mtk_dip_vb2_buf_to_dev_buf(vb);
 	struct mtk_dip_pipe *pipe = vb2_get_drv_priv(vb->vb2_queue);
 
-	dma_unmap_resource(pipe->dip_dev->dev, dev_buf->isp_daddr[0],
-			   vb->planes[0].length, DMA_BIDIRECTIONAL,
-			   DMA_ATTR_SKIP_CPU_SYNC);
+	dma_unmap_single(pipe->dip_dev->dev, dev_buf->isp_daddr[0],
+			   vb->planes[0].length, DMA_BIDIRECTIONAL);
 }
 
 static void mtk_dip_vb2_buf_queue(struct vb2_buffer *vb)
@@ -928,6 +926,8 @@ static int mtk_dip_video_device_v4l2_register(struct mtk_dip_pipe *pipe,
 	vbq->min_buffers_needed = 0;
 	vbq->drv_priv = pipe;
 	vbq->lock = &node->dev_q.lock;
+	if (node->desc->cached_mmap)
+		vbq->allow_cache_hints = 1;
 
 	ret = vb2_queue_init(vbq);
 	if (ret) {
@@ -1817,6 +1817,7 @@ queues_setting[MTK_DIP_VIDEO_NODE_ID_TOTAL_NUM] = {
 		.ops = &mtk_dip_v4l2_video_cap_ioctl_ops,
 		.vb2_ops = &mtk_dip_vb2_video_ops,
 		.description = "Output quality enhanced image",
+		.cached_mmap = true,
 	},
 	{
 		.id = MTK_DIP_VIDEO_NODE_ID_MDP1_CAPTURE,

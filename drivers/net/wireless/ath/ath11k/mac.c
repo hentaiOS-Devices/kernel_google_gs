@@ -150,6 +150,9 @@ static const struct ieee80211_channel ath11k_6ghz_channels[] = {
 	CHAN6G(225, 7075, 0),
 	CHAN6G(229, 7095, 0),
 	CHAN6G(233, 7115, 0),
+
+	/* new addition in IEEE Std 802.11ax-2021 */
+	CHAN6G(2, 5935, 0),
 };
 
 static struct ieee80211_rate ath11k_legacy_rates[] = {
@@ -1415,17 +1418,69 @@ static void ath11k_peer_assoc_h_he(struct ath11k *ar,
 	}
 }
 
+static void ath11k_peer_assoc_h_he_6ghz(struct ath11k *ar,
+					struct ieee80211_vif *vif,
+					struct ieee80211_sta *sta,
+					struct peer_assoc_params *arg)
+{
+	const struct ieee80211_sta_he_cap *he_cap = &sta->he_cap;
+	struct cfg80211_chan_def def;
+	enum nl80211_band band;
+	u8  ampdu_factor;
+
+	if (WARN_ON(ath11k_mac_vif_chan(vif, &def)))
+		return;
+
+	band = def.chan->band;
+
+	if (!arg->he_flag || band != NL80211_BAND_6GHZ || !sta->he_6ghz_capa.capa)
+		return;
+
+	if (sta->bandwidth == IEEE80211_STA_RX_BW_80)
+		arg->bw_80 = true;
+
+	if (sta->bandwidth == IEEE80211_STA_RX_BW_160)
+		arg->bw_160 = true;
+
+	arg->peer_he_caps_6ghz = le16_to_cpu(sta->he_6ghz_capa.capa);
+	arg->peer_mpdu_density =
+		ath11k_parse_mpdudensity(FIELD_GET(IEEE80211_HE_6GHZ_CAP_MIN_MPDU_START,
+						   arg->peer_he_caps_6ghz));
+
+	/* From IEEE Std 802.11ax-2021 - Section 10.12.2: An HE STA shall be capable of
+	 * receiving A-MPDU where the A-MPDU pre-EOF padding length is up to the value
+	 * indicated by the Maximum A-MPDU Length Exponent Extension field in the HE
+	 * Capabilities element and the Maximum A-MPDU Length Exponent field in HE 6 GHz
+	 * Band Capabilities element in the 6 GHz band.
+	 *
+	 * Here, we are extracting the Max A-MPDU Exponent Extension from HE caps and
+	 * factor is the Maximum A-MPDU Length Exponent from HE 6 GHZ Band capability.
+	 */
+	ampdu_factor = FIELD_GET(IEEE80211_HE_MAC_CAP3_MAX_AMPDU_LEN_EXP_MASK,
+				 he_cap->he_cap_elem.mac_cap_info[3]) +
+			FIELD_GET(IEEE80211_HE_6GHZ_CAP_MAX_AMPDU_LEN_EXP,
+				  arg->peer_he_caps_6ghz);
+
+	arg->peer_max_mpdu = (1u << (IEEE80211_HE_6GHZ_MAX_AMPDU_FACTOR +
+				     ampdu_factor)) - 1;
+}
+
 static void ath11k_peer_assoc_h_smps(struct ieee80211_sta *sta,
 				     struct peer_assoc_params *arg)
 {
 	const struct ieee80211_sta_ht_cap *ht_cap = &sta->ht_cap;
 	int smps;
 
-	if (!ht_cap->ht_supported)
+	if (!ht_cap->ht_supported && !sta->he_6ghz_capa.capa)
 		return;
 
-	smps = ht_cap->cap & IEEE80211_HT_CAP_SM_PS;
-	smps >>= IEEE80211_HT_CAP_SM_PS_SHIFT;
+	if (ht_cap->ht_supported) {
+		smps = ht_cap->cap & IEEE80211_HT_CAP_SM_PS;
+		smps >>= IEEE80211_HT_CAP_SM_PS_SHIFT;
+	} else {
+		smps = le16_get_bits(sta->he_6ghz_capa.capa,
+				     IEEE80211_HE_6GHZ_CAP_SM_PS);
+	}
 
 	switch (smps) {
 	case WLAN_HT_CAP_SM_PS_STATIC:
@@ -1699,6 +1754,7 @@ static void ath11k_peer_assoc_prepare(struct ath11k *ar,
 	ath11k_peer_assoc_h_ht(ar, vif, sta, arg);
 	ath11k_peer_assoc_h_vht(ar, vif, sta, arg);
 	ath11k_peer_assoc_h_he(ar, vif, sta, arg);
+	ath11k_peer_assoc_h_he_6ghz(ar, vif, sta, arg);
 	ath11k_peer_assoc_h_qos(ar, vif, sta, arg);
 	ath11k_peer_assoc_h_phymode(ar, vif, sta, arg);
 	ath11k_peer_assoc_h_smps(sta, arg);
@@ -1708,15 +1764,20 @@ static void ath11k_peer_assoc_prepare(struct ath11k *ar,
 
 static int ath11k_setup_peer_smps(struct ath11k *ar, struct ath11k_vif *arvif,
 				  const u8 *addr,
-				  const struct ieee80211_sta_ht_cap *ht_cap)
+				  const struct ieee80211_sta_ht_cap *ht_cap,
+				  u16 he_6ghz_capa)
 {
 	int smps;
 
-	if (!ht_cap->ht_supported)
+	if (!ht_cap->ht_supported && !he_6ghz_capa)
 		return 0;
 
-	smps = ht_cap->cap & IEEE80211_HT_CAP_SM_PS;
-	smps >>= IEEE80211_HT_CAP_SM_PS_SHIFT;
+	if (ht_cap->ht_supported) {
+		smps = ht_cap->cap & IEEE80211_HT_CAP_SM_PS;
+		smps >>= IEEE80211_HT_CAP_SM_PS_SHIFT;
+	} else {
+		smps = FIELD_GET(IEEE80211_HE_6GHZ_CAP_SM_PS, he_6ghz_capa);
+	}
 
 	if (smps >= ARRAY_SIZE(ath11k_smps_map))
 		return -EINVAL;
@@ -1769,7 +1830,8 @@ static void ath11k_bss_assoc(struct ieee80211_hw *hw,
 	}
 
 	ret = ath11k_setup_peer_smps(ar, arvif, bss_conf->bssid,
-				     &ap_sta->ht_cap);
+				     &ap_sta->ht_cap,
+				     le16_to_cpu(ap_sta->he_6ghz_capa.capa));
 	if (ret) {
 		ath11k_warn(ar->ab, "failed to setup peer SMPS for vdev %d: %d\n",
 			    arvif->vdev_id, ret);
@@ -2983,7 +3045,7 @@ static int ath11k_station_assoc(struct ath11k *ar,
 		return 0;
 
 	ret = ath11k_setup_peer_smps(ar, arvif, sta->addr,
-				     &sta->ht_cap);
+				     &sta->ht_cap, le16_to_cpu(sta->he_6ghz_capa.capa));
 	if (ret) {
 		ath11k_warn(ar->ab, "failed to setup peer SMPS for vdev %d: %d\n",
 			    arvif->vdev_id, ret);
@@ -3808,7 +3870,9 @@ static void ath11k_mac_setup_ht_vht_cap(struct ath11k *ar,
 						    rate_cap_rx_chainmask);
 	}
 
-	if (cap->supported_bands & WMI_HOST_WLAN_5G_CAP && !ar->supports_6ghz) {
+	if (cap->supported_bands & WMI_HOST_WLAN_5G_CAP &&
+	    (ar->ab->hw_params.single_pdev_only ||
+	     !ar->supports_6ghz)) {
 		band = &ar->mac.sbands[NL80211_BAND_5GHZ];
 		ht_cap = cap->band[NL80211_BAND_5GHZ].ht_cap_info;
 		if (ht_cap_info)
@@ -6234,7 +6298,7 @@ static int ath11k_mac_setup_channels_rates(struct ath11k *ar,
 					   u32 supported_bands)
 {
 	struct ieee80211_supported_band *band;
-	struct ath11k_hal_reg_capabilities_ext *reg_cap;
+	struct ath11k_hal_reg_capabilities_ext *reg_cap, *temp_reg_cap;
 	void *channels;
 	u32 phy_id;
 
@@ -6244,6 +6308,7 @@ static int ath11k_mac_setup_channels_rates(struct ath11k *ar,
 		     ATH11K_NUM_CHANS);
 
 	reg_cap = &ar->ab->hal_reg_cap[ar->pdev_idx];
+	temp_reg_cap = reg_cap;
 
 	if (supported_bands & WMI_HOST_WLAN_2G_CAP) {
 		channels = kmemdup(ath11k_2ghz_channels,
@@ -6262,11 +6327,11 @@ static int ath11k_mac_setup_channels_rates(struct ath11k *ar,
 
 		if (ar->ab->hw_params.single_pdev_only) {
 			phy_id = ath11k_get_phy_id(ar, WMI_HOST_WLAN_2G_CAP);
-			reg_cap = &ar->ab->hal_reg_cap[phy_id];
+			temp_reg_cap = &ar->ab->hal_reg_cap[phy_id];
 		}
 		ath11k_mac_update_ch_list(ar, band,
-					  reg_cap->low_2ghz_chan,
-					  reg_cap->high_2ghz_chan);
+					  temp_reg_cap->low_2ghz_chan,
+					  temp_reg_cap->high_2ghz_chan);
 	}
 
 	if (supported_bands & WMI_HOST_WLAN_5G_CAP) {
@@ -6286,9 +6351,15 @@ static int ath11k_mac_setup_channels_rates(struct ath11k *ar,
 			band->n_bitrates = ath11k_a_rates_size;
 			band->bitrates = ath11k_a_rates;
 			ar->hw->wiphy->bands[NL80211_BAND_6GHZ] = band;
+
+			if (ar->ab->hw_params.single_pdev_only) {
+				phy_id = ath11k_get_phy_id(ar, WMI_HOST_WLAN_5G_CAP);
+				temp_reg_cap = &ar->ab->hal_reg_cap[phy_id];
+			}
+
 			ath11k_mac_update_ch_list(ar, band,
-						  reg_cap->low_5ghz_chan,
-						  reg_cap->high_5ghz_chan);
+						  temp_reg_cap->low_5ghz_chan,
+						  temp_reg_cap->high_5ghz_chan);
 		}
 
 		if (reg_cap->low_5ghz_chan < ATH11K_MIN_6G_FREQ) {
@@ -6311,12 +6382,12 @@ static int ath11k_mac_setup_channels_rates(struct ath11k *ar,
 
 			if (ar->ab->hw_params.single_pdev_only) {
 				phy_id = ath11k_get_phy_id(ar, WMI_HOST_WLAN_5G_CAP);
-				reg_cap = &ar->ab->hal_reg_cap[phy_id];
+				temp_reg_cap = &ar->ab->hal_reg_cap[phy_id];
 			}
 
 			ath11k_mac_update_ch_list(ar, band,
-						  reg_cap->low_5ghz_chan,
-						  reg_cap->high_5ghz_chan);
+						  temp_reg_cap->low_5ghz_chan,
+						  temp_reg_cap->high_5ghz_chan);
 		}
 	}
 
@@ -6500,7 +6571,7 @@ static int __ath11k_mac_register(struct ath11k *ar)
 	ieee80211_hw_set(ar->hw, SUPPORTS_TX_FRAG);
 	ieee80211_hw_set(ar->hw, REPORTS_LOW_ACK);
 	ieee80211_hw_set(ar->hw, SUPPORTS_TX_ENCAP_OFFLOAD);
-	if (ht_cap & WMI_HT_CAP_ENABLED) {
+	if ((ht_cap & WMI_HT_CAP_ENABLED) || ar->supports_6ghz) {
 		ieee80211_hw_set(ar->hw, AMPDU_AGGREGATION);
 		ieee80211_hw_set(ar->hw, TX_AMPDU_SETUP_IN_HW);
 		ieee80211_hw_set(ar->hw, SUPPORTS_REORDERING_BUFFER);
@@ -6515,7 +6586,8 @@ static int __ath11k_mac_register(struct ath11k *ar)
 	 * for each band for a dual band capable radio. It will be tricky to
 	 * handle it when the ht capability different for each band.
 	 */
-	if (ht_cap & WMI_HT_CAP_DYNAMIC_SMPS)
+	if (ht_cap & WMI_HT_CAP_DYNAMIC_SMPS ||
+	    (ar->supports_6ghz && !ab->hw_params.check_dynamic_smps))
 		ar->hw->wiphy->features |= NL80211_FEATURE_DYNAMIC_SMPS;
 
 	ar->hw->wiphy->max_scan_ssids = WLAN_SCAN_PARAMS_MAX_SSID;
@@ -6584,7 +6656,7 @@ static int __ath11k_mac_register(struct ath11k *ar)
 		ar->hw->wiphy->interface_modes &= ~BIT(NL80211_IFTYPE_MONITOR);
 
 	/* Apply the regd received during initialization */
-	ret = ath11k_regd_update(ar, true);
+	ret = ath11k_regd_update(ar);
 	if (ret) {
 		ath11k_err(ar->ab, "ath11k regd update failed: %d\n", ret);
 		goto err_unregister_hw;

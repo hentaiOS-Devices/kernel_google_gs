@@ -573,9 +573,9 @@ int hda_dsp_stream_spib_config(struct snd_sof_dev *sdev,
 			       struct hdac_ext_stream *stream,
 			       int enable, u32 size);
 
-void hda_ipc_msg_data(struct snd_sof_dev *sdev,
-		      struct snd_pcm_substream *substream,
-		      void *p, size_t sz);
+int hda_ipc_msg_data(struct snd_sof_dev *sdev,
+		     struct snd_pcm_substream *substream,
+		     void *p, size_t sz);
 int hda_ipc_pcm_params(struct snd_sof_dev *sdev,
 		       struct snd_pcm_substream *substream,
 		       const struct sof_ipc_pcm_params_reply *reply);
@@ -767,5 +767,10 @@ void hda_set_mach_params(const struct snd_soc_acpi_mach *mach,
 
 /* PCI driver selection and probe */
 int hda_pci_intel_probe(struct pci_dev *pci, const struct pci_device_id *pci_id);
+
+struct snd_sof_dai;
+struct sof_ipc_dai_config;
+int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w);
+int hda_ctrl_dai_widget_free(struct snd_soc_dapm_widget *w);
 
 #endif

@@ -65,7 +65,7 @@ static void venus_event_notify(struct venus_core *core, u32 event)
 	}
 
 	mutex_lock(&core->lock);
-	core->sys_error = true;
+	set_bit(0, &core->sys_error);
 	list_for_each_entry(inst, &core->instances, list)
 		inst->ops->event_notify(inst, EVT_SESSION_ERROR, NULL);
 	mutex_unlock(&core->lock);
@@ -95,9 +95,8 @@ static void venus_sys_error_handler(struct work_struct *work)
 		failed = true;
 	}
 
-	hfi_core_deinit(core, true);
-
-	mutex_lock(&core->lock);
+	core->ops->core_deinit(core);
+	core->state = CORE_UNINIT;
 
 	for (i = 0; i < max_attempts; i++) {
 		if (!core->dev_dec || !core->dev_enc)
@@ -106,6 +105,8 @@ static void venus_sys_error_handler(struct work_struct *work)
 			break;
 		msleep(10);
 	}
+
+	mutex_lock(&core->lock);
 
 	venus_shutdown(core);
 
@@ -163,7 +164,8 @@ static void venus_sys_error_handler(struct work_struct *work)
 	dev_warn(core->dev, "system error has occurred (recovered)\n");
 
 	mutex_lock(&core->lock);
-	core->sys_error = false;
+	clear_bit(0, &core->sys_error);
+	wake_up_all(&core->sys_err_done);
 	mutex_unlock(&core->lock);
 }
 
@@ -269,7 +271,6 @@ static int venus_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct venus_core *core;
-	struct resource *r;
 	int ret;
 
 	core = devm_kzalloc(dev, sizeof(*core), GFP_KERNEL);
@@ -278,8 +279,7 @@ static int venus_probe(struct platform_device *pdev)
 
 	core->dev = dev;
 
-	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	core->base = devm_ioremap_resource(dev, r);
+	core->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(core->base))
 		return PTR_ERR(core->base);
 
@@ -320,6 +320,7 @@ static int venus_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&core->instances);
 	mutex_init(&core->lock);
 	INIT_DELAYED_WORK(&core->work, venus_sys_error_handler);
+	init_waitqueue_head(&core->sys_err_done);
 
 	ret = devm_request_threaded_irq(dev, core->irq, hfi_isr, hfi_isr_thread,
 					IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
@@ -731,11 +732,64 @@ static const struct venus_resources sm8250_res = {
 	.vcodec_num = 1,
 	.max_load = 7833600,
 	.hfi_version = HFI_VERSION_6XX,
+	.num_vpp_pipes = 4,
 	.vmem_id = VIDC_RESOURCE_NONE,
 	.vmem_size = 0,
 	.vmem_addr = 0,
 	.dma_mask = 0xe0000000 - 1,
 	.fwname = "qcom/vpu-1.0/venus.mdt",
+};
+
+static const struct freq_tbl sc7280_freq_table[] = {
+	{ 0, 460000000 },
+	{ 0, 424000000 },
+	{ 0, 335000000 },
+	{ 0, 240000000 },
+	{ 0, 133333333 },
+};
+
+static const struct bw_tbl sc7280_bw_table_enc[] = {
+	{ 1944000, 1896000, 0, 3657000, 0 },	/* 3840x2160@60 */
+	{  972000,  968000, 0, 1848000, 0 },	/* 3840x2160@30 */
+	{  489600,  618000, 0,  941000, 0 },	/* 1920x1080@60 */
+	{  244800,  318000, 0,	480000, 0 },	/* 1920x1080@30 */
+};
+
+static const struct bw_tbl sc7280_bw_table_dec[] = {
+	{ 2073600, 2128000, 0, 3831000, 0 },	/* 4096x2160@60 */
+	{ 1036800, 1085000, 0, 1937000, 0 },	/* 4096x2160@30 */
+	{  489600,  779000, 0,  998000, 0 },	/* 1920x1080@60 */
+	{  244800,  400000, 0,  509000, 0 },	/* 1920x1080@30 */
+};
+
+static const struct reg_val sm7280_reg_preset[] = {
+	{ 0xb0088, 0 },
+};
+
+static const struct venus_resources sc7280_res = {
+	.freq_tbl = sc7280_freq_table,
+	.freq_tbl_size = ARRAY_SIZE(sc7280_freq_table),
+	.reg_tbl = sm7280_reg_preset,
+	.reg_tbl_size = ARRAY_SIZE(sm7280_reg_preset),
+	.bw_tbl_enc = sc7280_bw_table_enc,
+	.bw_tbl_enc_size = ARRAY_SIZE(sc7280_bw_table_enc),
+	.bw_tbl_dec = sc7280_bw_table_dec,
+	.bw_tbl_dec_size = ARRAY_SIZE(sc7280_bw_table_dec),
+	.clks = {"core", "bus", "iface"},
+	.clks_num = 3,
+	.vcodec0_clks = {"vcodec_core", "vcodec_bus"},
+	.vcodec_clks_num = 2,
+	.vcodec_pmdomains = { "venus", "vcodec0" },
+	.vcodec_pmdomains_num = 2,
+	.opp_pmdomain = (const char *[]) { "cx", NULL },
+	.vcodec_num = 1,
+	.hfi_version = HFI_VERSION_6XX,
+	.num_vpp_pipes = 1,
+	.vmem_id = VIDC_RESOURCE_NONE,
+	.vmem_size = 0,
+	.vmem_addr = 0,
+	.dma_mask = 0xe0000000 - 1,
+	.fwname = "qcom/vpu-2.0/venus.mbn",
 };
 
 static const struct of_device_id venus_dt_match[] = {
@@ -744,6 +798,7 @@ static const struct of_device_id venus_dt_match[] = {
 	{ .compatible = "qcom,sdm845-venus", .data = &sdm845_res, },
 	{ .compatible = "qcom,sdm845-venus-v2", .data = &sdm845_res_v2, },
 	{ .compatible = "qcom,sc7180-venus", .data = &sc7180_res, },
+	{ .compatible = "qcom,sc7280-venus", .data = &sc7280_res, },
 	{ .compatible = "qcom,sm8250-venus", .data = &sm8250_res, },
 	{ }
 };

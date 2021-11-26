@@ -177,6 +177,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_RT5677
 	imply SND_SOC_RT5682_I2C
 	imply SND_SOC_RT5682_SDW
+	imply SND_SOC_RT5682S
 	imply SND_SOC_RT700_SDW
 	imply SND_SOC_RT711_SDW
 	imply SND_SOC_RT715_SDW
@@ -1219,6 +1220,10 @@ config SND_SOC_RT5682_SDW
 	select SND_SOC_RT5682
 	select REGMAP_SOUNDWIRE
 
+config SND_SOC_RT5682S
+	tristate
+	depends on I2C
+
 config SND_SOC_RT700
 	tristate
 
@@ -1505,6 +1510,7 @@ config SND_SOC_WCD938X
 config SND_SOC_WCD938X_SDW
 	tristate "WCD9380/WCD9385 Codec - SDW"
 	select SND_SOC_WCD938X
+	select SND_SOC_WCD_MBHC
 	depends on SOUNDWIRE
 	select REGMAP_SOUNDWIRE
 	help

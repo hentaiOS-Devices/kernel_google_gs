@@ -409,7 +409,7 @@ static kuid_t esdfs_get_derived_lower_uid(struct esdfs_sb_info *sbi,
 		if (test_opt(sbi, SPECIAL_DOWNLOAD))
 			return make_kuid(sbi->dl_ns,
 					 sbi->lower_dl_perms.raw_uid);
-		/* fall through */
+		fallthrough;
 	case ESDFS_TREE_ROOT:
 	case ESDFS_TREE_MEDIA:
 	case ESDFS_TREE_ANDROID:
@@ -446,7 +446,7 @@ static kgid_t esdfs_get_derived_lower_gid(struct esdfs_sb_info *sbi,
 		if (test_opt(sbi, SPECIAL_DOWNLOAD))
 			return make_kgid(sbi->dl_ns,
 					 sbi->lower_dl_perms.raw_gid);
-		/* fall through */
+		fallthrough;
 	case ESDFS_TREE_ROOT:
 	case ESDFS_TREE_MEDIA:
 	case ESDFS_TREE_ANDROID:

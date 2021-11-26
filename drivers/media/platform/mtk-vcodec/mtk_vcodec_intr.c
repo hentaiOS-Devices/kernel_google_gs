@@ -43,3 +43,33 @@ int mtk_vcodec_wait_for_done_ctx(struct mtk_vcodec_ctx  *ctx, int command,
 	return status;
 }
 EXPORT_SYMBOL(mtk_vcodec_wait_for_done_ctx);
+
+int mtk_vcodec_wait_for_comp_done_ctx(struct mtk_vcodec_ctx  *ctx,
+	int command, unsigned int timeout_ms, unsigned hw_id)
+{
+	long timeout_jiff, ret;
+	int status = 0;
+
+	timeout_jiff = msecs_to_jiffies(timeout_ms);
+	ret = wait_event_interruptible_timeout(ctx->core_queue[hw_id],
+				ctx->int_core_cond[hw_id],
+				timeout_jiff);
+
+	if (!ret) {
+		status = -1;	/* timeout */
+		mtk_v4l2_err("[%d] cmd=%d, type=%d, dec timeout=%ums (%d %d)",
+				ctx->id, command, ctx->type, timeout_ms,
+				ctx->int_core_cond[hw_id], ctx->int_core_type[hw_id]);
+	} else if (-ERESTARTSYS == ret) {
+		status = -1;
+		mtk_v4l2_err("[%d] cmd=%d, type=%d, dec inter fail (%d %d)",
+				ctx->id, command, ctx->type,
+				ctx->int_core_cond[hw_id], ctx->int_core_type[hw_id]);
+	}
+
+	ctx->int_core_cond[hw_id] = 0;
+	ctx->int_core_type[hw_id] = 0;
+
+	return status;
+}
+EXPORT_SYMBOL(mtk_vcodec_wait_for_comp_done_ctx);

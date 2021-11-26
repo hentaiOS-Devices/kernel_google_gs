@@ -239,7 +239,6 @@ u8 *evdi_painter_get_edid_copy(struct evdi_device *evdi)
 			memcpy(block,
 			       evdi->painter->edid,
 			       evdi->painter->edid_length);
-			EVDI_DEBUG("(dev=%d) EDID valid\n", evdi->dev_index);
 		}
 	}
 	painter_unlock(evdi->painter);
@@ -318,7 +317,7 @@ static void evdi_painter_send_event(struct evdi_painter *painter,
 	}
 
 	if (!painter->drm_filp) {
-		EVDI_WARN("Painter is not connected!");
+		EVDI_VERBOSE("Painter is not connected!");
 		drm_event_cancel_free(painter->drm_device, event);
 		return;
 	}
@@ -496,31 +495,6 @@ static void evdi_painter_send_dpms(struct evdi_painter *painter, int mode)
 	evdi_painter_send_event(painter, event);
 }
 
-static struct drm_pending_event *create_crtc_state_event(int state)
-{
-	struct evdi_event_crtc_state_pending *event;
-
-	event = kzalloc(sizeof(*event), GFP_KERNEL);
-	if (!event) {
-		EVDI_ERROR("Failed to create crtc state event");
-		return NULL;
-	}
-
-	event->crtc_state.base.type = DRM_EVDI_EVENT_CRTC_STATE;
-	event->crtc_state.base.length = sizeof(event->crtc_state);
-	event->crtc_state.state = state;
-	event->base.event = &event->crtc_state.base;
-	return &event->base;
-}
-
-static void evdi_painter_send_crtc_state(struct evdi_painter *painter,
-					 int state)
-{
-	struct drm_pending_event *event = create_crtc_state_event(state);
-
-	evdi_painter_send_event(painter, event);
-}
-
 static struct drm_pending_event *create_mode_changed_event(
 	struct drm_display_mode *current_mode,
 	int32_t bits_per_pixel,
@@ -591,7 +565,8 @@ struct drm_clip_rect evdi_painter_framebuffer_size(
 	painter_lock(painter);
 	efb = painter->scanout_fb;
 	if (!efb) {
-		EVDI_DEBUG("Scanout buffer not set.");
+		if (painter->is_connected)
+			EVDI_DEBUG("Scanout buffer not set.");
 		goto unlock;
 	}
 	rect.x1 = 0;
@@ -618,14 +593,15 @@ void evdi_painter_mark_dirty(struct evdi_device *evdi,
 	painter_lock(painter);
 	efb = painter->scanout_fb;
 	if (!efb) {
-		EVDI_DEBUG("(dev=%d) Skip clip rect. Scanout buffer not set.\n",
+		if (painter->is_connected)
+			EVDI_DEBUG("(card%d) Skip clip rect. Scanout buffer not set.\n",
 			   evdi->dev_index);
 		goto unlock;
 	}
 
 	rect = evdi_framebuffer_sanitize_rect(efb, dirty_rect);
 
-	EVDI_VERBOSE("(dev=%d) %d,%d-%d,%d\n", evdi->dev_index, rect.x1,
+	EVDI_VERBOSE("(card%d) %d,%d-%d,%d\n", evdi->dev_index, rect.x1,
 		     rect.y1, rect.x2, rect.y2);
 
 	if (painter->num_dirts == MAX_DIRTS)
@@ -707,33 +683,38 @@ void evdi_painter_send_update_ready_if_needed(struct evdi_painter *painter)
 	}
 }
 
+static const char *dpms_str[] = { "on", "standby", "suspend", "off" };
+
 void evdi_painter_dpms_notify(struct evdi_device *evdi, int mode)
 {
 	struct evdi_painter *painter = evdi->painter;
+	const char *mode_str;
 
-	if (painter) {
-		EVDI_DEBUG("(dev=%d) Notifying dpms mode: %d\n",
-			   evdi->dev_index, mode);
-		evdi_painter_send_dpms(painter, mode);
-	} else {
-		EVDI_WARN("Painter does not exist!");
+	if (!painter) {
+		EVDI_WARN("(card%d) Painter does not exist!", evdi->dev_index);
+		return;
 	}
+
+	if (!painter->is_connected)
+		return;
+
+	switch (mode) {
+	case DRM_MODE_DPMS_ON:
+	case DRM_MODE_DPMS_STANDBY:
+	case DRM_MODE_DPMS_SUSPEND:
+	case DRM_MODE_DPMS_OFF:
+		mode_str = dpms_str[mode];
+		break;
+	default:
+		mode_str = "unknown";
+	};
+	EVDI_INFO("(card%d) Notifying display power state: %s",
+		   evdi->dev_index, mode_str);
+	evdi_painter_send_dpms(painter, mode);
 }
 
-void evdi_painter_crtc_state_notify(struct evdi_device *evdi, int state)
-{
-	struct evdi_painter *painter = evdi->painter;
-
-	if (painter) {
-		EVDI_DEBUG("(dev=%d) Notifying crtc state: %d\n",
-			   evdi->dev_index, state);
-		evdi_painter_send_crtc_state(painter, state);
-	} else {
-		EVDI_WARN("Painter does not exist!");
-	}
-}
-
-static void evdi_log_pixel_format(uint32_t pixel_format, char *buf, size_t size)
+static void evdi_log_pixel_format(uint32_t pixel_format,
+		char *buf, size_t size)
 {
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
 	snprintf(buf, size, "pixel format %p4cc", &pixel_format);
@@ -764,10 +745,11 @@ void evdi_painter_mode_changed_notify(struct evdi_device *evdi,
 	bits_per_pixel = fb->format->cpp[0] * 8;
 	pixel_format = fb->format->format;
 
+
 	evdi_log_pixel_format(pixel_format, buf, sizeof(buf));
 	EVDI_INFO("(card%d) Notifying mode changed: %dx%d@%d; bpp %d; %s",
-		  evdi->dev_index, new_mode->hdisplay, new_mode->vdisplay,
-		  drm_mode_vrefresh(new_mode), bits_per_pixel, buf);
+		   evdi->dev_index, new_mode->hdisplay, new_mode->vdisplay,
+		   drm_mode_vrefresh(new_mode), bits_per_pixel, buf);
 
 	evdi_painter_send_mode_changed(painter,
 				       new_mode,
@@ -800,7 +782,7 @@ static void evdi_add_i2c_adapter(struct evdi_device *evdi)
 	evdi->i2c_adapter = kzalloc(sizeof(*evdi->i2c_adapter), GFP_KERNEL);
 
 	if (!evdi->i2c_adapter) {
-		EVDI_ERROR("(dev=%d) Failed to allocate for i2c adapter",
+		EVDI_ERROR("(card%d) Failed to allocate for i2c adapter",
 			evdi->dev_index);
 		return;
 	}
@@ -810,19 +792,19 @@ static void evdi_add_i2c_adapter(struct evdi_device *evdi)
 	if (result) {
 		kfree(evdi->i2c_adapter);
 		evdi->i2c_adapter = NULL;
-		EVDI_ERROR("(dev=%d) Failed to add i2c adapter, error %d",
+		EVDI_ERROR("(card%d) Failed to add i2c adapter, error %d",
 			evdi->dev_index, result);
 		return;
 	}
 
-	EVDI_DEBUG("(dev=%d) Added i2c adapter bus number %d",
+	EVDI_INFO("(card%d) Added i2c adapter bus number %d",
 		evdi->dev_index, evdi->i2c_adapter->nr);
 
 	result = sysfs_create_link(&evdi->conn->kdev->kobj,
 			&evdi->i2c_adapter->dev.kobj, "ddc");
 
 	if (result) {
-		EVDI_ERROR("(dev=%d) Failed to create sysfs link, error %d",
+		EVDI_ERROR("(card%d) Failed to create sysfs link, error %d",
 			evdi->dev_index, result);
 		return;
 	}
@@ -831,7 +813,7 @@ static void evdi_add_i2c_adapter(struct evdi_device *evdi)
 static void evdi_remove_i2c_adapter(struct evdi_device *evdi)
 {
 	if (evdi->i2c_adapter) {
-		EVDI_DEBUG("(dev=%d) Removing i2c adapter bus number %d",
+		EVDI_INFO("(card%d) Removing i2c adapter bus number %d",
 			evdi->dev_index, evdi->i2c_adapter->nr);
 
 		sysfs_remove_link(&evdi->conn->kdev->kobj, "ddc");
@@ -847,15 +829,14 @@ static int
 evdi_painter_connect(struct evdi_device *evdi,
 		     void const __user *edid_data, unsigned int edid_length,
 		     uint32_t sku_area_limit,
-		     struct drm_file *file, int dev_index)
+		     struct drm_file *file, __always_unused int dev_index)
 {
 	struct evdi_painter *painter = evdi->painter;
 	struct edid *new_edid = NULL;
 	int expected_edid_size = 0;
+	char buf[100];
 
-	EVDI_DEBUG("(dev=%d) Process is trying to connect\n",
-		   evdi->dev_index);
-	evdi_log_process();
+	evdi_log_process(buf, sizeof(buf));
 
 	if (edid_length < sizeof(struct edid)) {
 		EVDI_ERROR("Edid length too small\n");
@@ -872,7 +853,7 @@ evdi_painter_connect(struct evdi_device *evdi,
 		return -ENOMEM;
 
 	if (copy_from_user(new_edid, edid_data, edid_length)) {
-		EVDI_ERROR("(dev=%d) Failed to read edid\n", dev_index);
+		EVDI_ERROR("(card%d) Failed to read edid\n", evdi->dev_index);
 		kfree(new_edid);
 		return -EFAULT;
 	}
@@ -887,12 +868,11 @@ evdi_painter_connect(struct evdi_device *evdi,
 	}
 
 	if (painter->drm_filp)
-		EVDI_WARN("(dev=%d) Double connect - replacing %p with %p\n",
-			  dev_index, painter->drm_filp, file);
+		EVDI_WARN("(card%d) Double connect - replacing %p with %p\n",
+			  evdi->dev_index, painter->drm_filp, file);
 
 	painter_lock(painter);
 
-	evdi->dev_index = dev_index;
 	evdi->sku_area_limit = sku_area_limit;
 	painter->drm_filp = file;
 	kfree(painter->edid);
@@ -905,8 +885,7 @@ evdi_painter_connect(struct evdi_device *evdi,
 
 	painter_unlock(painter);
 
-	EVDI_DEBUG("(dev=%d) Connected with %p\n", evdi->dev_index,
-		   painter->drm_filp);
+	EVDI_INFO("(card%d) Connected with %s\n", evdi->dev_index, buf);
 
 	drm_helper_hpd_irq_event(evdi->ddev);
 
@@ -917,6 +896,7 @@ static int evdi_painter_disconnect(struct evdi_device *evdi,
 	struct drm_file *file)
 {
 	struct evdi_painter *painter = evdi->painter;
+	char buf[100];
 
 	EVDI_CHECKPT();
 
@@ -934,8 +914,8 @@ static int evdi_painter_disconnect(struct evdi_device *evdi,
 
 	painter->is_connected = false;
 
-	EVDI_DEBUG("(dev=%d) Disconnected from %p\n", evdi->dev_index,
-		   painter->drm_filp);
+	evdi_log_process(buf, sizeof(buf));
+	EVDI_INFO("(card%d) Disconnected from %s\n", evdi->dev_index, buf);
 	evdi_painter_events_cleanup(painter);
 
 	evdi_painter_send_vblank(painter);
@@ -949,7 +929,6 @@ static int evdi_painter_disconnect(struct evdi_device *evdi,
 	evdi_remove_i2c_adapter(evdi);
 
 	painter->drm_filp = NULL;
-	evdi->dev_index = -1;
 
 	painter->was_update_requested = false;
 	evdi->cursor_events_enabled = false;
@@ -967,10 +946,8 @@ void evdi_painter_close(struct evdi_device *evdi, struct drm_file *file)
 {
 	EVDI_CHECKPT();
 
-	if (evdi->painter)
+	if (evdi->painter && file == evdi->painter->drm_filp)
 		evdi_painter_disconnect(evdi, file);
-	else
-		EVDI_WARN("Painter does not exist!");
 }
 
 int evdi_painter_connect_ioctl(struct drm_device *drm_dev, void *data,
@@ -994,12 +971,12 @@ int evdi_painter_connect_ioctl(struct drm_device *drm_dev, void *data,
 			ret = evdi_painter_disconnect(evdi, file);
 
 		if (ret) {
-			EVDI_WARN("(dev=%d)(pid=%d) disconnect failed\n",
+			EVDI_WARN("(card%d)(pid=%d) disconnect failed\n",
 				  evdi->dev_index, (int)task_pid_nr(current));
 		}
 		return ret;
 	}
-	EVDI_WARN("Painter does not exist!");
+	EVDI_WARN("(card%d) Painter does not exist!", evdi->dev_index);
 	return -ENODEV;
 }
 
@@ -1035,7 +1012,7 @@ int evdi_painter_grabpix_ioctl(struct drm_device *drm_dev, void *data,
 	painter_lock(painter);
 
 	if (painter->was_update_requested) {
-		EVDI_WARN("(dev=%d) Update ready not sent,",
+		EVDI_WARN("(card%d) Update ready not sent,",
 			  evdi->dev_index);
 		EVDI_WARN(" but pixels are grabbed.\n");
 	}
@@ -1154,7 +1131,7 @@ int evdi_painter_request_update_ioctl(struct drm_device *drm_dev,
 
 		if (painter->was_update_requested) {
 			EVDI_WARN
-			  ("(dev=%d) Update was already requested - ignoring\n",
+			  ("(card%d) Update was already requested - ignoring\n",
 			   evdi->dev_index);
 		} else {
 			if (painter->num_dirts > 0)

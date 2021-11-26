@@ -295,20 +295,10 @@ intel_get_stepping_info(struct drm_i915_private *dev_priv)
 
 static void gen9_set_dc_state_debugmask(struct drm_i915_private *dev_priv)
 {
-	u32 val, mask;
-
-	mask = DC_STATE_DEBUG_MASK_MEMORY_UP;
-
-	if (IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv))
-		mask |= DC_STATE_DEBUG_MASK_CORES;
-
 	/* The below bit doesn't need to be cleared ever afterwards */
-	val = intel_de_read(dev_priv, DC_STATE_DEBUG);
-	if ((val & mask) != mask) {
-		val |= mask;
-		intel_de_write(dev_priv, DC_STATE_DEBUG, val);
-		intel_de_posting_read(dev_priv, DC_STATE_DEBUG);
-	}
+	intel_de_rmw(dev_priv, DC_STATE_DEBUG, 0,
+		     DC_STATE_DEBUG_MASK_CORES | DC_STATE_DEBUG_MASK_MEMORY_UP);
+	intel_de_posting_read(dev_priv, DC_STATE_DEBUG);
 }
 
 /**
@@ -856,11 +846,14 @@ void intel_dmc_ucode_resume(struct drm_i915_private *dev_priv)
  */
 void intel_dmc_ucode_fini(struct drm_i915_private *dev_priv)
 {
+	int id;
+
 	if (!HAS_DMC(dev_priv))
 		return;
 
 	intel_dmc_ucode_suspend(dev_priv);
 	drm_WARN_ON(&dev_priv->drm, dev_priv->dmc.wakeref);
 
-	kfree(dev_priv->dmc.dmc_info[DMC_FW_MAIN].payload);
+	for (id = 0; id < DMC_FW_MAX; id++)
+		kfree(dev_priv->dmc.dmc_info[id].payload);
 }

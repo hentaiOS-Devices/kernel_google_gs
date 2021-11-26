@@ -57,6 +57,10 @@ i915_gem_object_create_shmem(struct drm_i915_private *i915,
 struct drm_i915_gem_object *
 i915_gem_object_create_shmem_from_data(struct drm_i915_private *i915,
 				       const void *data, resource_size_t size);
+struct drm_i915_gem_object *
+__i915_gem_object_create_user(struct drm_i915_private *i915, u64 size,
+			      struct intel_memory_region **placements,
+			      unsigned int n_placements);
 
 extern const struct drm_i915_gem_object_ops i915_gem_shmem_ops;
 
@@ -249,6 +253,12 @@ static inline void
 i915_gem_object_clear_tiling_quirk(struct drm_i915_gem_object *obj)
 {
 	clear_bit(I915_TILING_QUIRK_BIT, &obj->flags);
+}
+
+static inline bool
+i915_gem_object_is_protected(const struct drm_i915_gem_object *obj)
+{
+	return obj->flags & I915_BO_PROTECTED;
 }
 
 static inline bool

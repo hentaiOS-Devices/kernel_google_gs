@@ -114,8 +114,6 @@ struct dpu_kms {
 	struct platform_device *pdev;
 	bool rpm_enabled;
 
-	struct opp_table *opp_table;
-
 	struct dss_module_power mp;
 
 	/* reference count bandwidth requests, so we know when we can
@@ -242,7 +240,7 @@ void dpu_kms_encoder_enable(struct drm_encoder *encoder);
 
 /**
  * dpu_kms_get_clk_rate() - get the clock rate
- * @dpu_kms:  poiner to dpu_kms structure
+ * @dpu_kms:  pointer to dpu_kms structure
  * @clock_name: clock name to get the rate
  *
  * Return: current clock rate
