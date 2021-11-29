@@ -582,7 +582,8 @@ static int vidioc_enum_framesizes(struct file *file, void *priv,
 		fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
 		fsize->stepwise = dec_pdata->vdec_framesizes[i].stepwise;
 		if (!(ctx->dev->dec_capability &
-				VCODEC_CAPABILITY_4K_DISABLED)) {
+				VCODEC_CAPABILITY_4K_DISABLED) &&
+				fsize->pixel_format != V4L2_PIX_FMT_VP8_FRAME) {
 			mtk_v4l2_debug(3, "4K is enabled");
 			fsize->stepwise.max_width =
 					VCODEC_DEC_4K_CODED_WIDTH;
