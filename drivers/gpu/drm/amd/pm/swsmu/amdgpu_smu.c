@@ -190,6 +190,10 @@ static int smu_dpm_set_vcn_enable_locked(struct smu_context *smu,
 	struct smu_power_gate *power_gate = &smu_power->power_gate;
 	int ret = 0;
 
+	// Do not perform VCN power gating to avoid SMU Hang
+	if (smu->adev->asic_type == CHIP_RENOIR)
+		return ret;
+
 	if (!smu->ppt_funcs->dpm_set_vcn_enable)
 		return 0;
 
