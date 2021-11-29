@@ -329,7 +329,7 @@ static int mtk_ethdr_probe(struct platform_device *pdev)
 		if (ret)
 			dev_dbg(dev, "get mediatek,gce-client-reg fail!\n");
 #endif
-		dev_dbg(dev, "[DRM]regs:0x%x, node:%d\n", priv->ethdr_comp[i].regs, i);
+		dev_dbg(dev, "[DRM]regs:0x%px, node:%d\n", priv->ethdr_comp[i].regs, i);
 	}
 
 	for (i = 0; i < ETHDR_CLK_NUM; i++)
