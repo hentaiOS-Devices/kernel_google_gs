@@ -99,8 +99,8 @@ void mtk_ovl_adaptor_layer_config(struct device *dev, unsigned int idx,
 
 	dev_dbg(dev, "%s+ idx:%d, enable:%d, fmt:0x%x\n", __func__, idx,
 		pending->enable, pending->format);
-	dev_dbg(dev, "addr 0x%lx, fb w:%d, {%d,%d,%d,%d}\n",
-		pending->addr, (pending->pitch / fmt_info->cpp[0]),
+	dev_dbg(dev, "addr 0x%pad, fb w:%d, {%d,%d,%d,%d}\n",
+		&pending->addr, (pending->pitch / fmt_info->cpp[0]),
 		pending->x, pending->y, pending->width, pending->height);
 
 	rdma_l = ovl_adaptor->ovl_adaptor_comp[OVL_ADAPTOR_MDP_RDMA0 + 2 * idx];
