@@ -828,6 +828,11 @@ config SND_SOC_HDAC_HDA
 	tristate
 	select SND_HDA
 
+config SND_SOC_HDA
+	tristate "Generic Intel HD-Audio codec"
+	select SND_HDA_EXT_CORE
+	select SND_HDA
+
 config SND_SOC_ICS43432
 	tristate
 
