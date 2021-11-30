@@ -527,7 +527,7 @@ static int mtk_spmi_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id mtk_spmi_match_table[] = {
+static const struct of_device_id __maybe_unused mtk_spmi_match_table[] = {
 	{
 		.compatible = "mediatek,mt6873-spmi",
 		.data = &mt6873_pmif_arb,
