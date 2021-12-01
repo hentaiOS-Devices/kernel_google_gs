@@ -896,7 +896,7 @@ static int mtk_dp_aux_do_transfer(struct mtk_dp *mtk_dp, bool is_read, u8 cmd,
 	int ret;
 	u32 reply_cmd;
 
-	dev_dbg(mtk_dp->dev, "AUX transfer is_read(%d) cmd(%d) addr(0x%x) length(%d)\n",
+	dev_dbg(mtk_dp->dev, "AUX transfer is_read(%d) cmd(%d) addr(0x%x) length(%zu)\n",
 		is_read, cmd, addr, length);
 	if (is_read && (length > DP_AUX_MAX_PAYLOAD_BYTES ||
 			(cmd == DP_AUX_NATIVE_READ && !length))) {
@@ -1059,7 +1059,7 @@ static void mtk_dp_hwirq_enable(struct mtk_dp *mtk_dp, bool enable)
 			   IRQ_MASK_DP_TRANS_P0_MASK);
 }
 
-void mtk_dp_initialize_settings(struct mtk_dp *mtk_dp)
+static void mtk_dp_initialize_settings(struct mtk_dp *mtk_dp)
 {
 	mtk_dp_update_bits(mtk_dp, MTK_DP_TRANS_P0_342C,
 			   XTAL_FREQ_DP_TRANS_P0_DEFAULT,
@@ -1262,7 +1262,7 @@ static int mtk_dp_get_calibration_data(struct mtk_dp *mtk_dp)
 	return 0;
 }
 
-void mtk_dp_set_cal_data(struct mtk_dp *mtk_dp)
+static void mtk_dp_set_cal_data(struct mtk_dp *mtk_dp)
 {
 	struct dp_cal_data *cal_data = &mtk_dp->cal_data;
 
@@ -2769,10 +2769,7 @@ static u32 *mtk_dp_bridge_atomic_get_input_bus_fmts(
 	struct drm_display_info *display_info =
 		&conn_state->connector->display_info;
 	u32 rx_linkrate;
-	u32 bpp;
 
-	bpp = (display_info->color_formats & DRM_COLOR_FORMAT_YCRCB422) ? 16 :
-										24;
 	rx_linkrate = (u32)mtk_dp->train_info.link_rate * 27000;
 	*num_input_fmts = 0;
 	input_fmts = kcalloc(ARRAY_SIZE(mt8195_input_fmts), sizeof(*input_fmts),
@@ -2888,7 +2885,7 @@ static int mtk_dp_audio_get_eld(struct device *dev, void *data, uint8_t *buf,
 	else
 		memset(buf, 0, len);
 
-	dev_dbg(mtk_dp->dev, "get eld: %*ph\n", len, buf);
+	dev_dbg(mtk_dp->dev, "get eld: %*ph\n", (int)len, buf);
 
 	return 0;
 }
