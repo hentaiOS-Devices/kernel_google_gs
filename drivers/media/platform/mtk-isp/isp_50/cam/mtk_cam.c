@@ -887,8 +887,8 @@ static int mtk_cam_vb2_buf_init(struct vb2_buffer *vb)
 
 	buf = mtk_cam_vb2_buf_to_dev_buf(vb);
 	/* Use coherent address to get iova address */
-	addr = dma_map_single(dev, phys_to_virt(buf->daddr), vb->planes[0].length,
-				DMA_BIDIRECTIONAL);
+	addr = dma_map_resource(dev, buf->daddr, vb->planes[0].length,
+				DMA_BIDIRECTIONAL, DMA_ATTR_SKIP_CPU_SYNC);
 	if (dma_mapping_error(dev, addr)) {
 		dev_err(dev, "failed to map meta addr:%pad\n", &buf->daddr);
 		return -EFAULT;
@@ -945,9 +945,10 @@ static void mtk_cam_vb2_buf_cleanup(struct vb2_buffer *vb)
 		return;
 
 	buf = mtk_cam_vb2_buf_to_dev_buf(vb);
-	dma_unmap_single(dev, buf->daddr,
+	dma_unmap_page_attrs(dev, buf->daddr,
 			     vb->planes[0].length,
-			     DMA_BIDIRECTIONAL);
+			     DMA_BIDIRECTIONAL,
+			     DMA_ATTR_SKIP_CPU_SYNC);
 }
 
 static void mtk_cam_vb2_request_complete(struct vb2_buffer *vb)
@@ -971,6 +972,9 @@ static int mtk_cam_vb2_queue_setup(struct vb2_queue *vq,
 	/* Check the limitation of buffer size */
 	if (max_buffer_count)
 		*num_buffers = clamp_val(*num_buffers, 1, max_buffer_count);
+
+	if (node->desc.smem_alloc)
+		vq->dma_attrs |= DMA_ATTR_NO_KERNEL_MAPPING;
 
 	if (vq->type == V4L2_BUF_TYPE_META_OUTPUT ||
 	    vq->type == V4L2_BUF_TYPE_META_CAPTURE)

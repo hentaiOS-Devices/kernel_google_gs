@@ -58,9 +58,9 @@ int mtk_dip_hw_working_buf_pool_init(struct mtk_dip_dev *dip_dev)
 	working_buf_paddr = dip_dev->working_buf_mem_scp_daddr;
 
 	dip_dev->working_buf_mem_isp_daddr =
-		dma_map_single(dip_dev->dev, phys_to_virt(working_buf_paddr),
+		dma_map_resource(dip_dev->dev, working_buf_paddr,
 				 dip_dev->working_buf_mem_size,
-				 DMA_BIDIRECTIONAL);
+				 DMA_BIDIRECTIONAL, DMA_ATTR_SKIP_CPU_SYNC);
 	if (dma_mapping_error(dip_dev->dev,
 			      dip_dev->working_buf_mem_isp_daddr)) {
 		dev_err(dip_dev->dev,
@@ -121,9 +121,10 @@ int mtk_dip_hw_working_buf_pool_init(struct mtk_dip_dev *dip_dev)
 void mtk_dip_hw_working_buf_pool_release(struct mtk_dip_dev *dip_dev)
 {
 	/* All the buffer should be in the freebufferlist when release */
-	dma_unmap_single(dip_dev->dev,
+	dma_unmap_resource(dip_dev->dev,
 			   dip_dev->working_buf_mem_isp_daddr,
-			   dip_dev->working_buf_mem_size, DMA_BIDIRECTIONAL);
+			   dip_dev->working_buf_mem_size, DMA_BIDIRECTIONAL,
+			   DMA_ATTR_SKIP_CPU_SYNC);
 
 	dma_free_coherent(scp_get_device(dip_dev->scp),
 			  dip_dev->working_buf_mem_size,
