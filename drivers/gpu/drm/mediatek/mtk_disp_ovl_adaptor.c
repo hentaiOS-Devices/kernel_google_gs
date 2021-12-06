@@ -226,10 +226,10 @@ clk_err:
 		else
 			mtk_ethdr_clk_disable(comp);
 	}
-	i = OVL_ADAPTOR_MDP_RDMA7;
+	i = OVL_ADAPTOR_MERGE0;
 
 pwr_err:
-	while (i-- >= 0)
+	while (--i >= 0)
 		pm_runtime_put(ovl_adaptor->ovl_adaptor_comp[i]);
 
 	return ret;
