@@ -498,7 +498,7 @@ static int t7xx_dpmaif_hw_config(struct dpmaif_hw_info *hw_info)
 	return 0;
 }
 
-static inline void t7xx_dpmaif_pcie_dpmaif_sign(struct dpmaif_hw_info *hw_info)
+static void t7xx_dpmaif_pcie_dpmaif_sign(struct dpmaif_hw_info *hw_info)
 {
 	iowrite32(DPMAIF_PCIE_MODE_SET_VALUE, hw_info->pcie_base + DPMAIF_UL_RESERVE_AO_RW);
 }
@@ -524,7 +524,7 @@ static void t7xx_dpmaif_common_hw_init(struct dpmaif_hw_info *hw_info)
 
  /* DPMAIF DL DLQ part HW setting */
 
-static inline void t7xx_dpmaif_hw_hpc_cntl_set(struct dpmaif_hw_info *hw_info)
+static void t7xx_dpmaif_hw_hpc_cntl_set(struct dpmaif_hw_info *hw_info)
 {
 	unsigned int value;
 
@@ -534,7 +534,7 @@ static inline void t7xx_dpmaif_hw_hpc_cntl_set(struct dpmaif_hw_info *hw_info)
 	iowrite32(value, hw_info->pcie_base + DPMAIF_AO_DL_HPC_CNTL);
 }
 
-static inline void t7xx_dpmaif_hw_agg_cfg_set(struct dpmaif_hw_info *hw_info)
+static void t7xx_dpmaif_hw_agg_cfg_set(struct dpmaif_hw_info *hw_info)
 {
 	unsigned int value;
 
@@ -542,13 +542,13 @@ static inline void t7xx_dpmaif_hw_agg_cfg_set(struct dpmaif_hw_info *hw_info)
 	iowrite32(value, hw_info->pcie_base + DPMAIF_AO_DL_DLQ_AGG_CFG);
 }
 
-static inline void t7xx_dpmaif_hw_hash_bit_choose_set(struct dpmaif_hw_info *hw_info)
+static void t7xx_dpmaif_hw_hash_bit_choose_set(struct dpmaif_hw_info *hw_info)
 {
 	iowrite32(DPMAIF_DLQ_HASH_BIT_CHOOSE_DF,
 		  hw_info->pcie_base + DPMAIF_AO_DL_DLQPIT_INIT_CON5);
 }
 
-static inline void t7xx_dpmaif_hw_mid_pit_timeout_thres_set(struct dpmaif_hw_info *hw_info)
+static void t7xx_dpmaif_hw_mid_pit_timeout_thres_set(struct dpmaif_hw_info *hw_info)
 {
 	iowrite32(DPMAIF_MID_TIMEOUT_THRES_DF, hw_info->pcie_base + DPMAIF_AO_DL_DLQPIT_TIMEOUT0);
 }
@@ -567,7 +567,7 @@ static void t7xx_dpmaif_hw_dlq_timeout_thres_set(struct dpmaif_hw_info *hw_info)
 	}
 }
 
-static inline void t7xx_dpmaif_hw_dlq_start_prs_thres_set(struct dpmaif_hw_info *hw_info)
+static void t7xx_dpmaif_hw_dlq_start_prs_thres_set(struct dpmaif_hw_info *hw_info)
 {
 	iowrite32(DPMAIF_DLQ_PRS_THRES_DF, hw_info->pcie_base + DPMAIF_AO_DL_DLQPIT_TRIG_THRES);
 }
@@ -657,7 +657,7 @@ static void t7xx_dpmaif_dl_set_ao_bid_maxcnt(struct dpmaif_hw_info *hw_info,
 	iowrite32(value, hw_info->pcie_base + DPMAIF_AO_DL_PKTINFO_CON0);
 }
 
-static inline void t7xx_dpmaif_dl_set_ao_mtu(struct dpmaif_hw_info *hw_info, unsigned int mtu_sz)
+static void t7xx_dpmaif_dl_set_ao_mtu(struct dpmaif_hw_info *hw_info, unsigned int mtu_sz)
 {
 	iowrite32(mtu_sz, hw_info->pcie_base + DPMAIF_AO_DL_PKTINFO_CON1);
 }
@@ -1067,7 +1067,7 @@ static int t7xx_dpmaif_config_que_hw(struct dpmaif_ctrl *dpmaif_ctrl)
 	return t7xx_dpmaif_hw_init_done(hw_info);
 }
 
-static inline bool t7xx_dpmaif_dl_idle_check(struct dpmaif_hw_info *hw_info)
+static bool t7xx_dpmaif_dl_idle_check(struct dpmaif_hw_info *hw_info)
 {
 	u32 dpmaif_dl_is_busy = ioread32(hw_info->pcie_base + DPMAIF_DL_CHK_BUSY);
 
@@ -1086,7 +1086,7 @@ static void t7xx_dpmaif_ul_all_queue_en(struct dpmaif_hw_info *hw_info, bool ena
 	iowrite32(ul_arb_en, hw_info->pcie_base + DPMAIF_AO_UL_CHNL_ARB0);
 }
 
-static inline bool t7xx_dpmaif_ul_idle_check(struct dpmaif_hw_info *hw_info)
+static bool t7xx_dpmaif_ul_idle_check(struct dpmaif_hw_info *hw_info)
 {
 	u32 dpmaif_ul_is_busy = ioread32(hw_info->pcie_base + DPMAIF_UL_CHK_BUSY);
 

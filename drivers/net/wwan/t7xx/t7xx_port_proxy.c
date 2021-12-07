@@ -270,7 +270,7 @@ void t7xx_port_proxy_reset(struct port_proxy *port_prox)
 	}
 }
 
-static inline int t7xx_port_get_queue_no(struct t7xx_port *port)
+static int t7xx_port_get_queue_no(struct t7xx_port *port)
 {
 	struct t7xx_port_static *port_static = port->port_static;
 	struct t7xx_fsm_ctl *ctl = port->t7xx_dev->md->fsm_ctl;
@@ -279,7 +279,7 @@ static inline int t7xx_port_get_queue_no(struct t7xx_port *port)
 		port_static->txq_exp_index : port_static->txq_index;
 }
 
-static inline void t7xx_port_struct_init(struct t7xx_port *port)
+static void t7xx_port_struct_init(struct t7xx_port *port)
 {
 	INIT_LIST_HEAD(&port->entry);
 	INIT_LIST_HEAD(&port->queue_entry);
@@ -391,7 +391,7 @@ int t7xx_port_kthread_handler(void *arg)
 	return 0;
 }
 
-static inline struct cldma_ctrl *get_md_ctrl(struct t7xx_port *port)
+static struct cldma_ctrl *get_md_ctrl(struct t7xx_port *port)
 {
 	enum cldma_id id = port->port_static->path_id;
 

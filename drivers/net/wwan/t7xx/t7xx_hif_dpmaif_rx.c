@@ -66,7 +66,7 @@
 /* Buffer type */
 #define PKT_BUF_FRAG			1
 
-static inline unsigned int t7xx_normal_pit_bid(const struct dpmaif_normal_pit *pit_info)
+static unsigned int t7xx_normal_pit_bid(const struct dpmaif_normal_pit *pit_info)
 {
 	u32 value;
 
@@ -317,8 +317,8 @@ static int t7xx_dpmaifq_release_pit_entry(struct dpmaif_rx_queue *rxq,
 	return 0;
 }
 
-static inline void t7xx_dpmaif_set_bat_mask(struct device *dev,
-					    struct dpmaif_bat_request *bat_req, unsigned int idx)
+static void t7xx_dpmaif_set_bat_mask(struct device *dev, struct dpmaif_bat_request *bat_req,
+				     unsigned int idx)
 {
 	unsigned long flags;
 
@@ -481,8 +481,7 @@ static int t7xx_dpmaif_get_frag(struct dpmaif_rx_queue *rxq,
 	return 0;
 }
 
-static inline int t7xx_bat_cur_bid_check(struct dpmaif_rx_queue *rxq,
-					 const unsigned int cur_bid)
+static int t7xx_bat_cur_bid_check(struct dpmaif_rx_queue *rxq, const unsigned int cur_bid)
 {
 	struct dpmaif_bat_skb *bat_skb = rxq->bat_req->bat_skb;
 
@@ -645,9 +644,9 @@ static int t7xx_dpmaif_frag_bat_release_and_add(const struct dpmaif_rx_queue *rx
 	return t7xx_dpmaif_rx_frag_alloc(rxq->dpmaif_ctrl, rxq->bat_frag, bid_cnt, false);
 }
 
-static inline void t7xx_dpmaif_parse_msg_pit(const struct dpmaif_rx_queue *rxq,
-					     const struct dpmaif_msg_pit *msg_pit,
-					     struct dpmaif_cur_rx_skb_info *skb_info)
+static void t7xx_dpmaif_parse_msg_pit(const struct dpmaif_rx_queue *rxq,
+				      const struct dpmaif_msg_pit *msg_pit,
+				      struct dpmaif_cur_rx_skb_info *skb_info)
 {
 	skb_info->cur_chn_idx = FIELD_GET(MSG_PIT_CHANNEL_ID, le32_to_cpu(msg_pit->dword1));
 	skb_info->check_sum = FIELD_GET(MSG_PIT_CHECKSUM, le32_to_cpu(msg_pit->dword1));
@@ -726,7 +725,7 @@ static int t7xx_dpmaifq_rx_notify_hw(struct dpmaif_rx_queue *rxq)
 	return ret;
 }
 
-static inline void t7xx_dpmaif_rx_skb_enqueue(struct dpmaif_rx_queue *rxq, struct sk_buff *skb)
+static void t7xx_dpmaif_rx_skb_enqueue(struct dpmaif_rx_queue *rxq, struct sk_buff *skb)
 {
 	unsigned long flags;
 

@@ -52,7 +52,7 @@ static void t7xx_port_ctrl_stop(struct wwan_port *port)
 	atomic_dec(&port_mtk->usage_cnt);
 }
 
-static inline bool t7xx_port_wwan_multipkt_capable(struct t7xx_port_static *port)
+static bool t7xx_port_wwan_multipkt_capable(struct t7xx_port_static *port)
 {
 	return port->tx_ch == PORT_CH_MBIM_TX ||
 		(port->tx_ch >= PORT_CH_DSS0_TX && port->tx_ch <= PORT_CH_DSS7_TX);

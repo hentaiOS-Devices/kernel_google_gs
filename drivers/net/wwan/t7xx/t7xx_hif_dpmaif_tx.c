@@ -163,7 +163,7 @@ static int t7xx_dpmaif_tx_release(struct dpmaif_ctrl *dpmaif_ctrl,
 	return (real_rel_cnt < rel_cnt) ? -EAGAIN : 0;
 }
 
-static inline bool t7xx_dpmaif_drb_ring_not_empty(struct dpmaif_tx_queue *txq)
+static bool t7xx_dpmaif_drb_ring_not_empty(struct dpmaif_tx_queue *txq)
 {
 	return !!t7xx_dpmaif_update_drb_rd_idx(txq->dpmaif_ctrl, txq->index);
 }
@@ -361,7 +361,7 @@ static bool t7xx_tx_lists_are_all_empty(const struct dpmaif_ctrl *dpmaif_ctrl)
 }
 
 /* Currently, only the default TX queue is used */
-static inline int t7xx_select_tx_queue(struct dpmaif_ctrl *dpmaif_ctrl)
+static int t7xx_select_tx_queue(struct dpmaif_ctrl *dpmaif_ctrl)
 {
 	return TXQ_TYPE_DEFAULT;
 }
@@ -523,7 +523,7 @@ void t7xx_dpmaif_tx_thread_rel(struct dpmaif_ctrl *dpmaif_ctrl)
 		kthread_stop(dpmaif_ctrl->tx_thread);
 }
 
-static inline unsigned char t7xx_get_drb_cnt_per_skb(struct sk_buff *skb)
+static unsigned char t7xx_get_drb_cnt_per_skb(struct sk_buff *skb)
 {
 	/* Normal DRB (frags data + skb linear data) + msg DRB */
 	return skb_shinfo(skb)->nr_frags + 2;

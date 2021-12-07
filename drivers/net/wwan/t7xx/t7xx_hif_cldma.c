@@ -64,8 +64,8 @@ static enum cldma_queue_type txq_type[CLDMA_TXQ_NUM];
 static int rxq_buff_size[CLDMA_RXQ_NUM];
 static int txq_buff_size[CLDMA_TXQ_NUM];
 
-static inline void md_cd_queue_struct_reset(struct cldma_queue *queue, struct cldma_ctrl *md_ctrl,
-					    enum mtk_txrx tx_rx, unsigned char index)
+static void md_cd_queue_struct_reset(struct cldma_queue *queue, struct cldma_ctrl *md_ctrl,
+				     enum mtk_txrx tx_rx, unsigned char index)
 {
 	queue->dir = tx_rx;
 	queue->index = index;
@@ -76,33 +76,33 @@ static inline void md_cd_queue_struct_reset(struct cldma_queue *queue, struct cl
 	queue->tx_xmit = NULL;
 }
 
-static inline void md_cd_queue_struct_init(struct cldma_queue *queue, struct cldma_ctrl *md_ctrl,
-					   enum mtk_txrx tx_rx, unsigned char index)
+static void md_cd_queue_struct_init(struct cldma_queue *queue, struct cldma_ctrl *md_ctrl,
+				    enum mtk_txrx tx_rx, unsigned char index)
 {
 	md_cd_queue_struct_reset(queue, md_ctrl, tx_rx, index);
 	init_waitqueue_head(&queue->req_wq);
 	spin_lock_init(&queue->ring_lock);
 }
 
-static inline void t7xx_cldma_tgpd_set_data_ptr(struct cldma_tgpd *tgpd, dma_addr_t data_ptr)
+static void t7xx_cldma_tgpd_set_data_ptr(struct cldma_tgpd *tgpd, dma_addr_t data_ptr)
 {
 	tgpd->data_buff_bd_ptr_h = cpu_to_le32(upper_32_bits(data_ptr));
 	tgpd->data_buff_bd_ptr_l = cpu_to_le32(lower_32_bits(data_ptr));
 }
 
-static inline void t7xx_cldma_tgpd_set_next_ptr(struct cldma_tgpd *tgpd, dma_addr_t next_ptr)
+static void t7xx_cldma_tgpd_set_next_ptr(struct cldma_tgpd *tgpd, dma_addr_t next_ptr)
 {
 	tgpd->next_gpd_ptr_h = cpu_to_le32(upper_32_bits(next_ptr));
 	tgpd->next_gpd_ptr_l = cpu_to_le32(lower_32_bits(next_ptr));
 }
 
-static inline void t7xx_cldma_rgpd_set_data_ptr(struct cldma_rgpd *rgpd, dma_addr_t data_ptr)
+static void t7xx_cldma_rgpd_set_data_ptr(struct cldma_rgpd *rgpd, dma_addr_t data_ptr)
 {
 	rgpd->data_buff_bd_ptr_h = cpu_to_le32(upper_32_bits(data_ptr));
 	rgpd->data_buff_bd_ptr_l = cpu_to_le32(lower_32_bits(data_ptr));
 }
 
-static inline void t7xx_cldma_rgpd_set_next_ptr(struct cldma_rgpd *rgpd, dma_addr_t next_ptr)
+static void t7xx_cldma_rgpd_set_next_ptr(struct cldma_rgpd *rgpd, dma_addr_t next_ptr)
 {
 	rgpd->next_gpd_ptr_h = cpu_to_le32(upper_32_bits(next_ptr));
 	rgpd->next_gpd_ptr_l = cpu_to_le32(lower_32_bits(next_ptr));
@@ -575,12 +575,12 @@ static void t7xx_cldma_tx_queue_init(struct cldma_queue *queue)
 	t7xx_cldma_queue_reset(queue);
 }
 
-static inline void t7xx_cldma_enable_irq(struct cldma_ctrl *md_ctrl)
+static void t7xx_cldma_enable_irq(struct cldma_ctrl *md_ctrl)
 {
 	t7xx_pcie_mac_set_int(md_ctrl->t7xx_dev, md_ctrl->hw_info.phy_interrupt_id);
 }
 
-static inline void t7xx_cldma_disable_irq(struct cldma_ctrl *md_ctrl)
+static void t7xx_cldma_disable_irq(struct cldma_ctrl *md_ctrl)
 {
 	t7xx_pcie_mac_clear_int(md_ctrl->t7xx_dev, md_ctrl->hw_info.phy_interrupt_id);
 }
@@ -1183,7 +1183,7 @@ err_free_tx_ring:
 	return ret;
 }
 
-static inline void __iomem *pcie_addr_transfer(void __iomem *addr, u32 addr_trs1, u32 phy_addr)
+static void __iomem *pcie_addr_transfer(void __iomem *addr, u32 addr_trs1, u32 phy_addr)
 {
 	return addr + phy_addr - addr_trs1;
 }
