@@ -147,10 +147,9 @@ void swiotlb_print_info(void)
 	       (mem->nslabs << IO_TLB_SHIFT) >> 20);
 }
 
-static inline unsigned long io_tlb_offset(unsigned long val,
-					  unsigned long io_tlb_segsize)
+static inline unsigned long io_tlb_offset(unsigned long val)
 {
-	return val & (io_tlb_segsize - 1);
+	return val & (IO_TLB_SEGSIZE - 1);
 }
 
 static inline unsigned long nr_slots(u64 val)
@@ -189,16 +188,13 @@ static void swiotlb_init_io_tlb_mem(struct io_tlb_mem *mem, phys_addr_t start,
 	mem->end = mem->start + bytes;
 	mem->index = 0;
 	mem->late_alloc = late_alloc;
-	if (!mem->io_tlb_segsize)
-		mem->io_tlb_segsize = IO_TLB_SEGSIZE;
 
 	if (swiotlb_force == SWIOTLB_FORCE)
 		mem->force_bounce = true;
 
 	spin_lock_init(&mem->lock);
 	for (i = 0; i < mem->nslabs; i++) {
-		mem->slots[i].list = mem->io_tlb_segsize -
-				     io_tlb_offset(i, mem->io_tlb_segsize);
+		mem->slots[i].list = IO_TLB_SEGSIZE - io_tlb_offset(i);
 		mem->slots[i].orig_addr = INVALID_PHYS_ADDR;
 		mem->slots[i].alloc_size = 0;
 	}
@@ -485,7 +481,7 @@ found:
 			alloc_size - (offset + ((i - index) << IO_TLB_SHIFT));
 	}
 	for (i = index - 1;
-	     io_tlb_offset(i, mem->io_tlb_segsize) != mem->io_tlb_segsize - 1 &&
+	     io_tlb_offset(i) != IO_TLB_SEGSIZE - 1 &&
 	     mem->slots[i].list; i--)
 		mem->slots[i].list = ++count;
 
@@ -563,7 +559,7 @@ static void swiotlb_release_slots(struct device *dev, phys_addr_t tlb_addr)
 	 * with slots below and above the pool being returned.
 	 */
 	spin_lock_irqsave(&mem->lock, flags);
-	if (index + nslots < ALIGN(index + 1, mem->io_tlb_segsize))
+	if (index + nslots < ALIGN(index + 1, IO_TLB_SEGSIZE))
 		count = mem->slots[index + nslots].list;
 	else
 		count = 0;
@@ -583,8 +579,8 @@ static void swiotlb_release_slots(struct device *dev, phys_addr_t tlb_addr)
 	 * available (non zero)
 	 */
 	for (i = index - 1;
-	     io_tlb_offset(i, mem->io_tlb_segsize) != mem->io_tlb_segsize - 1 &&
-	     mem->slots[i].list; i--)
+	     io_tlb_offset(i) != IO_TLB_SEGSIZE - 1 && mem->slots[i].list;
+	     i--)
 		mem->slots[i].list = ++count;
 	mem->used -= nslots;
 	spin_unlock_irqrestore(&mem->lock, flags);
@@ -661,9 +657,7 @@ dma_addr_t swiotlb_map(struct device *dev, phys_addr_t paddr, size_t size,
 
 size_t swiotlb_max_mapping_size(struct device *dev)
 {
-	struct io_tlb_mem *mem = dev->dma_io_tlb_mem;
-
-	return ((size_t)IO_TLB_SIZE) * mem->io_tlb_segsize;
+	return ((size_t)IO_TLB_SIZE) * IO_TLB_SEGSIZE;
 }
 
 bool is_swiotlb_active(struct device *dev)
@@ -750,7 +744,6 @@ static int rmem_swiotlb_device_init(struct reserved_mem *rmem,
 {
 	struct io_tlb_mem *mem = rmem->priv;
 	unsigned long nslabs = rmem->size >> IO_TLB_SHIFT;
-	struct device_node *np;
 
 	/*
 	 * Since multiple devices can share the same pool, the private data,
@@ -771,17 +764,6 @@ static int rmem_swiotlb_device_init(struct reserved_mem *rmem,
 
 		set_memory_decrypted((unsigned long)phys_to_virt(rmem->base),
 				     rmem->size >> PAGE_SHIFT);
-
-		np = of_find_node_by_phandle(rmem->phandle);
-		if (np) {
-			if (!of_property_read_u32(np, "io-tlb-segsize",
-						  &mem->io_tlb_segsize)) {
-				if (hweight32(mem->io_tlb_segsize) != 1)
-					mem->io_tlb_segsize = IO_TLB_SEGSIZE;
-			}
-			of_node_put(np);
-		}
-
 		swiotlb_init_io_tlb_mem(mem, rmem->base, nslabs, false);
 		mem->force_bounce = true;
 		mem->for_alloc = true;
