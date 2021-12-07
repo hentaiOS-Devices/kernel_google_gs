@@ -29,6 +29,9 @@
 #include "t7xx_hif_dpmaif.h"
 #include "t7xx_reg.h"
 
+#define ioread32_poll_timeout_atomic(addr, val, cond, delay_us, timeout_us) \
+	readx_poll_timeout_atomic(ioread32, addr, val, cond, delay_us, timeout_us)
+
 static int t7xx_dpmaif_init_intr(struct dpmaif_hw_info *hw_info)
 {
 	struct dpmaif_isr_en_mask *isr_en_msk = &hw_info->isr_en_mask;
@@ -44,9 +47,9 @@ static int t7xx_dpmaif_init_intr(struct dpmaif_hw_info *hw_info)
 	iowrite32(~ul_intr_enable, hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMSR0);
 
 	/* Check mask status */
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMR0,
-					value, (value & ul_intr_enable) != ul_intr_enable, 0,
-					DPMAIF_CHECK_INIT_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMR0,
+					   value, (value & ul_intr_enable) != ul_intr_enable, 0,
+					   DPMAIF_CHECK_INIT_TIMEOUT_US);
 	if (ret)
 		return ret;
 
@@ -59,9 +62,9 @@ static int t7xx_dpmaif_init_intr(struct dpmaif_hw_info *hw_info)
 
 	/* Set DL ISR PD enable mask */
 	iowrite32(~ul_intr_enable, hw_info->pcie_base + DPMAIF_AO_UL_APDL_L2TIMSR0);
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_AO_UL_APDL_L2TIMR0,
-					value, (value & ul_intr_enable) != ul_intr_enable, 0,
-					DPMAIF_CHECK_INIT_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_AO_UL_APDL_L2TIMR0,
+					   value, (value & ul_intr_enable) != ul_intr_enable, 0,
+					   DPMAIF_CHECK_INIT_TIMEOUT_US);
 	if (ret)
 		return ret;
 
@@ -89,9 +92,9 @@ static void t7xx_dpmaif_mask_ulq_interrupt(struct dpmaif_ctrl *dpmaif_ctrl, unsi
 	isr_en_msk->ap_ul_l2intr_en_msk &= ~ul_int_que_done;
 	iowrite32(ul_int_que_done, hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMSR0);
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMR0,
-					value, (value & ul_int_que_done) == ul_int_que_done, 0,
-					DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMR0,
+					   value, (value & ul_int_que_done) == ul_int_que_done, 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret)
 		dev_err(dpmaif_ctrl->dev,
 			"Could not mask the UL interrupt. DPMAIF_AO_UL_AP_L2TIMR0 is 0x%x\n",
@@ -110,9 +113,9 @@ void t7xx_dpmaif_unmask_ulq_intr(struct dpmaif_ctrl *dpmaif_ctrl, unsigned int q
 	isr_en_msk->ap_ul_l2intr_en_msk |= ul_int_que_done;
 	iowrite32(ul_int_que_done, hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMCR0);
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMR0,
-					value, (value & ul_int_que_done) != ul_int_que_done, 0,
-					DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_AO_UL_AP_L2TIMR0,
+					   value, (value & ul_int_que_done) != ul_int_que_done, 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret)
 		dev_err(dpmaif_ctrl->dev,
 			"Could not unmask the UL interrupt. DPMAIF_AO_UL_AP_L2TIMR0 is 0x%x\n",
@@ -463,9 +466,9 @@ static int t7xx_dpmaif_sram_init(struct dpmaif_hw_info *hw_info)
 	value |= DPMAIF_MEM_CLR;
 	iowrite32(value, hw_info->pcie_base + DPMAIF_AP_MEM_CLR);
 
-	return readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_AP_MEM_CLR,
-					value, !(value & DPMAIF_MEM_CLR), 0,
-					DPMAIF_CHECK_INIT_TIMEOUT_US);
+	return ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_AP_MEM_CLR,
+					    value, !(value & DPMAIF_MEM_CLR), 0,
+					    DPMAIF_CHECK_INIT_TIMEOUT_US);
 }
 
 static void t7xx_dpmaif_hw_reset(struct dpmaif_hw_info *hw_info)
@@ -595,9 +598,9 @@ static int t7xx_dpmaif_dl_bat_init_done(struct dpmaif_ctrl *dpmaif_ctrl,
 	dl_bat_init |= DPMAIF_DL_BAT_INIT_ALLSET;
 	dl_bat_init |= DPMAIF_DL_BAT_INIT_EN;
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
-					value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY), 0,
-					DPMAIF_CHECK_INIT_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
+					   value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY), 0,
+					   DPMAIF_CHECK_INIT_TIMEOUT_US);
 	if (ret) {
 		dev_err(dpmaif_ctrl->dev, "Data plane modem DL BAT is not ready\n");
 		return ret;
@@ -605,9 +608,9 @@ static int t7xx_dpmaif_dl_bat_init_done(struct dpmaif_ctrl *dpmaif_ctrl,
 
 	iowrite32(dl_bat_init, hw_info->pcie_base + DPMAIF_DL_BAT_INIT);
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
-					value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY), 0,
-					DPMAIF_CHECK_INIT_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
+					   value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY), 0,
+					   DPMAIF_CHECK_INIT_TIMEOUT_US);
 	if (ret)
 		dev_err(dpmaif_ctrl->dev, "Data plane modem DL BAT initialization failed\n");
 
@@ -839,18 +842,20 @@ static void t7xx_dpmaif_dl_dlq_pit_init_done(struct dpmaif_ctrl *dpmaif_ctrl,
 	dl_pit_init |= (pit_idx << DPMAIF_DLQPIT_CHAN_OFS);
 	dl_pit_init |= DPMAIF_DL_PIT_INIT_EN;
 
-	timeout = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_DLQPIT_INIT,
-					    value, !(value & DPMAIF_DL_PIT_INIT_NOT_READY),
-					    DPMAIF_CHECK_DELAY_US, DPMAIF_CHECK_INIT_TIMEOUT_US);
+	timeout = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_DLQPIT_INIT,
+					       value, !(value & DPMAIF_DL_PIT_INIT_NOT_READY),
+					       DPMAIF_CHECK_DELAY_US,
+					       DPMAIF_CHECK_INIT_TIMEOUT_US);
 	if (timeout) {
 		dev_err(dpmaif_ctrl->dev, "Data plane modem DL PIT is not ready\n");
 		return;
 	}
 
 	iowrite32(dl_pit_init, hw_info->pcie_base + DPMAIF_DL_DLQPIT_INIT);
-	timeout = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_DLQPIT_INIT,
-					    value, !(value & DPMAIF_DL_PIT_INIT_NOT_READY),
-					    DPMAIF_CHECK_DELAY_US, DPMAIF_CHECK_INIT_TIMEOUT_US);
+	timeout = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_DLQPIT_INIT,
+					       value, !(value & DPMAIF_DL_PIT_INIT_NOT_READY),
+					       DPMAIF_CHECK_DELAY_US,
+					       DPMAIF_CHECK_INIT_TIMEOUT_US);
 	if (timeout)
 		dev_err(dpmaif_ctrl->dev, "Data plane modem DL PIT initialization failed\n");
 }
@@ -893,16 +898,16 @@ static void t7xx_dpmaif_dl_all_queue_en(struct dpmaif_ctrl *dpmaif_ctrl, bool en
 	dl_bat_init = DPMAIF_DL_BAT_INIT_ONLY_ENABLE_BIT;
 	dl_bat_init |= DPMAIF_DL_BAT_INIT_EN;
 
-	timeout = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
-					    value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY),
-					    0, DPMAIF_CHECK_TIMEOUT_US);
+	timeout = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
+					       value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY), 0,
+					       DPMAIF_CHECK_TIMEOUT_US);
 	if (timeout)
 		dev_err(dpmaif_ctrl->dev, "Timeout updating BAT setting to HW\n");
 
 	iowrite32(dl_bat_init, hw_info->pcie_base + DPMAIF_DL_BAT_INIT);
-	timeout = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
-					    value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY),
-					    0, DPMAIF_CHECK_TIMEOUT_US);
+	timeout = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_BAT_INIT,
+					       value, !(value & DPMAIF_DL_BAT_INIT_NOT_READY), 0,
+					       DPMAIF_CHECK_TIMEOUT_US);
 	if (timeout)
 		dev_err(dpmaif_ctrl->dev, "Data plane modem DL BAT is not ready\n");
 }
@@ -1041,9 +1046,9 @@ static int t7xx_dpmaif_hw_init_done(struct dpmaif_hw_info *hw_info)
 	ap_cfg |= DPMAIF_SRAM_SYNC;
 	iowrite32(ap_cfg, hw_info->pcie_base + DPMAIF_AP_OVERWRITE_CFG);
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_AP_OVERWRITE_CFG,
-					ap_cfg, !(ap_cfg & DPMAIF_SRAM_SYNC),
-					0, DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_AP_OVERWRITE_CFG,
+					   ap_cfg, !(ap_cfg & DPMAIF_SRAM_SYNC), 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret)
 		return ret;
 
@@ -1105,10 +1110,9 @@ int t7xx_dpmaif_ul_update_hw_drb_cnt(struct dpmaif_ctrl *dpmaif_ctrl, unsigned c
 	ul_update = drb_entry_cnt & DPMAIF_UL_ADD_COUNT_MASK;
 	ul_update |= DPMAIF_UL_ADD_UPDATE;
 
-	ret = readx_poll_timeout_atomic(ioread32,
-					hw_info->pcie_base + DPMAIF_ULQ_ADD_DESC_CH_n(q_num),
-					value, !(value & DPMAIF_UL_ADD_NOT_READY),
-					     0, DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_ULQ_ADD_DESC_CH_n(q_num),
+					   value, !(value & DPMAIF_UL_ADD_NOT_READY), 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret) {
 		dev_err(dpmaif_ctrl->dev, "UL add is not ready\n");
 		return ret;
@@ -1116,10 +1120,9 @@ int t7xx_dpmaif_ul_update_hw_drb_cnt(struct dpmaif_ctrl *dpmaif_ctrl, unsigned c
 
 	iowrite32(ul_update, hw_info->pcie_base + DPMAIF_ULQ_ADD_DESC_CH_n(q_num));
 
-	ret = readx_poll_timeout_atomic(ioread32,
-					hw_info->pcie_base + DPMAIF_ULQ_ADD_DESC_CH_n(q_num),
-					value, !(value & DPMAIF_UL_ADD_NOT_READY),
-					0, DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_ULQ_ADD_DESC_CH_n(q_num),
+					   value, !(value & DPMAIF_UL_ADD_NOT_READY), 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret) {
 		dev_err(dpmaif_ctrl->dev, "Timeout updating UL add\n");
 		return ret;
@@ -1145,9 +1148,9 @@ int t7xx_dpmaif_dlq_add_pit_remain_cnt(struct dpmaif_ctrl *dpmaif_ctrl, unsigned
 	dl_update = pit_remain_cnt & DPMAIF_PIT_REM_CNT_MSK;
 	dl_update |= DPMAIF_DL_ADD_UPDATE | (dlq_pit_idx << DPMAIF_ADD_DLQ_PIT_CHAN_OFS);
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_DLQPIT_ADD,
-					value, !(value & DPMAIF_DL_ADD_NOT_READY),
-					0, DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_DLQPIT_ADD,
+					   value, !(value & DPMAIF_DL_ADD_NOT_READY), 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret) {
 		dev_err(dpmaif_ctrl->dev, "Data plane modem is not ready to add dlq\n");
 		return ret;
@@ -1155,9 +1158,9 @@ int t7xx_dpmaif_dlq_add_pit_remain_cnt(struct dpmaif_ctrl *dpmaif_ctrl, unsigned
 
 	iowrite32(dl_update, hw_info->pcie_base + DPMAIF_DL_DLQPIT_ADD);
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_DLQPIT_ADD,
-					value, !(value & DPMAIF_DL_ADD_NOT_READY),
-					0, DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_DLQPIT_ADD,
+					   value, !(value & DPMAIF_DL_ADD_NOT_READY), 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	if (ret) {
 		dev_err(dpmaif_ctrl->dev, "Data plane modem add dlq failed\n");
 		return ret;
@@ -1181,9 +1184,9 @@ static bool t7xx_dl_add_timedout(struct dpmaif_hw_info *hw_info)
 	u32 value;
 	int ret;
 
-	ret = readx_poll_timeout_atomic(ioread32, hw_info->pcie_base + DPMAIF_DL_BAT_ADD,
-					value, !(value & DPMAIF_DL_ADD_NOT_READY),
-					0, DPMAIF_CHECK_TIMEOUT_US);
+	ret = ioread32_poll_timeout_atomic(hw_info->pcie_base + DPMAIF_DL_BAT_ADD,
+					   value, !(value & DPMAIF_DL_ADD_NOT_READY), 0,
+					   DPMAIF_CHECK_TIMEOUT_US);
 	return !!ret;
 }
 
