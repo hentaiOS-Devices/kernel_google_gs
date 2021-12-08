@@ -21,29 +21,199 @@ static inline struct coiommu_dtt *get_coiommu_dtt(struct device *dev)
 	return NULL;
 }
 
-static bool is_page_pinned(unsigned long pfn)
+static inline unsigned int dtt_level_to_offset(unsigned long pfn,
+					       unsigned int level)
 {
-	return false;
+	unsigned int offset;
+
+	if (level == DTT_LAST_LEVEL)
+		return (pfn) & COIOMMU_PT_LEVEL_MASK;
+
+	offset = COIOMMU_PT_LEVEL_STRIDE + (level - 2) * COIOMMU_UPPER_LEVEL_STRIDE;
+
+	return (pfn >> offset) & COIOMMU_UPPER_LEVEL_MASK;
 }
 
-static void unmark_pfn(unsigned long pfn, bool clear_accessed)
+static void *dtt_alloc_page(void)
 {
+	return (void *)get_zeroed_page(GFP_ATOMIC | __GFP_ACCOUNT);
 }
 
-static void unmark_pfns(unsigned long pfn, unsigned long nr_pages,
-			bool clear_accessed)
+static struct dtt_leaf_entry *pfn_to_dtt_pte(struct coiommu_dtt *dtt,
+					     unsigned long pfn, bool alloc)
 {
+	struct dtt_parent_entry *parent_pte;
+	unsigned int index;
+	struct dtt_leaf_entry *leaf_pte;
+	unsigned int level = dtt->level;
+	void *pt = (void *)dtt->root;
+	u64 pteval;
+
+	while (level != DTT_LAST_LEVEL) {
+		index = dtt_level_to_offset(pfn, level);
+		parent_pte = (struct dtt_parent_entry *)pt + index;
+
+		if (!parent_pte_present(parent_pte)) {
+			if (!alloc)
+				break;
+			pt = dtt_alloc_page();
+			if (!pt)
+				break;
+			pteval = parent_pte_value(pt);
+			if (cmpxchg64(&parent_pte->val, 0ULL, pteval))
+				/* Someone else set it, free this one */
+				free_page((unsigned long)pt);
+		}
+
+		pt = phys_to_virt(parent_pte_addr(parent_pte));
+		level--;
+	}
+
+	if (level > DTT_LAST_LEVEL) {
+		pr_err("coiommu: DTT %s failed at level %d for pfn 0x%lx\n",
+			alloc ? "alloc" : "absent", level, pfn);
+		return NULL;
+	}
+
+	index = dtt_level_to_offset(pfn, DTT_LAST_LEVEL);
+	leaf_pte = (struct dtt_leaf_entry *)pt + index;
+
+	return leaf_pte;
 }
 
-static int mark_pfn(unsigned long pfn)
+static bool is_page_pinned(struct coiommu_dtt *dtt, unsigned long pfn)
 {
-	return -EINVAL;
+	struct dtt_leaf_entry *leaf_pte = pfn_to_dtt_pte(dtt, pfn, false);
+
+	if (leaf_pte == NULL)
+		return false;
+
+	return coiommu_test_flag((1 << DTTE_PINNED_FLAG), &leaf_pte->dtte);
 }
 
-static int mark_pfns(unsigned long pfn, unsigned long nr_pages,
-		     struct pin_pages_info *pin_info)
+static void unmark_pfn(struct dtt_leaf_entry *leaf_pte, bool clear_accessed)
 {
-	return -EINVAL;
+	if (!(atomic_read(&leaf_pte->dtte) & DTTE_MAP_CNT_MASK)) {
+		pr_err("%s: coiomu: map count already zero, leaf_pte 0x%llx\n",
+			__func__, (u64)leaf_pte);
+		return;
+	}
+
+	if (!(atomic_dec_return(&leaf_pte->dtte) & DTTE_MAP_CNT_MASK)) {
+		if (unlikely(clear_accessed))
+			/*
+			 * The clear_accessed is only true in the error handling code
+			 * path, like pin a page failed and need reverse some operations.
+			 * So this happens in rare.
+			 * If this page is pinned successfully by another thread right
+			 * before decreasing the map count here, then the access flag
+			 * won't be cleared which is expected.
+			 * If this page is pinned successfully by another thread right
+			 * after decreasing the map count here, then the access flag
+			 * will still be cleared. This won't cause any issue but just
+			 * messes up access tracking a little bit.
+			 */
+			coiommu_clear_flag((1 << DTTE_ACCESSED_FLAG),
+					&leaf_pte->dtte);
+	}
+}
+
+static void unmark_pfns(struct coiommu_dtt *dtt, unsigned long pfn,
+			unsigned long nr_pages, bool clear_accessed)
+{
+	struct dtt_leaf_entry *leaf_pte = NULL;
+	unsigned long count = 0;
+	unsigned int index = 0;
+
+	for (; count < nr_pages; count++) {
+		if (!leaf_pte || index > COIOMMU_PT_LEVEL_MASK) {
+			leaf_pte = pfn_to_dtt_pte(dtt, pfn + count, false);
+			if (leaf_pte == NULL) {
+				pr_err("%s: coiommu: pfn 0x%lx pte is NULL\n",
+					__func__, pfn + count);
+				/* For the entries in the same page table
+				 * page, they should all be NULL, so we
+				 * can just skip all of them.
+				 */
+				index = dtt_level_to_offset(pfn + count,
+							DTT_LAST_LEVEL);
+				count += COIOMMU_PT_LEVEL_MASK - index;
+				continue;
+			}
+			index = dtt_level_to_offset(pfn + count,
+						DTT_LAST_LEVEL);
+		} else
+			leaf_pte += 1;
+
+		unmark_pfn(leaf_pte, clear_accessed);
+		index++;
+	}
+}
+
+static int mark_pfn(struct coiommu_dtt *dtt,
+		    struct dtt_leaf_entry *leaf_pte,
+		    bool *pinned)
+{
+	unsigned long flags;
+	unsigned int dtte;
+
+	local_irq_save(flags);
+	dtte = atomic_inc_return(&leaf_pte->dtte);
+	if ((dtte & DTTE_MAP_CNT_MASK) > dtt->max_map_count) {
+		pr_err("%s: coiommu: %d maps already done, leaf_pte 0x%llx\n",
+			__func__, (dtte & DTTE_MAP_CNT_MASK), (u64)leaf_pte);
+		atomic_dec(&leaf_pte->dtte);
+		local_irq_restore(flags);
+		return -EINVAL;
+	}
+	local_irq_restore(flags);
+
+	coiommu_set_flag((1 << DTTE_ACCESSED_FLAG), &leaf_pte->dtte);
+
+	if (pinned)
+		*pinned = !!coiommu_test_flag((1 << DTTE_PINNED_FLAG),
+					&leaf_pte->dtte);
+	return 0;
+}
+
+static int mark_pfns(struct coiommu_dtt *dtt, unsigned long pfn,
+		     unsigned long nr_pages, struct pin_pages_info *pin_info)
+{
+	struct dtt_leaf_entry *leaf_pte = NULL;
+	unsigned long count = 0;
+	unsigned int index = 0;
+	bool pinned;
+	int ret = 0;
+
+	for (count = 0; count < nr_pages; count++) {
+		if (!leaf_pte || index > COIOMMU_PT_LEVEL_MASK) {
+			leaf_pte = pfn_to_dtt_pte(dtt, pfn + count, true);
+			if (leaf_pte == NULL) {
+				pr_err("%s: coiommu: pfn 0x%lx pte is NULL\n",
+					__func__, pfn);
+				ret = -EINVAL;
+				goto out;
+			}
+			index = dtt_level_to_offset(pfn + count, DTT_LAST_LEVEL);
+		} else
+			leaf_pte += 1;
+
+		ret = mark_pfn(dtt, leaf_pte, &pinned);
+		if (ret)
+			goto out;
+
+		if (!pinned) {
+			pin_info->pfn[pin_info->nr_pages] = pfn + count;
+			pin_info->nr_pages++;
+		}
+
+		index++;
+	}
+
+	return 0;
+out:
+	unmark_pfns(dtt, pfn, count, true);
+	return ret;
 }
 
 static inline unsigned long get_aligned_nrpages(phys_addr_t phys_addr,
@@ -62,14 +232,17 @@ static inline unsigned short get_pci_device_id(struct device *dev)
 static void unmark_dma_addr(struct device *dev, size_t size,
 			    dma_addr_t dma_addr)
 {
+	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
 	phys_addr_t phys_addr = dma_to_phys(dev, dma_addr);
 	unsigned long pfn = phys_addr >> PAGE_SHIFT;
 	unsigned long nr_pages = get_aligned_nrpages(phys_addr, size);
 
-	unmark_pfns(pfn, nr_pages, false);
+	if (likely(dtt))
+		unmark_pfns(dtt, pfn, nr_pages, false);
 }
 
-static void unmark_sg_pfns(struct scatterlist *sgl,
+static void unmark_sg_pfns(struct coiommu_dtt *dtt,
+			   struct scatterlist *sgl,
 			   int nents, bool clear_accessed)
 {
 	struct scatterlist *sg;
@@ -82,8 +255,18 @@ static void unmark_sg_pfns(struct scatterlist *sgl,
 		phys_addr = sg_phys(sg);
 		pfn = phys_addr >> PAGE_SHIFT;
 		nr_pages = get_aligned_nrpages(phys_addr, sg->length);
-		unmark_pfns(pfn, nr_pages, clear_accessed);
+		unmark_pfns(dtt, pfn, nr_pages, clear_accessed);
 	}
+}
+
+static void unmark_sg(struct device *dev,
+		      struct scatterlist *sgl,
+		      int nents, bool clear_accessed)
+{
+	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
+
+	if (likely(dtt))
+		unmark_sg_pfns(dtt, sgl, nents, clear_accessed);
 }
 
 static int pin_page(struct coiommu_dtt *dtt, unsigned long pfn,
@@ -96,7 +279,7 @@ static int pin_page(struct coiommu_dtt *dtt, unsigned long pfn,
 	if (ret)
 		return ret;
 
-	if (!is_page_pinned(pfn)) {
+	if (!is_page_pinned(dtt, pfn)) {
 		pr_err("%s: coiommu pin pfn 0x%lx failed\n", __func__, pfn);
 		return -EFAULT;
 	}
@@ -114,7 +297,7 @@ static int pin_page_list(struct coiommu_dtt *dtt, struct pin_pages_info *pin_inf
 		return ret;
 
 	for (count = 0; count < pin_info->nr_pages; count++) {
-		if (!is_page_pinned(pin_info->pfn[count])) {
+		if (!is_page_pinned(dtt, pin_info->pfn[count])) {
 			pr_err("%s: coiommu pin pfn 0x%llx failed\n",
 				__func__, pin_info->pfn[count]);
 			return -EFAULT;
@@ -126,20 +309,30 @@ static int pin_page_list(struct coiommu_dtt *dtt, struct pin_pages_info *pin_inf
 
 static int pin_and_mark_pfn(struct device *dev, unsigned long pfn)
 {
+	struct dtt_leaf_entry *leaf_pte;
 	unsigned short bdf = get_pci_device_id(dev);
 	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
 	int ret = 0;
+	bool pinned;
 
 	if (!dtt)
 		return -ENODEV;
 
-	ret = mark_pfn(pfn);
+	leaf_pte = pfn_to_dtt_pte(dtt, pfn, true);
+	if (leaf_pte == NULL) {
+		pr_err("%s: coiommu: pfn 0x%lx pte is NULL\n", __func__, pfn);
+		return -EINVAL;
+	}
+
+	ret = mark_pfn(dtt, leaf_pte, &pinned);
 	if (ret)
 		return ret;
 
-	ret = pin_page(dtt, pfn, bdf);
-	if (unlikely(ret))
-		unmark_pfn(pfn, true);
+	if (!pinned) {
+		ret = pin_page(dtt, pfn, bdf);
+		if (unlikely(ret))
+			unmark_pfn(leaf_pte, true);
+	}
 
 	return ret;
 }
@@ -164,7 +357,7 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 	if (!pin_info)
 		return -ENOMEM;
 
-	ret = mark_pfns(start_pfn, nr_pages, pin_info);
+	ret = mark_pfns(dtt, start_pfn, nr_pages, pin_info);
 	if (ret)
 		goto out;
 
@@ -178,7 +371,7 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 			 * them will participate in the dma operations.
 			 * Hence their map count shall be decremented.
 			 */
-			unmark_pfns(start_pfn, nr_pages, true);
+			unmark_pfns(dtt, start_pfn, nr_pages, true);
 	}
 
 out:
@@ -233,9 +426,9 @@ static int pin_and_mark_sg_list(struct device *dev,
 		pfn = phys_addr >> PAGE_SHIFT;
 		nr_pages = get_aligned_nrpages(phys_addr, sg->length);
 
-		ret = mark_pfns(pfn, nr_pages, pin_info);
+		ret = mark_pfns(dtt, pfn, nr_pages, pin_info);
 		if (ret) {
-			unmark_sg_pfns(sgl, i, true);
+			unmark_sg_pfns(dtt, sgl, i, true);
 			goto out;
 		}
 	}
@@ -250,7 +443,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 			 * participate in the dma operations. Hence their map count
 			 * shall be decremented.
 			 */
-			unmark_sg_pfns(sgl, nents, true);
+			unmark_sg_pfns(dtt, sgl, nents, true);
 	}
 
 out:
@@ -375,7 +568,7 @@ static void coiommu_unmap_sg(struct device *dev, struct scatterlist *sgl,
 {
 	dma_direct_unmap_sg(dev, sgl, nents, dir, attrs);
 
-	unmark_sg_pfns(sgl, nents, false);
+	unmark_sg(dev, sgl, nents, false);
 }
 
 static const struct dma_map_ops coiommu_ops = {
@@ -412,9 +605,35 @@ static inline unsigned int get_dtt_level(void)
 			    COIOMMU_UPPER_LEVEL_STRIDE) + 1;
 }
 
+static void dtt_free(void *pt, unsigned int level)
+{
+	struct dtt_parent_entry *pte;
+	u64 phys;
+	int i;
+
+	/*
+	 * The last level contains the DMA tracking which doesn't
+	 * point to any physical memory, so don't need to free any
+	 * entry but the page itself.
+	 */
+	if (level == DTT_LAST_LEVEL)
+		goto free;
+
+	for (i = 0; i < 1 << COIOMMU_UPPER_LEVEL_STRIDE; i++) {
+		pte = (struct dtt_parent_entry *)pt + i;
+		if (!parent_pte_present(pte))
+			continue;
+		phys = parent_pte_addr(pte);
+		dtt_free(phys_to_virt(phys), level - 1);
+	}
+free:
+
+	free_page((unsigned long)pt);
+}
+
 static void dtt_root_free(struct coiommu_dtt *dtt)
 {
-	free_page((unsigned long)dtt->root);
+	dtt_free((void *)dtt->root, dtt->level);
 	dtt->root = NULL;
 	dtt->level = 0;
 }
@@ -438,6 +657,16 @@ int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 		*dtt_addr = (u64)__pa(dtt->root);
 	if (dtt_level)
 		*dtt_level = (u64)dtt->level;
+	/*
+	 * It is possible that the same guest physical page will be mapped
+	 * at the same time by different CPUs. So it is possible to increase
+	 * the map_count at the same time by multiple CPU threads(see mark_pfn).
+	 * To prevent map_count from exceeding the MAP_CNT_MASK, set the
+	 * max map_count to be MAP_CNT_MASK - num_possible_cpus().
+	 */
+	dtt->max_map_count = DTTE_MAP_CNT_MASK - num_possible_cpus();
+	pr_info("%s: coiommu max map_count: 0x%x\n",
+		__func__, dtt->max_map_count);
 
 	return 0;
 }
