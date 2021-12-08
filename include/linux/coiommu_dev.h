@@ -9,9 +9,10 @@ struct pin_pages_info {
 	uint64_t	pfn[];
 };
 
+struct coiommu_dev;
 struct coiommu_dev_ops {
-	int (*execute_request)(unsigned long pfn, unsigned short bdf);
-	int (*execute_requests)(struct pin_pages_info *pin_info);
+	int (*execute_request)(struct coiommu_dev *dev, unsigned long pfn, unsigned short bdf);
+	int (*execute_requests)(struct coiommu_dev *dev, struct pin_pages_info *pin_info);
 };
 
 #endif /* __LINUX_COIOMMU_DEV_H */

@@ -4,6 +4,7 @@
 
 struct coiommu {
 	const struct coiommu_dev_ops *dev_ops;
+	void *dev;
 };
 
 #endif /* __COIOMMU_H */

@@ -89,7 +89,7 @@ static int pin_page(struct coiommu *coiommu, unsigned long pfn,
 {
 	int ret;
 
-	ret = coiommu->dev_ops->execute_request(pfn, bdf);
+	ret = coiommu->dev_ops->execute_request(coiommu->dev, pfn, bdf);
 	if (ret)
 		return ret;
 
@@ -105,7 +105,7 @@ static int pin_page_list(struct coiommu *coiommu, struct pin_pages_info *pin_inf
 {
 	int ret, count;
 
-	ret = coiommu->dev_ops->execute_requests(pin_info);
+	ret = coiommu->dev_ops->execute_requests(coiommu->dev, pin_info);
 	if (ret)
 		return ret;
 
