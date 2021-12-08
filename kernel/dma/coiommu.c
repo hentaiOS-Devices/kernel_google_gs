@@ -16,7 +16,7 @@
 
 static struct coiommu *global_coiommu;
 
-static inline struct coiommu *get_coiommu(struct device *dev)
+static inline struct coiommu_dtt *get_coiommu_dtt(struct device *dev)
 {
 	return NULL;
 }
@@ -86,9 +86,10 @@ static void unmark_sg_pfns(struct scatterlist *sgl,
 	}
 }
 
-static int pin_page(struct coiommu *coiommu, unsigned long pfn,
+static int pin_page(struct coiommu_dtt *dtt, unsigned long pfn,
 		    unsigned short bdf)
 {
+	struct coiommu *coiommu = dtt_to_coiommu(dtt);
 	int ret;
 
 	ret = coiommu->dev_ops->execute_request(coiommu->dev, pfn, bdf);
@@ -103,8 +104,9 @@ static int pin_page(struct coiommu *coiommu, unsigned long pfn,
 	return 0;
 }
 
-static int pin_page_list(struct coiommu *coiommu, struct pin_pages_info *pin_info)
+static int pin_page_list(struct coiommu_dtt *dtt, struct pin_pages_info *pin_info)
 {
+	struct coiommu *coiommu = dtt_to_coiommu(dtt);
 	int ret, count;
 
 	ret = coiommu->dev_ops->execute_requests(coiommu->dev, pin_info);
@@ -125,17 +127,17 @@ static int pin_page_list(struct coiommu *coiommu, struct pin_pages_info *pin_inf
 static int pin_and_mark_pfn(struct device *dev, unsigned long pfn)
 {
 	unsigned short bdf = get_pci_device_id(dev);
-	struct coiommu *coiommu = get_coiommu(dev);
+	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
 	int ret = 0;
 
-	if (!coiommu)
+	if (!dtt)
 		return -ENODEV;
 
 	ret = mark_pfn(pfn);
 	if (ret)
 		return ret;
 
-	ret = pin_page(coiommu, pfn, bdf);
+	ret = pin_page(dtt, pfn, bdf);
 	if (unlikely(ret))
 		unmark_pfn(pfn, true);
 
@@ -146,14 +148,14 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 			     unsigned long nr_pages)
 {
 	unsigned short bdf = get_pci_device_id(dev);
-	struct coiommu *coiommu = get_coiommu(dev);
+	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
 	struct pin_pages_info *pin_info;
 	int ret;
 
 	if (nr_pages == 1)
 		return pin_and_mark_pfn(dev, start_pfn);
 
-	if (!coiommu)
+	if (!dtt)
 		return -ENODEV;
 
 	pin_info = kzalloc(sizeof(struct pin_pages_info) +
@@ -168,7 +170,7 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 
 	if (pin_info->nr_pages > 0) {
 		pin_info->bdf = bdf;
-		ret = pin_page_list(coiommu, pin_info);
+		ret = pin_page_list(dtt, pin_info);
 		if (unlikely(ret))
 			/*
 			 * Note - In case pin failures, all pfns required for
@@ -205,7 +207,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 				int nents)
 {
 	unsigned short bdf = get_pci_device_id(dev);
-	struct coiommu *coiommu = get_coiommu(dev);
+	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
 	struct scatterlist *sg;
 	unsigned long nr_pages = 0;
 	phys_addr_t phys_addr;
@@ -213,7 +215,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 	struct pin_pages_info *pin_info = NULL;
 	int i, ret = 0;
 
-	if (!coiommu)
+	if (!dtt)
 		return -ENODEV;
 
 	for_each_sg(sgl, sg, nents, i) {
@@ -240,7 +242,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 
 	if (pin_info->nr_pages > 0) {
 		pin_info->bdf = bdf;
-		ret = pin_page_list(coiommu, pin_info);
+		ret = pin_page_list(dtt, pin_info);
 		if (unlikely(ret))
 			/*
 			 * Note - In case pin failures, all pfns required for this
@@ -396,6 +398,63 @@ static const struct dma_map_ops coiommu_ops = {
 	.get_required_mask	= dma_direct_get_required_mask,
 	.max_mapping_size	= dma_direct_max_mapping_size,
 };
+
+static inline unsigned int get_dtt_level(void)
+{
+	unsigned int pfn_width;
+
+	pfn_width = MAX_PHYSMEM_BITS - PAGE_SHIFT;
+
+	if (pfn_width <= COIOMMU_PT_LEVEL_STRIDE)
+		return 1;
+
+	return DIV_ROUND_UP((pfn_width - COIOMMU_PT_LEVEL_STRIDE),
+			    COIOMMU_UPPER_LEVEL_STRIDE) + 1;
+}
+
+static void dtt_root_free(struct coiommu_dtt *dtt)
+{
+	free_page((unsigned long)dtt->root);
+	dtt->root = NULL;
+	dtt->level = 0;
+}
+
+int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
+{
+	struct coiommu_dtt *dtt;
+
+	if (!global_coiommu) {
+		pr_err("%s: coiommu not exists\n", __func__);
+		return -EINVAL;
+	}
+
+	dtt = &global_coiommu->dtt;
+	dtt->root = (void *)get_zeroed_page(GFP_KERNEL_ACCOUNT);
+	if (!dtt->root)
+		return -ENOMEM;
+	dtt->level = get_dtt_level();
+
+	if (dtt_addr)
+		*dtt_addr = (u64)__pa(dtt->root);
+	if (dtt_level)
+		*dtt_level = (u64)dtt->level;
+
+	return 0;
+}
+
+void coiommu_disable_dtt(void)
+{
+	struct coiommu_dtt *dtt;
+
+	if (!global_coiommu)
+		return;
+
+	dtt = &global_coiommu->dtt;
+	if (!dtt->root)
+		return;
+
+	dtt_root_free(dtt);
+}
 
 static void coiommu_set_endpoints(struct coiommu *coiommu,
 				  unsigned short ep_count,

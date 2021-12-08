@@ -16,5 +16,7 @@ struct coiommu_dev_ops {
 };
 
 extern void coiommu_init(unsigned short ep_count, unsigned short *endpoints);
+extern int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level);
+extern void coiommu_disable_dtt(void);
 
 #endif /* __LINUX_COIOMMU_DEV_H */

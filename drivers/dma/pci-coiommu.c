@@ -103,6 +103,7 @@ static const struct coiommu_dev_ops dev_ops = {
 static int pci_coiommu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
 	struct coiommu_dev *cidev;
+	u64 dtt_addr, dtt_level;
 	int ret;
 
 	ret = pci_enable_device(dev);
@@ -156,12 +157,27 @@ static int pci_coiommu_probe(struct pci_dev *dev, const struct pci_device_id *id
 		goto free_mmio;
 	}
 
+	ret = coiommu_enable_dtt(&dtt_addr, &dtt_level);
+	if (ret) {
+		dev_err(&dev->dev, "Failed to setup DTT\n");
+		goto free_notify;
+	}
+
+	/*
+	 * Set the dtt_addr and dtt_level to the backend. The subsequent
+	 * activate command takes care synchronizing these async writes.
+	 */
+	writeq(dtt_addr, (void *__iomem)&cidev->mmio_info->dtt_addr);
+	writeq(dtt_level, (void *__iomem)&cidev->mmio_info->dtt_level);
+
 	coiommu_execute_cmd(COIOMMU_CMD_ACTIVATE,
 			(void *__iomem)&cidev->mmio_info->command);
 
 	dev_set_drvdata(&dev->dev, cidev);
 
 	return 0;
+free_notify:
+	pci_iounmap(dev, cidev->notify_map);
 free_mmio:
 	pci_iounmap(dev, cidev->mmio_info);
 free_dev:
@@ -176,6 +192,7 @@ static void pci_coiommu_remove(struct pci_dev *dev)
 	if (!cidev)
 		return;
 
+	coiommu_disable_dtt();
 	pci_iounmap(dev, cidev->mmio_info);
 	pci_iounmap(dev, cidev->notify_map);
 	kfree(cidev);
