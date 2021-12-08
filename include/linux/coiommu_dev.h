@@ -15,4 +15,6 @@ struct coiommu_dev_ops {
 	int (*execute_requests)(struct coiommu_dev *dev, struct pin_pages_info *pin_info);
 };
 
+extern void coiommu_init(unsigned short ep_count, unsigned short *endpoints);
+
 #endif /* __LINUX_COIOMMU_DEV_H */

@@ -5,6 +5,8 @@
 struct coiommu {
 	const struct coiommu_dev_ops *dev_ops;
 	void *dev;
+	unsigned short *endpoints;
+	int ep_count;
 };
 
 #endif /* __COIOMMU_H */

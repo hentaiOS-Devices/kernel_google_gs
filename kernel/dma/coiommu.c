@@ -14,6 +14,8 @@
 #include "coiommu.h"
 #include "direct.h"
 
+static struct coiommu *global_coiommu;
+
 static inline struct coiommu *get_coiommu(struct device *dev)
 {
 	return NULL;
@@ -394,3 +396,38 @@ static const struct dma_map_ops coiommu_ops = {
 	.get_required_mask	= dma_direct_get_required_mask,
 	.max_mapping_size	= dma_direct_max_mapping_size,
 };
+
+static void coiommu_set_endpoints(struct coiommu *coiommu,
+				  unsigned short ep_count,
+				  unsigned short *endpoints)
+{
+	if (!endpoints)
+		return;
+
+	coiommu->endpoints = kcalloc(ep_count,
+				sizeof(unsigned short), GFP_KERNEL);
+	if (!coiommu->endpoints)
+		return;
+
+	memcpy(coiommu->endpoints, endpoints,
+			ep_count * sizeof(unsigned short));
+	coiommu->ep_count = ep_count;
+}
+
+void coiommu_init(unsigned short ep_count, unsigned short *endpoints)
+{
+	/*
+	 * If already created means it is not the first time
+	 * to init. Just re-use it.
+	 */
+	if (global_coiommu) {
+		pr_warn("%s: coiommu is already initialized\n", __func__);
+		return;
+	}
+
+	global_coiommu = kzalloc(sizeof(struct coiommu), GFP_KERNEL);
+	if (!global_coiommu)
+		return;
+
+	coiommu_set_endpoints(global_coiommu, ep_count, endpoints);
+}

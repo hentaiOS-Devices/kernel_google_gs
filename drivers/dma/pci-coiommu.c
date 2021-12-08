@@ -11,6 +11,7 @@
 #define PCI_DEVICE_ID_COIOMMU	0xabcd
 #define COIOMMU_MMIO_BAR	0
 #define COIOMMU_NOTIFY_BAR	2
+#define COIOMMU_TOPOLOGY_BAR	4
 
 #define COIOMMU_CMD_ACTIVATE	1
 #define PIN_PAGES_IN_BATCH	(1UL << 63)
@@ -201,3 +202,62 @@ MODULE_LICENSE("GPL v2");
 
 module_init(pci_coiommu_init);
 module_exit(pci_coiommu_exit);
+
+static void setup_coiommu(struct pci_dev *dev)
+{
+	void *__iomem bar;
+	unsigned short ep_count, *endpoints;
+	unsigned short total_count, bdf;
+	unsigned long bar_len;
+	int i;
+
+	if (pci_enable_device(dev))
+		return;
+	/*
+	 * Map device topology bar which contains BDF to indicate which
+	 * device is attached to coiommu.
+	 */
+	bar_len = pci_resource_len(dev, COIOMMU_TOPOLOGY_BAR);
+	bar = pci_iomap(dev, COIOMMU_TOPOLOGY_BAR, bar_len);
+	if (!bar) {
+		dev_err(&dev->dev, "%s: failed to get topology bar\n",
+				__func__);
+		return;
+	}
+
+	total_count = readw(bar);
+	dev_info(&dev->dev, "%s: endpoint count %d\n", __func__, total_count);
+
+	if (!total_count)
+		goto out;
+
+	if (((total_count + 1) * sizeof(unsigned short)) > bar_len) {
+		dev_warn(&dev->dev, "%s: topology bar is too small\n",
+				__func__);
+		total_count = bar_len / sizeof(unsigned short) - 1;
+	}
+
+	endpoints = kcalloc(total_count, sizeof(unsigned short), GFP_KERNEL);
+	if (!endpoints)
+		goto out;
+
+	/* start from index 1 as to skip the total_count register */
+	for (i = 1, ep_count = 0; i < total_count + 1; i++) {
+		bdf = readw(bar + i * sizeof(unsigned short));
+		if (!bdf) {
+			pr_err("%s: Get invalid bdf\n", __func__);
+			continue;
+		}
+
+		endpoints[ep_count++] = bdf;
+		dev_info(&dev->dev, "%s: endpoint %02x:%02x.%01x\n", __func__,
+			 PCI_BUS_NUM(bdf), PCI_SLOT(bdf), PCI_FUNC(bdf));
+	}
+
+	coiommu_init(ep_count, endpoints);
+	kfree(endpoints);
+out:
+	pci_iounmap(dev, bar);
+}
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_COIOMMU, PCI_DEVICE_ID_COIOMMU,
+			setup_coiommu);
