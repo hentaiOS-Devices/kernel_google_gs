@@ -2,10 +2,13 @@
 #ifndef __COIOMMU_H
 #define __COIOMMU_H
 
+#include <linux/rwlock.h>
+
 struct coiommu_dtt {
 	void *root;
 	unsigned int level;
 	int max_map_count;
+	rwlock_t lock;
 };
 
 struct coiommu {

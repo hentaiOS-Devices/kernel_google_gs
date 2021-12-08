@@ -237,8 +237,13 @@ static void unmark_dma_addr(struct device *dev, size_t size,
 	unsigned long pfn = phys_addr >> PAGE_SHIFT;
 	unsigned long nr_pages = get_aligned_nrpages(phys_addr, size);
 
-	if (likely(dtt))
+	if (unlikely(!dtt))
+		return;
+
+	read_lock(&dtt->lock);
+	if (likely(dtt->root))
 		unmark_pfns(dtt, pfn, nr_pages, false);
+	read_unlock(&dtt->lock);
 }
 
 static void unmark_sg_pfns(struct coiommu_dtt *dtt,
@@ -255,7 +260,13 @@ static void unmark_sg_pfns(struct coiommu_dtt *dtt,
 		phys_addr = sg_phys(sg);
 		pfn = phys_addr >> PAGE_SHIFT;
 		nr_pages = get_aligned_nrpages(phys_addr, sg->length);
+		read_lock(&dtt->lock);
+		if (unlikely(!dtt->root)) {
+			read_unlock(&dtt->lock);
+			return;
+		}
 		unmark_pfns(dtt, pfn, nr_pages, clear_accessed);
+		read_unlock(&dtt->lock);
 	}
 }
 
@@ -318,15 +329,23 @@ static int pin_and_mark_pfn(struct device *dev, unsigned long pfn)
 	if (!dtt)
 		return -ENODEV;
 
+	read_lock(&dtt->lock);
+
+	if (unlikely(!dtt->root)) {
+		ret = -ENODEV;
+		goto out;
+	}
+
 	leaf_pte = pfn_to_dtt_pte(dtt, pfn, true);
 	if (leaf_pte == NULL) {
 		pr_err("%s: coiommu: pfn 0x%lx pte is NULL\n", __func__, pfn);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mark_pfn(dtt, leaf_pte, &pinned);
 	if (ret)
-		return ret;
+		goto out;
 
 	if (!pinned) {
 		ret = pin_page(dtt, pfn, bdf);
@@ -334,6 +353,8 @@ static int pin_and_mark_pfn(struct device *dev, unsigned long pfn)
 			unmark_pfn(leaf_pte, true);
 	}
 
+out:
+	read_unlock(&dtt->lock);
 	return ret;
 }
 
@@ -357,6 +378,13 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 	if (!pin_info)
 		return -ENOMEM;
 
+	read_lock(&dtt->lock);
+
+	if (unlikely(!dtt->root)) {
+		ret = -ENODEV;
+		goto out;
+	}
+
 	ret = mark_pfns(dtt, start_pfn, nr_pages, pin_info);
 	if (ret)
 		goto out;
@@ -375,6 +403,7 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 	}
 
 out:
+	read_unlock(&dtt->lock);
 	kfree(pin_info);
 	return ret;
 }
@@ -421,6 +450,13 @@ static int pin_and_mark_sg_list(struct device *dev,
 	if (!pin_info)
 		return -ENOMEM;
 
+	read_lock(&dtt->lock);
+
+	if (unlikely(!dtt->root)) {
+		ret = -ENODEV;
+		goto out;
+	}
+
 	for_each_sg(sgl, sg, nents, i) {
 		phys_addr = sg_phys(sg);
 		pfn = phys_addr >> PAGE_SHIFT;
@@ -447,6 +483,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 	}
 
 out:
+	read_unlock(&dtt->lock);
 	kfree(pin_info);
 	return ret;
 }
@@ -674,6 +711,7 @@ int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 void coiommu_disable_dtt(void)
 {
 	struct coiommu_dtt *dtt;
+	unsigned long flags;
 
 	if (!global_coiommu)
 		return;
@@ -682,7 +720,9 @@ void coiommu_disable_dtt(void)
 	if (!dtt->root)
 		return;
 
+	write_lock_irqsave(&dtt->lock, flags);
 	dtt_root_free(dtt);
+	write_unlock_irqrestore(&dtt->lock, flags);
 }
 
 static void coiommu_set_endpoints(struct coiommu *coiommu,
@@ -717,5 +757,6 @@ void coiommu_init(unsigned short ep_count, unsigned short *endpoints)
 	if (!global_coiommu)
 		return;
 
+	rwlock_init(&global_coiommu->dtt.lock);
 	coiommu_set_endpoints(global_coiommu, ep_count, endpoints);
 }

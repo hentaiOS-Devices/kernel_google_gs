@@ -13,6 +13,7 @@
 #define COIOMMU_NOTIFY_BAR	2
 #define COIOMMU_TOPOLOGY_BAR	4
 
+#define COIOMMU_CMD_DEACTIVATE	0
 #define COIOMMU_CMD_ACTIVATE	1
 #define PIN_PAGES_IN_BATCH	(1UL << 63)
 
@@ -192,6 +193,11 @@ static void pci_coiommu_remove(struct pci_dev *dev)
 	if (!cidev)
 		return;
 
+	/* deactivate the device before disable dtt as
+	 * device may be using dtt.
+	 */
+	coiommu_execute_cmd(COIOMMU_CMD_DEACTIVATE,
+			(void *__iomem)&cidev->mmio_info->command);
 	coiommu_disable_dtt();
 	pci_iounmap(dev, cidev->mmio_info);
 	pci_iounmap(dev, cidev->notify_map);
