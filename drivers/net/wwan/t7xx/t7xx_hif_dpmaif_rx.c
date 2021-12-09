@@ -504,7 +504,7 @@ static int t7xx_dpmaif_check_pit_seq(struct dpmaif_rx_queue *rxq,
 
 	if (read_poll_timeout_atomic(t7xx_dpmaif_read_pit_seq, cur_pit_seq,
 				     cur_pit_seq == expect_pit_seq, DPMAIF_POLL_PIT_TIME_US,
-				     DPMAIF_POLL_PIT_MAX_TIME_US, DPMAIF_WRITE, pit))
+				     DPMAIF_POLL_PIT_MAX_TIME_US, false, pit))
 		return -EFAULT;
 
 	rxq->expect_pit_seq++;
