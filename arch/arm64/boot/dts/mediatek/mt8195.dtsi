@@ -13,8 +13,8 @@
 #include <dt-bindings/phy/phy.h>
 #include <dt-bindings/pinctrl/mt8195-pinfunc.h>
 #include <dt-bindings/power/mt8195-power.h>
-#include <dt-bindings/reset/ti-syscon.h>
 #include <dt-bindings/reset/mt8195-resets.h>
+#include <dt-bindings/reset/ti-syscon.h>
 #include <dt-bindings/thermal/thermal.h>
 
 / {
@@ -30,13 +30,13 @@
 		ethdr0 = &ethdr0;
 		gce0 = &gce0;
 		gce1 = &gce1;
-		mutex0 = &mutex;
-		mutex1 = &mutex1;
 		merge1 = &merge1;
 		merge2 = &merge2;
 		merge3 = &merge3;
 		merge4 = &merge4;
 		merge5 = &merge5;
+		mutex0 = &mutex;
+		mutex1 = &mutex1;
 		vdo1_rdma0 = &vdo1_rdma0;
 		vdo1_rdma1 = &vdo1_rdma1;
 		vdo1_rdma2 = &vdo1_rdma2;
@@ -264,6 +264,13 @@
 		wakeup-delay-ms = <50>;
 	};
 
+	hdmiddc0: ddc_i2c {
+		compatible = "mediatek,mt8195-hdmi-ddc";
+		clocks = <&clk26m>;
+		clock-names = "ddc-i2c";
+		status = "disabled";
+	};
+
 	pmu-a55 {
 		compatible = "arm,cortex-a55-pmu";
 		interrupt-parent = <&gic>;
@@ -286,16 +293,6 @@
                 reg = <0 0x0011bc10 0 0x120>, <0 0x0011bd30 0 0x120>;
                 #performance-domain-cells = <1>;
         };
-
-	timer: timer {
-		compatible = "arm,armv8-timer";
-		interrupt-parent = <&gic>;
-		interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_HIGH 0>,
-			     <GIC_PPI 14 IRQ_TYPE_LEVEL_HIGH 0>,
-			     <GIC_PPI 11 IRQ_TYPE_LEVEL_HIGH 0>,
-			     <GIC_PPI 10 IRQ_TYPE_LEVEL_HIGH 0>;
-		clock-frequency = <13000000>;
-	};
 
 	soc {
 		#address-cells = <2>;
@@ -3633,13 +3630,6 @@
 		};
 	};
 
-	hdmiddc0: ddc_i2c {
-		compatible = "mediatek,mt8195-hdmi-ddc";
-		clocks = <&clk26m>;
-		clock-names = "ddc-i2c";
-		status = "disabled";
-	};
-
 	sound: mt8195-sound {
 		mediatek,platform = <&afe>;
 		status = "disabled";
@@ -3791,5 +3781,15 @@
 			polling-delay-passive = <0>; /* milliseconds */
 			thermal-sensors = <&lvts 17>;
 		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_PPI 14 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_PPI 11 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_PPI 10 IRQ_TYPE_LEVEL_HIGH 0>;
+		clock-frequency = <13000000>;
 	};
 };
