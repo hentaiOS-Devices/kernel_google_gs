@@ -11,6 +11,10 @@
 	compatible = "google,tomato-rev1", "google,tomato", "mediatek,mt8195";
 };
 
+&pcie0 {
+	status = "okay";
+};
+
 &sound {
 	compatible = "mediatek,mt8195_mt6359_rt1019_rt5682";
 	model = "mt8195_r1019_5682";

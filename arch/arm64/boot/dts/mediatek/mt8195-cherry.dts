@@ -10,6 +10,10 @@
 	compatible = "google,cherry", "mediatek,mt8195";
 };
 
+&pcie0 {
+	status = "okay";
+};
+
 &subpmic_mtk_regulator {
 	mt_pmic_vmc_ldo_reg: ldo3 {
 		regulator-compatible = "LDO3";
