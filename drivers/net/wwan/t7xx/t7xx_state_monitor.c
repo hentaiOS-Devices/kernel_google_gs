@@ -42,6 +42,7 @@
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
 #include "t7xx_pci_rescan.h"
+#include "t7xx_netdev.h"
 
 #define FSM_DRM_DISABLE_DELAY_MS		200
 #define FSM_EVENT_POLL_INTERVAL_MS		20
@@ -467,6 +468,7 @@ static void fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 {
 	struct t7xx_modem *md = ctl->md;
 	struct device *dev;
+	int ret;
 
 	ctl->last_state = ctl->curr_state;
 	ctl->curr_state = FSM_STATE_STARTING;
@@ -475,8 +477,10 @@ static void fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 	t7xx_fsm_broadcast_state(ctl, MD_STATE_WAITING_FOR_HS1);
 	t7xx_md_event_notify(md, FSM_START);
 
-	wait_event_interruptible_timeout(ctl->async_hk_wq, md->core_md.ready || ctl->exp_flg,
-					 HZ * 60);
+	wait_event_interruptible_timeout(ctl->async_hk_wq, 
+					(md->core_md.ready && md->core_sap.ready) ||
+					ctl->exp_flg, HZ * 60);
+
 	dev = &md->t7xx_dev->pdev->dev;
 
 	if (ctl->exp_flg)
@@ -490,6 +494,9 @@ static void fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 		fsm_routine_exception(ctl, NULL, EXCEPTION_HS_TIMEOUT);
 	} else {
 		t7xx_pci_pm_init_late(md->t7xx_dev);
+		ret = t7xx_ccmni_late_init(md->t7xx_dev);
+		if (ret)
+			dev_err(dev, "ccmni late init failed.. \n");
 		fsm_routine_ready(ctl);
 	}
 }
