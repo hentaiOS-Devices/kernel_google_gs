@@ -470,7 +470,8 @@ static int __maybe_unused amd_pmc_suspend(struct device *dev)
 	amd_pmc_send_cmd(pdev, 0, NULL, SMU_MSG_LOG_START, 0);
 
 	/* Activate CZN specific RTC functionality */
-	if (pdev->cpu_id == AMD_CPU_ID_CZN) {
+	/* TODO(b/209705576): We need to add firmware support */
+	if (pdev->cpu_id == AMD_CPU_ID_CZN && false) {
 		rc = amd_pmc_verify_czn_rtc(pdev, &arg);
 		if (rc < 0)
 			return rc;
