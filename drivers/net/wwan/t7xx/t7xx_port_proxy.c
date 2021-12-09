@@ -335,7 +335,7 @@ int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb)
 			t7xx_port_adjust_skb(port, skb);
 
 		status = FIELD_GET(HDR_FLD_CHN, le32_to_cpu(ccci_h->status));
-		if (status == PORT_CH_STATUS_RX) {
+		if (!(port->flags & PORT_F_RAW_DATA) && (status == PORT_CH_STATUS_RX)) {
 			port->skb_handler(port, skb);
 		} else {
 			if (port->wwan_port)
