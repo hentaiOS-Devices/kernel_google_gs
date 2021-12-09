@@ -1180,8 +1180,7 @@ static u16 g4x_compute_wm(const struct intel_crtc_state *crtc_state,
 
 	pixel_rate = crtc_state->pixel_rate;
 	htotal = pipe_mode->crtc_htotal;
-
-	width = drm_rect_width(&plane_state->uapi.dst);
+	width = drm_rect_width(&plane_state->uapi.src) >> 16;
 
 	if (plane->id == PLANE_CURSOR) {
 		wm = intel_wm_method2(pixel_rate, htotal, width, cpp, latency);
@@ -1689,7 +1688,7 @@ static u16 vlv_compute_wm_level(const struct intel_crtc_state *crtc_state,
 	cpp = plane_state->hw.fb->format->cpp[0];
 	pixel_rate = crtc_state->pixel_rate;
 	htotal = pipe_mode->crtc_htotal;
-	width = crtc_state->pipe_src_w;
+	width = drm_rect_width(&plane_state->uapi.src) >> 16;
 
 	if (plane->id == PLANE_CURSOR) {
 		/*
@@ -2283,12 +2282,12 @@ static void i965_update_wm(struct drm_i915_private *dev_priv)
 			crtc->base.primary->state->fb;
 		int pixel_rate = crtc->config->pixel_rate;
 		int htotal = pipe_mode->crtc_htotal;
-		int hdisplay = crtc->config->pipe_src_w;
+		int width = drm_rect_width(&crtc->base.primary->state->src) >> 16;
 		int cpp = fb->format->cpp[0];
 		int entries;
 
 		entries = intel_wm_method2(pixel_rate, htotal,
-					   hdisplay, cpp, sr_latency_ns / 100);
+					   width, cpp, sr_latency_ns / 100);
 		entries = DIV_ROUND_UP(entries, I915_FIFO_LINE_SIZE);
 		srwm = I965_FIFO_SIZE - entries;
 		if (srwm < 0)
@@ -2458,7 +2457,7 @@ static void i9xx_update_wm(struct drm_i915_private *dev_priv)
 			enabled->base.primary->state->fb;
 		int pixel_rate = enabled->config->pixel_rate;
 		int htotal = pipe_mode->crtc_htotal;
-		int hdisplay = enabled->config->pipe_src_w;
+		int width = drm_rect_width(&enabled->base.primary->state->src) >> 16;
 		int cpp;
 		int entries;
 
@@ -2467,7 +2466,7 @@ static void i9xx_update_wm(struct drm_i915_private *dev_priv)
 		else
 			cpp = fb->format->cpp[0];
 
-		entries = intel_wm_method2(pixel_rate, htotal, hdisplay, cpp,
+		entries = intel_wm_method2(pixel_rate, htotal, width, cpp,
 					   sr_latency_ns / 100);
 		entries = DIV_ROUND_UP(entries, wm_info->cacheline_size);
 		drm_dbg_kms(&dev_priv->drm,
@@ -2602,7 +2601,7 @@ static u32 ilk_compute_pri_wm(const struct intel_crtc_state *crtc_state,
 
 	method2 = ilk_wm_method2(crtc_state->pixel_rate,
 				 crtc_state->hw.pipe_mode.crtc_htotal,
-				 drm_rect_width(&plane_state->uapi.dst),
+				 drm_rect_width(&plane_state->uapi.src) >> 16,
 				 cpp, mem_value);
 
 	return min(method1, method2);
@@ -2630,7 +2629,7 @@ static u32 ilk_compute_spr_wm(const struct intel_crtc_state *crtc_state,
 	method1 = ilk_wm_method1(crtc_state->pixel_rate, cpp, mem_value);
 	method2 = ilk_wm_method2(crtc_state->pixel_rate,
 				 crtc_state->hw.pipe_mode.crtc_htotal,
-				 drm_rect_width(&plane_state->uapi.dst),
+				 drm_rect_width(&plane_state->uapi.src) >> 16,
 				 cpp, mem_value);
 	return min(method1, method2);
 }
@@ -2655,7 +2654,7 @@ static u32 ilk_compute_cur_wm(const struct intel_crtc_state *crtc_state,
 
 	return ilk_wm_method2(crtc_state->pixel_rate,
 			      crtc_state->hw.pipe_mode.crtc_htotal,
-			      drm_rect_width(&plane_state->uapi.dst),
+			      drm_rect_width(&plane_state->uapi.src) >> 16,
 			      cpp, mem_value);
 }
 
@@ -2671,7 +2670,7 @@ static u32 ilk_compute_fbc_wm(const struct intel_crtc_state *crtc_state,
 
 	cpp = plane_state->hw.fb->format->cpp[0];
 
-	return ilk_wm_fbc(pri_val, drm_rect_width(&plane_state->uapi.dst),
+	return ilk_wm_fbc(pri_val, drm_rect_width(&plane_state->uapi.src) >> 16,
 			  cpp);
 }
 
