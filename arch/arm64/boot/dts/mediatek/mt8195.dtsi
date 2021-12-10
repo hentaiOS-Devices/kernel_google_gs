@@ -1809,6 +1809,8 @@
 							<&spm MT8195_POWER_DOMAIN_VPPSYS1>;
 			iommus = <&iommu_vpp M4U_PORT_L4_MDP_RDMA>,
 				 <&iommu_vpp M4U_PORT_L4_MDP_WROT>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x2 0x0 0x0 0x40000000 0x1 0x0>; /* 8G - 12G IOVA*/
 			clocks = <&vppsys0 CLK_VPP0_MDP_RDMA>,
 					<&topckgen CLK_TOP_CFG_VPP0>,
@@ -2266,6 +2268,8 @@
 						"TOP_CFG_26M_VPP1";
 			iommus = <&iommu_vdo M4U_PORT_L5_SVPP1_MDP_RDMA>,
 				 <&iommu_vdo M4U_PORT_L5_SVPP1_MDP_WROT>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x2 0x0 0x0 0x40000000 0x1 0x0>; /* 8G - 12G IOVA*/
 			power-domains = <&spm MT8195_POWER_DOMAIN_VPPSYS1>;
 		};
@@ -2285,6 +2289,8 @@
 						"TOP_CFG_26M_VPP1";
 			iommus = <&iommu_vdo M4U_PORT_L5_SVPP2_MDP_RDMA>,
 				 <&iommu_vdo M4U_PORT_L5_SVPP2_MDP_WROT>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x2 0x0 0x0 0x40000000 0x1 0x0>; /* 8G - 12G IOVA*/
 			power-domains = <&spm MT8195_POWER_DOMAIN_VPPSYS1>;
 		};
@@ -2304,6 +2310,8 @@
 						"TOP_CFG_26M_VPP1";
 			iommus = <&iommu_vpp M4U_PORT_L6_SVPP3_MDP_RDMA>,
 				 <&iommu_vpp M4U_PORT_L6_SVPP3_MDP_WROT>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x2 0x0 0x0 0x40000000 0x1 0x0>; /* 8G - 12G IOVA*/
 			power-domains = <&spm MT8195_POWER_DOMAIN_VPPSYS1>;
 		};
@@ -2886,6 +2894,8 @@
 			reg = <0 0x18000000 0 0x1000>;		/* VDEC_SYS */
 			mediatek,scp = <&scp>;
 			iommus = <&iommu_vdo M4U_PORT_L21_VDEC_MC_EXT>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
 		};
 
@@ -2902,6 +2912,8 @@
 				 assigned-clocks = <&topckgen CLK_TOP_VDEC>;
 			assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL_D4>;
 			power-domains = <&spm MT8195_POWER_DOMAIN_VDEC0>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
 		};
 
@@ -2923,6 +2935,8 @@
 			assigned-clocks = <&topckgen CLK_TOP_VDEC>;
 			assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL_D4>;
 			power-domains =  <&spm MT8195_POWER_DOMAIN_VDEC0>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
 		};
 
@@ -2948,6 +2962,8 @@
 			assigned-clocks = <&topckgen CLK_TOP_VDEC>;
 			assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL_D4>;
 			power-domains = <&spm MT8195_POWER_DOMAIN_VDEC1>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
 		};
 
@@ -2973,6 +2989,8 @@
 			assigned-clocks = <&topckgen CLK_TOP_VDEC>;
 			assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL_D4>;
 			power-domains = <&spm MT8195_POWER_DOMAIN_VDEC2>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
 		};
 
@@ -3102,6 +3120,8 @@
 			assigned-clocks = <&topckgen CLK_TOP_VENC>;
 			assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL_D4>;
 			power-domains = <&spm MT8195_POWER_DOMAIN_VENC>;
+			#address-cells = <2>;
+			#size-cells = <2>;
 			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
 		};
 
