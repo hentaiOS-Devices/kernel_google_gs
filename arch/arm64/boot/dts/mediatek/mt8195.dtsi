@@ -1320,7 +1320,7 @@
 			};
 		};
 
-		nor_flash: nor@1132c000 {
+		nor_flash: spi@1132c000 {
 			compatible = "mediatek,mt8195-nor",
 				     "mediatek,mt8173-nor";
 			reg = <0 0x1132c000 0 0x1000>;
