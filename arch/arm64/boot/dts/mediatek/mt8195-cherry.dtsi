@@ -1257,6 +1257,9 @@
 };
 
 &spmi {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
 	grpid = <11>;
 	mt6315_6: mt6315@6 {
 		compatible = "mediatek,mt6315-regulator";
