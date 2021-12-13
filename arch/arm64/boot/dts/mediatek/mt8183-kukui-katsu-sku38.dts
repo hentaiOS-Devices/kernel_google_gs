@@ -34,6 +34,10 @@
 	compatible = "starry,2081101qfh032011-53g";
 };
 
+&qca_wifi {
+        qcom,ath10k-calibration-variant = "GO_KATSU";
+};
+
 &sound {
 	compatible = "mediatek,mt8183_mt6358_ts3a227_rt1015p";
 };
