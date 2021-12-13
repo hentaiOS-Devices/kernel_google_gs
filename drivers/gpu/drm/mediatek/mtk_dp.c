@@ -2963,8 +2963,9 @@ static int mtk_dp_probe(struct platform_device *pdev)
 			"No panel connected in devicetree, continuing as external DP\n");
 		mtk_dp->next_bridge = NULL;
 	} else if (ret) {
-		dev_err(dev, "Failed to find panel or bridge: %d\n", ret);
-		return ret;
+		return dev_err_probe(dev, ret,
+				     "Failed to find panel or bridge: %d\n",
+				     ret);
 	}
 
 	if (panel) {
