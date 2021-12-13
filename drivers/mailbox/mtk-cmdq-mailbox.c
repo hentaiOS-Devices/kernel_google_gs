@@ -91,7 +91,6 @@ struct cmdq {
 	u8			shift_pa;
 	bool			control_by_sw;
 	u32			gce_num;
-	u32			fetch_delay;
 };
 
 struct gce_plat {
@@ -99,7 +98,6 @@ struct gce_plat {
 	u8 shift;
 	bool control_by_sw;
 	u32 gce_num;
-	u32 fetch_delay; /* us */
 };
 
 u8 cmdq_get_shift_pa(struct mbox_chan *chan)
@@ -375,16 +373,6 @@ static int cmdq_mbox_send_data(struct mbox_chan *chan, void *data)
 		WARN_ON(clk_bulk_enable(cmdq->gce_num, cmdq->clocks));
 
 		/*
-		 * After GCE clk enable, GCE will fetch event signal
-		 * from DRAM to SRAM. This may cause some delay if
-		 * the event is recieved in GCE clk disable.
-		 * Add fetch delay to make sure the clear event is
-		 * work with the right event, so that wait event can
-		 * wait for the expected event.
-		 */
-		udelay(cmdq->fetch_delay);
-
-		/*
 		 * The thread reset will clear thread related register to 0,
 		 * including pc, end, priority, irq, suspend and enable. Thus
 		 * set CMDQ_THR_ENABLED to CMDQ_THR_ENABLE_TASK will enable
@@ -582,7 +570,6 @@ static int cmdq_probe(struct platform_device *pdev)
 	cmdq->shift_pa = plat_data->shift;
 	cmdq->control_by_sw = plat_data->control_by_sw;
 	cmdq->gce_num = plat_data->gce_num;
-	cmdq->fetch_delay = plat_data->fetch_delay;
 	cmdq->irq_mask = GENMASK(cmdq->thread_nr - 1, 0);
 	err = devm_request_irq(dev, cmdq->irq, cmdq_irq_handler, IRQF_SHARED,
 			       "mtk_cmdq", cmdq);
@@ -665,40 +652,35 @@ static const struct gce_plat gce_plat_v2 = {
 	.thread_nr = 16,
 	.shift = 0,
 	.control_by_sw = false,
-	.gce_num = 1,
-	.fetch_delay = 0
+	.gce_num = 1
 };
 
 static const struct gce_plat gce_plat_v3 = {
 	.thread_nr = 24,
 	.shift = 0,
 	.control_by_sw = false,
-	.gce_num = 1,
-	.fetch_delay = 0
+	.gce_num = 1
 };
 
 static const struct gce_plat gce_plat_v4 = {
 	.thread_nr = 24,
 	.shift = 3,
 	.control_by_sw = false,
-	.gce_num = 1,
-	.fetch_delay = 0
+	.gce_num = 1
 };
 
 static const struct gce_plat gce_plat_v5 = {
 	.thread_nr = 24,
 	.shift = 3,
 	.control_by_sw = true,
-	.gce_num = 2,
-	.fetch_delay = 0
+	.gce_num = 2
 };
 
 static const struct gce_plat gce_plat_v6 = {
 	.thread_nr = 24,
 	.shift = 3,
 	.control_by_sw = true,
-	.gce_num = 2,
-	.fetch_delay = 3
+	.gce_num = 2
 };
 
 static const struct of_device_id cmdq_of_ids[] = {
