@@ -115,10 +115,10 @@ struct vdec_lat_buf *vdec_msg_queue_get_lat_buf(
 	msg_queue->num_lat--;
 
 	mtk_v4l2_debug(4, "lat num in msg queue = %d", msg_queue->num_lat);
-	mtk_v4l2_debug(3, "get lat(0x%p) trans(0x%llx) err:0x%llx slice(0x%llx)\n",
-		buf, msg_queue->wdma_addr.dma_addr,
-		buf->wdma_err_addr.dma_addr,
-		buf->slice_bc_addr.dma_addr);
+	mtk_v4l2_debug(3, "get lat(0x%p) trans(0x%pad) err:0x%pad slice(0x%pad)\n",
+		buf, &msg_queue->wdma_addr.dma_addr,
+		&buf->wdma_err_addr.dma_addr,
+		&buf->slice_bc_addr.dma_addr);
 
 	spin_unlock(&msg_queue->lat_lock);
 	return buf;
