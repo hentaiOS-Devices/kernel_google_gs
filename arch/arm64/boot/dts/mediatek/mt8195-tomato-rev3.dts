@@ -34,5 +34,6 @@
 };
 
 &rt5682s {
+	realtek,amic-delay-ms = <250>;
 	status = "okay";
 };
