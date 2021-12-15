@@ -239,7 +239,7 @@ int mt7921_mcu_fill_message(struct mt76_dev *mdev, struct sk_buff *skb,
 	case MCU_UNI_CMD_HIF_CTRL:
 	case MCU_UNI_CMD_SUSPEND:
 	case MCU_UNI_CMD_OFFLOAD:
-		mdev->mcu.timeout = HZ / 3;
+		mdev->mcu.timeout = HZ;
 		break;
 	default:
 		mdev->mcu.timeout = 3 * HZ;
