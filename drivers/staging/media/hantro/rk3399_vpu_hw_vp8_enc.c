@@ -121,11 +121,6 @@ static const s32 qzbin_factors[QINDEX_RANGE] = {
 	80, 80, 80, 80, 80, 80, 80, 80
 };
 
-static const s32 zbin_boost[16] = {
-	0,   0,  8, 10, 12, 14, 16, 20, 24, 28,
-	32, 36, 40, 44, 44, 44
-};
-
 /* Intra 16x16 mode tree penalty values */
 static s32 intra_16_tree_penalty[] = {
 	305, 841, 914, 1082
