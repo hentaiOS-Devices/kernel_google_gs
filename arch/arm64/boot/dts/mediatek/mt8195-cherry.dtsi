@@ -43,7 +43,7 @@
 
 	panel: panel {
 		compatible = "lg,lp120up1";
-		power-supply = <&panel_fixed_3v3>;
+		power-supply = <&pp3300_disp_x>;
 		backlight = <&backlight_lcd0>;
 
 		port {
@@ -53,15 +53,14 @@
 		};
 	};
 
-	panel_fixed_3v3: regulator@0 {
+	pp3300_disp_x: pp3300-disp-x-regulator {
 		compatible = "regulator-fixed";
-		regulator-name = "PANEL_3V3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
+		regulator-name = "pp3300_disp_x";
 		enable-active-high;
 		gpio = <&pio 55 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&panel_fixed_pins>;
+		vin-supply = <&pp3300_z2>;
 	};
 
 	/* system wide LDO 3.3V power rail */
