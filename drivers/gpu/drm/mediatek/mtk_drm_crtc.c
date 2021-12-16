@@ -93,6 +93,9 @@ static void mtk_drm_crtc_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 	struct drm_crtc *crtc = &mtk_crtc->base;
 	unsigned long flags;
 
+	if (!crtc->dev)
+		DRM_WARN("crtc 0x%px already free!!!! %s %d\n", crtc, __func__, __LINE__);
+
 	spin_lock_irqsave(&crtc->dev->event_lock, flags);
 	drm_crtc_send_vblank_event(crtc, mtk_crtc->event);
 	drm_crtc_vblank_put(crtc);
@@ -102,6 +105,11 @@ static void mtk_drm_crtc_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 
 static void mtk_drm_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 {
+	struct drm_crtc *crtc = &mtk_crtc->base;
+
+	if (!crtc->dev)
+		DRM_WARN("crtc 0x%px already free!!!! %s %d\n", crtc, __func__, __LINE__);
+
 	drm_crtc_handle_vblank(&mtk_crtc->base);
 	if (!mtk_crtc->config_updating && mtk_crtc->pending_needs_vblank) {
 		mtk_drm_crtc_finish_page_flip(mtk_crtc);
@@ -154,6 +162,8 @@ static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 
+	DRM_INFO("crtc destroy\n");
+
 	mtk_mutex_put(mtk_crtc->mutex);
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	mtk_drm_cmdq_pkt_destroy(&mtk_crtc->cmdq_handle);
@@ -170,6 +180,8 @@ static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
 static void mtk_drm_crtc_reset(struct drm_crtc *crtc)
 {
 	struct mtk_crtc_state *state;
+
+	DRM_INFO("crtc reset\n");
 
 	if (crtc->state)
 		__drm_atomic_helper_crtc_destroy_state(crtc->state);
@@ -619,6 +631,8 @@ static int mtk_drm_crtc_enable_vblank(struct drm_crtc *crtc)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[0];
 
+	DRM_INFO("enable vblank\n");
+
 	mtk_ddp_comp_enable_vblank(comp, mtk_crtc_ddp_irq, &mtk_crtc->base);
 
 	return 0;
@@ -628,6 +642,8 @@ static void mtk_drm_crtc_disable_vblank(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[0];
+
+	DRM_INFO("disable vblank\n");
 
 	mtk_ddp_comp_disable_vblank(comp);
 }
