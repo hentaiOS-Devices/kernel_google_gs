@@ -133,7 +133,7 @@ static struct t7xx_port_static t7xx_md_ports[] = {
 		.ops = &tty_port_ops,
 		.minor = 1,
 		.name = "ttyCMIPC0",
- 	}, {
+	}, {
 		.tx_ch = PORT_CH_CONTROL_TX,
 		.rx_ch = PORT_CH_CONTROL_RX,
 		.txq_index = Q_IDX_CTRL,
@@ -184,7 +184,7 @@ static struct t7xx_port_static md_ccci_early_ports[] = {
 		.ops = &char_port_ops,
 		.minor = 21,
 		.name = "ttyDUMP",
-	}, 
+	},
 };
 
 static struct t7xx_port *t7xx_proxy_get_port_by_ch(struct port_proxy *port_prox, enum port_ch ch)
@@ -335,7 +335,7 @@ int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb)
 			t7xx_port_adjust_skb(port, skb);
 
 		status = FIELD_GET(HDR_FLD_CHN, le32_to_cpu(ccci_h->status));
-		if (!(port->flags & PORT_F_RAW_DATA) && (status == PORT_CH_STATUS_RX)) {
+		if (!(port->flags & PORT_F_RAW_DATA) && status == PORT_CH_STATUS_RX) {
 			port->skb_handler(port, skb);
 		} else {
 			if (port->wwan_port)
@@ -680,8 +680,12 @@ static void t7xx_proxy_init_all_ports(struct t7xx_modem *md)
 		if (port_static->ops->init)
 			port_static->ops->init(port);
 
-		if (port->flags & PORT_F_RAW_DATA)
-			port_proxy->dedicated_ports[port_static->path_id][port_static->rxq_index] = port;
+		if (port->flags & PORT_F_RAW_DATA) {
+			unsigned int index = port_static->rxq_index;
+			unsigned int id = port_static->path_id;
+
+			port_proxy->dedicated_ports[id][index] = port;
+		}
 	}
 
 	t7xx_proxy_setup_ch_mapping(port_proxy);
@@ -710,12 +714,12 @@ static int port_get_cfg(struct t7xx_port_static **ports, enum port_cfg_id port_c
 
 void port_switch_cfg(struct t7xx_modem *md, enum port_cfg_id cfg_id)
 {
-	int i;
-	struct t7xx_port *port;
-	struct t7xx_port_static *port_static;
 	struct port_proxy *port_proxy = md->port_prox;
 	struct device *dev = &md->t7xx_dev->pdev->dev;
+	struct t7xx_port_static *port_static;
 	struct t7xx_port *ports_private;
+	struct t7xx_port *port;
+	int i;
 
 	if (port_proxy->current_cfg_id != cfg_id) {
 		port_proxy->current_cfg_id = cfg_id;
@@ -726,10 +730,10 @@ void port_switch_cfg(struct t7xx_modem *md, enum port_cfg_id cfg_id)
 
 		port_proxy->port_number = port_get_cfg(&port_proxy->ports_shared, cfg_id);
 
-
 		devm_kfree(dev, port_proxy->ports_private);
 
-		ports_private = devm_kzalloc(dev, sizeof(*ports_private) * port_proxy->port_number, GFP_KERNEL);
+		ports_private = devm_kzalloc(dev, sizeof(*ports_private) * port_proxy->port_number,
+					     GFP_KERNEL);
 		if (!ports_private) {
 			dev_err(dev, "no memory for ports !\n");
 			return;
@@ -739,7 +743,7 @@ void port_switch_cfg(struct t7xx_modem *md, enum port_cfg_id cfg_id)
 			ports_private[i].port_static = &port_proxy->ports_shared[i];
 			ports_private[i].flags = port_proxy->ports_shared[i].flags;
 		}
-		
+
 		port_proxy->ports_private = ports_private;
 		t7xx_proxy_init_all_ports(md);
 	}
@@ -807,29 +811,29 @@ void port_unregister_device(int major, int minor)
 
 static int port_netlink_send_msg(struct t7xx_port *port, int grp, const char *buf, size_t len)
 {
-        struct port_proxy *pprox;
-        struct sk_buff *nl_skb;
-        struct nlmsghdr *nlh;
+	struct port_proxy *pprox;
+	struct sk_buff *nl_skb;
+	struct nlmsghdr *nlh;
 
-        nl_skb = nlmsg_new(len, GFP_KERNEL);
-        if (!nl_skb)
-                return -ENOMEM;
+	nl_skb = nlmsg_new(len, GFP_KERNEL);
+	if (!nl_skb)
+		return -ENOMEM;
 
-        nlh = nlmsg_put(nl_skb, 0, 1, NLMSG_DONE, len, 0);
-        if (!nlh) {
-                dev_err(port->dev, "could not release netlink\n");
-                nlmsg_free(nl_skb);
-                return -EFAULT;
-        }
+	nlh = nlmsg_put(nl_skb, 0, 1, NLMSG_DONE, len, 0);
+	if (!nlh) {
+		dev_err(port->dev, "could not release netlink\n");
+		nlmsg_free(nl_skb);
+		return -EFAULT;
+	}
 
-        /* Add new netlink message to the skb
-         * after checking if header+payload
-         * can be handled.
-         */
-        memcpy(nlmsg_data(nlh), buf, len);
+	/* Add new netlink message to the skb
+	 * after checking if header+payload
+	 * can be handled.
+	 */
+	memcpy(nlmsg_data(nlh), buf, len);
 
-        pprox = port_prox;
-        return netlink_broadcast(pprox->netlink_sock, nl_skb, 0, grp, GFP_KERNEL);
+	pprox = port_prox;
+	return netlink_broadcast(pprox->netlink_sock, nl_skb, 0, grp, GFP_KERNEL);
 }
 
 int port_proxy_broadcast_state(struct t7xx_port *port, int state)

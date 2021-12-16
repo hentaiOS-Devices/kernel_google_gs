@@ -232,7 +232,8 @@ static ssize_t port_char_write(struct file *file, const char __user *buf,
 					ccci_h->packet_len = cpu_to_le32(actual_count);
 
 				ccci_h->status &= cpu_to_le32(~HDR_FLD_CHN);
-				ccci_h->status |= cpu_to_le32(FIELD_PREP(HDR_FLD_CHN, port_static->tx_ch));
+				ccci_h->status |= cpu_to_le32(FIELD_PREP(HDR_FLD_CHN,
+									 port_static->tx_ch));
 			}
 		} else {
 			/* ccci_header is provided by driver */
@@ -306,7 +307,8 @@ static int port_char_init(struct t7xx_port *port)
 
 		dev->ops = &char_fops;
 		dev->owner = THIS_MODULE;
-		if (cdev_add(dev, MKDEV(port_static->major, port_static->minor_base + port_static->minor), 1)) {
+		if (cdev_add(dev, MKDEV(port_static->major,
+					port_static->minor_base + port_static->minor), 1)) {
 			kobject_put(&dev->kobj);
 			return -ENOMEM;
 		}
@@ -331,7 +333,8 @@ static void port_char_uninit(struct t7xx_port *port)
 
 	if (port->flags & PORT_F_RX_CHAR_NODE && port->cdev) {
 		if (port->chn_crt_stat == CCCI_CHAN_ENABLE) {
-			port_unregister_device(port_static->major, port_static->minor_base + port_static->minor);
+			port_unregister_device(port_static->major,
+					       port_static->minor_base + port_static->minor);
 			spin_lock(&port->port_update_lock);
 			port->chn_crt_stat = CCCI_CHAN_DISABLE;
 			spin_unlock(&port->port_update_lock);

@@ -54,7 +54,6 @@
  * 0:reserved, 1: to sAP, 2: to MD
  */
 enum port_ch {
-
 	/* to sAP */
 	CCCI_SAP_CONTROL_RX = 0X1000,
 	CCCI_SAP_CONTROL_TX = 0X1001,

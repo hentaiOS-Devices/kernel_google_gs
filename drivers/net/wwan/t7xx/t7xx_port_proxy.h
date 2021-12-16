@@ -54,8 +54,8 @@ struct port_proxy {
 	struct list_head		queue_ports[CLDMA_NUM][MTK_MAX_QUEUE_NUM];
 	struct device			*dev;
 	unsigned char			current_cfg_id;
-	unsigned int 			major;
-	unsigned int 			minor_base;
+	unsigned int			major;
+	unsigned int			minor_base;
 	struct sock			*netlink_sock;
 };
 

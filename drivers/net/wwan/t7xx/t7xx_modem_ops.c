@@ -448,10 +448,10 @@ static void t7xx_core_reset(struct t7xx_modem *md)
 	md->core_md.handshake_ongoing = false;
 }
 
-static void t7xx_core_hk_handler(struct t7xx_modem *md, struct t7xx_sys_info *core_info, 
-				struct t7xx_fsm_ctl *ctl,
-				enum t7xx_fsm_event_state event_id,
-				enum t7xx_fsm_event_state err_detect)
+static void t7xx_core_hk_handler(struct t7xx_modem *md, struct t7xx_sys_info *core_info,
+				 struct t7xx_fsm_ctl *ctl,
+				 enum t7xx_fsm_event_state event_id,
+				 enum t7xx_fsm_event_state err_detect)
 {
 	struct device *dev = &md->t7xx_dev->pdev->dev;
 	struct t7xx_fsm_event *event, *event_next;
