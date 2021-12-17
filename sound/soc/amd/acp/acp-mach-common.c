@@ -20,6 +20,7 @@
 #include <sound/soc.h>
 #include <linux/input.h>
 #include <linux/module.h>
+#include <linux/dmi.h>
 
 #include "../../codecs/rt5682.h"
 #include "../../codecs/rt1019.h"
@@ -267,9 +268,24 @@ static const struct snd_soc_ops acp_card_rt5682s_ops = {
 };
 
 /* Declare RT1019 codec components */
+static const struct dmi_system_id rt1019_dev_id[] = {
+	{
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Google"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "Guybrush"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "rev3"),
+		},
+	},
+	{},
+};
+
 SND_SOC_DAILINK_DEF(rt1019,
 	DAILINK_COMP_ARRAY(COMP_CODEC("i2c-10EC1019:00", "rt1019-aif"),
 			  COMP_CODEC("i2c-10EC1019:01", "rt1019-aif")));
+
+SND_SOC_DAILINK_DEF(rt1019_1,
+	DAILINK_COMP_ARRAY(COMP_CODEC("i2c-10EC1019:01", "rt1019-aif"),
+			  COMP_CODEC("i2c-10EC1019:02", "rt1019-aif")));
 
 static const struct snd_soc_dapm_route rt1019_map_lr[] = {
 	{ "Left Spk", NULL, "Left SPO" },
@@ -283,6 +299,17 @@ static struct snd_soc_codec_conf rt1019_conf[] = {
 	},
 	{
 		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:01"),
+		 .name_prefix = "Right",
+	},
+};
+
+static struct snd_soc_codec_conf rt1019_1_conf[] = {
+	{
+		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:01"),
+		 .name_prefix = "Left",
+	},
+	{
+		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:02"),
 		 .name_prefix = "Right",
 	},
 };
@@ -485,6 +512,12 @@ int acp_sofdsp_dai_links_create(struct snd_soc_card *card)
 			links[i].init = acp_card_rt1019_init;
 			card->codec_conf = rt1019_conf;
 			card->num_configs = ARRAY_SIZE(rt1019_conf);
+			if (dmi_check_system(rt1019_dev_id)) {
+				links[i].codecs = rt1019_1;
+				links[i].num_codecs = ARRAY_SIZE(rt1019_1);
+				card->codec_conf = rt1019_1_conf;
+				card->num_configs = ARRAY_SIZE(rt1019_1_conf);
+			}
 		}
 		if (drv_data->amp_codec_id == MAX98360A) {
 			links[i].codecs = max98360a;
@@ -581,6 +614,12 @@ int acp_legacy_dai_links_create(struct snd_soc_card *card)
 			links[i].init = acp_card_rt1019_init;
 			card->codec_conf = rt1019_conf;
 			card->num_configs = ARRAY_SIZE(rt1019_conf);
+			if (dmi_check_system(rt1019_dev_id)) {
+				links[i].codecs = rt1019_1;
+				links[i].num_codecs = ARRAY_SIZE(rt1019_1);
+				card->codec_conf = rt1019_1_conf;
+				card->num_configs = ARRAY_SIZE(rt1019_1_conf);
+			}
 		}
 		if (drv_data->amp_codec_id == MAX98360A) {
 			links[i].codecs = max98360a;
