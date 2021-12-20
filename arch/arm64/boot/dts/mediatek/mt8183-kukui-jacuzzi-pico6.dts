@@ -42,6 +42,12 @@
 	};
 };
 
+&wifi_wakeup {
+	wowlan {
+		gpios = <&pio 113 GPIO_ACTIVE_LOW>;
+	};
+};
+
 &wifi_pwrseq {
 	post-power-on-delay-ms = <50>;
 
