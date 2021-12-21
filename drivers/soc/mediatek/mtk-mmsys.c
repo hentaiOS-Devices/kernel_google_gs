@@ -63,8 +63,6 @@ static const struct mtk_mmsys_driver_data mt8183_mmsys_driver_data = {
 	.num_routes = ARRAY_SIZE(mmsys_mt8183_routing_table),
 	.sw_reset_start = MMSYS_SW0_RST_B,
 	.num_resets = 32,
-	.mdp_routes = mmsys_mt8183_mdp_routing_table,
-	.mdp_num_routes = ARRAY_SIZE(mmsys_mt8183_mdp_routing_table),
 	.mdp_isp_ctrl = mmsys_mt8183_mdp_isp_ctrl_table,
 };
 
@@ -98,8 +96,6 @@ static const struct mtk_mmsys_driver_data mt8365_mmsys_driver_data = {
 
 static const struct mtk_mmsys_driver_data mt8195_vppsys0_driver_data = {
 	.clk_driver = "clk-mt8195-vpp0",
-	.mdp_routes = mmsys_mt8195_mdp_routing_table,
-	.mdp_num_routes = ARRAY_SIZE(mmsys_mt8195_mdp_routing_table),
 	.mdp_mmsys_configs = mmsys_mt8195_mdp_vppsys_config_table,
 	.mdp_num_mmsys_configs = ARRAY_SIZE(mmsys_mt8195_mdp_vppsys_config_table),
 	.vppsys = true,
@@ -107,8 +103,6 @@ static const struct mtk_mmsys_driver_data mt8195_vppsys0_driver_data = {
 
 static const struct mtk_mmsys_driver_data mt8195_vppsys1_driver_data = {
 	.clk_driver = "clk-mt8195-vpp1",
-	.mdp_routes = mmsys_mt8195_mdp_routing_table,
-	.mdp_num_routes = ARRAY_SIZE(mmsys_mt8195_mdp_routing_table),
 	.mdp_mmsys_configs = mmsys_mt8195_mdp_vppsys_config_table,
 	.mdp_num_mmsys_configs = ARRAY_SIZE(mmsys_mt8195_mdp_vppsys_config_table),
 	.vppsys = true,
@@ -160,43 +154,6 @@ void mtk_mmsys_ddp_disconnect(struct device *dev,
 		}
 }
 EXPORT_SYMBOL_GPL(mtk_mmsys_ddp_disconnect);
-
-void mtk_mmsys_mdp_connect(struct device *dev, struct mmsys_cmdq_cmd *cmd,
-			   enum mtk_mdp_comp_id cur,
-			   enum mtk_mdp_comp_id next)
-{
-	struct mtk_mmsys *mmsys = dev_get_drvdata(dev);
-	const struct mtk_mmsys_routes *routes = mmsys->data->mdp_routes;
-	int i;
-
-	if (!routes) {
-		WARN_ON(!routes);
-		return;
-	}
-
-	for (i = 0; i < mmsys->data->mdp_num_routes; i++)
-		if (cur == routes[i].from_comp && next == routes[i].to_comp)
-			cmdq_pkt_write_mask(cmd->pkt, mmsys->subsys_id,
-					    mmsys->addr + routes[i].addr,
-					    routes[i].val, routes[i].mask);
-}
-EXPORT_SYMBOL_GPL(mtk_mmsys_mdp_connect);
-
-void mtk_mmsys_mdp_disconnect(struct device *dev, struct mmsys_cmdq_cmd *cmd,
-			      enum mtk_mdp_comp_id cur,
-			      enum mtk_mdp_comp_id next)
-{
-	struct mtk_mmsys *mmsys = dev_get_drvdata(dev);
-	const struct mtk_mmsys_routes *routes = mmsys->data->mdp_routes;
-	int i;
-
-	for (i = 0; i < mmsys->data->mdp_num_routes; i++)
-		if (cur == routes[i].from_comp && next == routes[i].to_comp)
-			cmdq_pkt_write_mask(cmd->pkt, mmsys->subsys_id,
-					    mmsys->addr + routes[i].addr,
-					    0, routes[i].mask);
-}
-EXPORT_SYMBOL_GPL(mtk_mmsys_mdp_disconnect);
 
 void mtk_mmsys_mdp_isp_ctrl(struct device *dev, struct mmsys_cmdq_cmd *cmd,
 			    enum mtk_mdp_comp_id id)
