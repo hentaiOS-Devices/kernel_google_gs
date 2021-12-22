@@ -35,7 +35,7 @@
 		merge3 = &merge3;
 		merge4 = &merge4;
 		merge5 = &merge5;
-		mutex0 = &mutex;
+		mutex0 = &mutex0;
 		mutex1 = &mutex1;
 		vdo1_rdma0 = &vdo1_rdma0;
 		vdo1_rdma1 = &vdo1_rdma1;
@@ -3263,7 +3263,7 @@
 				      "TVDPLL_D16";
 		};
 
-		mutex: disp_mutex0@1c016000 {
+		mutex0: disp_mutex0@1c016000 {
 			compatible = "mediatek,mt8195-disp-mutex";
 			reg = <0 0x1c016000 0 0x1000>;
 			reg-names = "vdo0_mutex";
