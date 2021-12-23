@@ -450,28 +450,28 @@
 	pinctrl-0 = <&i2c2_pin>;
 
 	rt5682: rt5682@1a {
-               compatible = "realtek,rt5682i";
-               reg = <0x1a>;
-               interrupt-parent = <&pio>;
-               interrupts = <89 IRQ_TYPE_EDGE_BOTH>;
-               realtek,jd-src = <1>;
-               realtek,btndet-delay = <16>;
+		compatible = "realtek,rt5682i";
+		reg = <0x1a>;
+		interrupt-parent = <&pio>;
+		interrupts = <89 IRQ_TYPE_EDGE_BOTH>;
+		realtek,jd-src = <1>;
+		realtek,btndet-delay = <16>;
 
 		AVDD-supply = <&mt6359_vio18_ldo_reg>;
 		MICVDD-supply = <&pp3300_z2>;
 		VBAT-supply = <&pp3300_ldo_z5>;
-               status = "disabled";
+		status = "disabled";
 	};
 
 	rt5682s: rt5682s@1a {
-               compatible = "realtek,rt5682s";
-               reg = <0x1a>;
-               interrupt-parent = <&pio>;
-               interrupts = <89 IRQ_TYPE_EDGE_BOTH>;
-               realtek,jd-src = <1>;
+		compatible = "realtek,rt5682s";
+		reg = <0x1a>;
+		interrupt-parent = <&pio>;
+		interrupts = <89 IRQ_TYPE_EDGE_BOTH>;
+		realtek,jd-src = <1>;
 		AVDD-supply = <&mt6359_vio18_ldo_reg>;
 		MICVDD-supply = <&pp3300_z2>;
-               status = "disabled";
+		status = "disabled";
 	};
 
 	rt1011_l: rt1011@38 {
