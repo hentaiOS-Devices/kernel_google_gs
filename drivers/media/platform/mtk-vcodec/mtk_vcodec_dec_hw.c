@@ -109,10 +109,10 @@ static int mtk_vdec_comp_init_irq(struct mtk_vdec_comp_dev *dev)
 	struct platform_device *pdev = dev->plat_dev;
 	int ret;
 
-	dev->dec_irq = platform_get_irq(pdev, 0);
+	dev->dec_irq = platform_get_irq_optional(pdev, 0);
 	if (dev->dec_irq < 0) {
-		dev_err(&pdev->dev, "Failed to get irq resource");
-		return dev->dec_irq;
+		dev_dbg(&pdev->dev, "Failed to get irq resource");
+		return 0;
 	}
 
 	ret = devm_request_irq(&pdev->dev, dev->dec_irq,
@@ -158,6 +158,7 @@ static int mtk_vdec_comp_probe(struct platform_device *pdev)
 	ret = mtk_vdec_comp_init_irq(dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register irq handler.\n");
+		goto err;
 	}
 
 	platform_set_drvdata(pdev, dev);
