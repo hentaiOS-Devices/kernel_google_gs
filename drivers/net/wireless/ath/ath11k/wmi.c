@@ -4589,6 +4589,26 @@ static struct cur_reg_rule
 	return reg_rule_ptr;
 }
 
+static char *ath11k_cc_status_to_str(enum cc_setting_code code)
+{
+	switch (code) {
+	case REG_SET_CC_STATUS_PASS:
+		return "REG_SET_CC_STATUS_PASS";
+	case REG_CURRENT_ALPHA2_NOT_FOUND:
+		return "REG_CURRENT_ALPHA2_NOT_FOUND";
+	case REG_INIT_ALPHA2_NOT_FOUND:
+		return "REG_INIT_ALPHA2_NOT_FOUND";
+	case REG_SET_CC_CHANGE_NOT_ALLOWED:
+		return "REG_SET_CC_CHANGE_NOT_ALLOWED";
+	case REG_SET_CC_STATUS_NO_MEMORY:
+		return "REG_SET_CC_STATUS_NO_MEMORY";
+	case REG_SET_CC_STATUS_FAIL:
+		return "REG_SET_CC_STATUS_FAIL";
+	default:
+		return "unknown cc status";
+	}
+};
+
 static int ath11k_pull_reg_chan_list_update_ev(struct ath11k_base *ab,
 					       struct sk_buff *skb,
 					       struct cur_regulatory_info *reg_info)
@@ -4656,6 +4676,10 @@ static int ath11k_pull_reg_chan_list_update_ev(struct ath11k_base *ab,
 	num_5g_reg_rules = reg_info->num_5g_reg_rules;
 
 	ath11k_dbg(ab, ATH11K_DBG_WMI,
+		   "%s: status_code %s", __func__,
+		   ath11k_cc_status_to_str(reg_info->status_code));
+
+	ath11k_dbg(ab, ATH11K_DBG_WMI,
 		   "%s:cc %s dsf %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
 		   __func__, reg_info->alpha2, reg_info->dfs_region,
 		   reg_info->min_bw_2g, reg_info->max_bw_2g,
@@ -4695,6 +4719,99 @@ static int ath11k_pull_reg_chan_list_update_ev(struct ath11k_base *ab,
 
 	kfree(tb);
 	return 0;
+}
+
+static char *ath11k_super_reg_6g_to_str(enum reg_super_domain_6g domain_id)
+{
+	switch (domain_id) {
+	case FCC1_6G:
+		return "FCC1_6G";
+	case ETSI1_6G:
+		return "ETSI1_6G";
+	case ETSI2_6G:
+		return "ETSI2_6G";
+	case APL1_6G:
+		return "APL1_6G";
+	case FCC1_6G_CL:
+		return "FCC1_6G_CL";
+	default:
+		return "unknown domain id";
+	}
+};
+
+static char *ath11k_6g_client_type_to_str(enum wmi_reg_6g_client_type type)
+{
+	switch (type) {
+	case WMI_REG_DEFAULT_CLIENT:
+		return "DEFAULT CLIENT";
+	case WMI_REG_SUBORDINATE_CLIENT:
+		return "SUBORDINATE CLIENT";
+	default:
+		return "unknown client type";
+	}
+};
+
+static char *ath11k_6g_ap_type_to_str(enum wmi_reg_6g_ap_type type)
+{
+	switch (type) {
+	case WMI_REG_INDOOR_AP:
+		return "INDOOR AP";
+	case WMI_REG_STANDARD_POWER_AP:
+		return "STANDARD POWER AP";
+	case WMI_REG_VERY_LOW_POWER_AP:
+		return "VERY LOW POWER AP";
+	default:
+		return "unknown AP type";
+	}
+};
+
+static char *ath11k_sub_reg_6g_to_str(enum reg_subdomains_6g sub_id)
+{
+	switch (sub_id) {
+	case FCC1_CLIENT_LPI_REGULAR_6G:
+		return "FCC1_CLIENT_LPI_REGULAR_6G";
+	case FCC1_CLIENT_SP_6G:
+		return "FCC1_CLIENT_SP_6G";
+	case FCC1_AP_LPI_6G:
+		return "FCC1_AP_LPI_6G/FCC1_CLIENT_LPI_SUBORDINATE";
+	case FCC1_AP_SP_6G:
+		return "FCC1_AP_SP_6G";
+	case ETSI1_LPI_6G:
+		return "ETSI1_LPI_6G";
+	case ETSI1_VLP_6G:
+		return "ETSI1_VLP_6G";
+	case ETSI2_LPI_6G:
+		return "ETSI2_LPI_6G";
+	case ETSI2_VLP_6G:
+		return "ETSI2_VLP_6G";
+	case APL1_LPI_6G:
+		return "APL1_LPI_6G";
+	case APL1_VLP_6G:
+		return "APL1_VLP_6G";
+	case EMPTY_6G:
+		return "N/A";
+	default:
+		return "unknown sub reg id";
+	}
+};
+
+static void ath11k_print_reg_rule(struct ath11k_base *ab, char *prev,
+				  u32 num_reg_rules,
+				  struct cur_reg_rule *reg_rule_ptr)
+{
+	struct cur_reg_rule *reg_rule = reg_rule_ptr;
+	u32 count;
+
+	ath11k_dbg(ab, ATH11K_DBG_WMI, "%s reg rules number %d\n", prev, num_reg_rules);
+
+	for (count = 0; count < num_reg_rules; count++) {
+		ath11k_dbg(ab, ATH11K_DBG_WMI,
+			   "reg rule %d: (%d - %d @ %d) (%d, %d) (FLAGS %d) (psd flag %d EIRP %d dB/MHz)\n",
+			   count + 1, reg_rule->start_freq, reg_rule->end_freq,
+			   reg_rule->max_bw, reg_rule->ant_gain, reg_rule->reg_power,
+			   reg_rule->flags, reg_rule->psd_flag, reg_rule->psd_eirp);
+		reg_rule++;
+	}
 }
 
 static struct cur_reg_rule
@@ -4854,6 +4971,10 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 	 * from 5 GHz rules list.
 	 */
 	if (memcmp(reg_info->alpha2, "US", 2) == 0) {
+		ath11k_dbg(ab, ATH11K_DBG_WMI,
+			   "US 5g reg rules number %d from firmware",
+			   reg_info->num_5g_reg_rules);
+
 		reg_info->num_5g_reg_rules = REG_US_5G_NUM_REG_RULES;
 		num_5g_reg_rules = reg_info->num_5g_reg_rules;
 	}
@@ -4886,6 +5007,10 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 		break;
 	}
 
+	ath11k_dbg(ab, ATH11K_DBG_WMI,
+		   "%s: status_code %s", __func__,
+		   ath11k_cc_status_to_str(reg_info->status_code));
+
 	reg_info->is_ext_reg_event = true;
 
 	reg_info->min_bw_2g = ext_chan_list_event_hdr->min_bw_2g;
@@ -4905,6 +5030,15 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 	reg_info->max_bw_6g_ap[WMI_REG_VERY_LOW_POWER_AP] =
 			ext_chan_list_event_hdr->max_bw_6g_ap_vlp;
 
+	ath11k_dbg(ab, ATH11K_DBG_WMI,
+		   "6 GHz AP BW: lpi %d - %d sp %d - %d vlp %d - %d\n",
+		   ext_chan_list_event_hdr->min_bw_6g_ap_lpi,
+		   ext_chan_list_event_hdr->max_bw_6g_ap_lpi,
+		   ext_chan_list_event_hdr->min_bw_6g_ap_sp,
+		   ext_chan_list_event_hdr->max_bw_6g_ap_sp,
+		   ext_chan_list_event_hdr->min_bw_6g_ap_vlp,
+		   ext_chan_list_event_hdr->max_bw_6g_ap_vlp);
+
 	for (i = 0; i < WMI_REG_MAX_CLIENT_TYPE; i++) {
 		reg_info->min_bw_6g_client[WMI_REG_INDOOR_AP][i] =
 				ext_chan_list_event_hdr->min_bw_6g_client_lpi[i];
@@ -4918,6 +5052,17 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 				ext_chan_list_event_hdr->min_bw_6g_client_vlp[i];
 		reg_info->max_bw_6g_client[WMI_REG_VERY_LOW_POWER_AP][i] =
 				ext_chan_list_event_hdr->max_bw_6g_client_vlp[i];
+
+		ath11k_dbg(ab, ATH11K_DBG_WMI,
+			   "6 GHz %s BW: lpi (%d - %d) sp (%d - %d) vlp (%d - %d)\n",
+			   ath11k_6g_client_type_to_str(i),
+			   ext_chan_list_event_hdr->min_bw_6g_client_lpi[i],
+			   ext_chan_list_event_hdr->max_bw_6g_client_lpi[i],
+			   ext_chan_list_event_hdr->min_bw_6g_client_sp[i],
+			   ext_chan_list_event_hdr->max_bw_6g_client_sp[i],
+			   ext_chan_list_event_hdr->min_bw_6g_client_vlp[i],
+			   ext_chan_list_event_hdr->max_bw_6g_client_vlp[i]);
+
 	}
 
 	ath11k_dbg(ab, ATH11K_DBG_WMI,
@@ -4960,6 +5105,9 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 			ath11k_warn(ab, "Unable to Allocate memory for 2g rules\n");
 			return -ENOMEM;
 		}
+		ath11k_print_reg_rule(ab, "2g",
+				      num_2g_reg_rules,
+				      reg_info->reg_rules_2g_ptr);
 	}
 
 	if (num_5g_reg_rules) {
@@ -4973,6 +5121,9 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 			ath11k_warn(ab, "Unable to Allocate memory for 5g rules\n");
 			return -ENOMEM;
 		}
+		ath11k_print_reg_rule(ab, "5g",
+				      num_5g_reg_rules,
+				      reg_info->reg_rules_5g_ptr);
 	}
 
 	ext_wmi_reg_rule += num_5g_reg_rules;
@@ -4988,10 +5139,17 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 			return -ENOMEM;
 		}
 
+		ath11k_print_reg_rule(ab, ath11k_6g_ap_type_to_str(i),
+				      num_6g_reg_rules_ap[i],
+				      reg_info->reg_rules_6g_ap_ptr[i]);
+
 		ext_wmi_reg_rule += num_6g_reg_rules_ap[i];
 	}
 
 	for (j = 0; j < WMI_REG_CURRENT_MAX_AP_TYPE; j++) {
+		ath11k_dbg(ab, ATH11K_DBG_WMI,
+			   "AP type %s", ath11k_6g_ap_type_to_str(j));
+
 		for (i = 0; i < WMI_REG_MAX_CLIENT_TYPE; i++) {
 			reg_info->reg_rules_6g_client_ptr[j][i] =
 				create_ext_reg_rules_from_wmi(num_6g_client[j][i],
@@ -5002,6 +5160,10 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 				ath11k_warn(ab, "Unable to Allocate memory for 6 GHz client rules\n");
 				return -ENOMEM;
 			}
+
+			ath11k_print_reg_rule(ab, ath11k_6g_client_type_to_str(i),
+					      num_6g_client[j][i],
+					      reg_info->reg_rules_6g_client_ptr[j][i]);
 
 			ext_wmi_reg_rule += num_6g_client[j][i];
 		}
@@ -5018,6 +5180,18 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 	reg_info->domain_code_6g_ap[WMI_REG_VERY_LOW_POWER_AP] =
 			ext_chan_list_event_hdr->domain_code_6g_ap_vlp;
 
+	ath11k_dbg(ab, ATH11K_DBG_WMI,
+		   "6 GHz reg info client type %s rnr_tpe_usable %d unspecified_ap_usable %d AP sub domain: lpi %s , sp %s , vlp %s\n",
+		   ath11k_6g_client_type_to_str(reg_info->client_type),
+		   reg_info->rnr_tpe_usable,
+		   reg_info->unspecified_ap_usable,
+		   ath11k_sub_reg_6g_to_str
+		   (ext_chan_list_event_hdr->domain_code_6g_ap_lpi),
+		   ath11k_sub_reg_6g_to_str
+		   (ext_chan_list_event_hdr->domain_code_6g_ap_sp),
+		   ath11k_sub_reg_6g_to_str
+		   (ext_chan_list_event_hdr->domain_code_6g_ap_vlp));
+
 	for (i = 0; i < WMI_REG_MAX_CLIENT_TYPE; i++) {
 		reg_info->domain_code_6g_client[WMI_REG_INDOOR_AP][i] =
 				ext_chan_list_event_hdr->domain_code_6g_client_lpi[i];
@@ -5025,13 +5199,24 @@ static int ath11k_pull_reg_chan_list_ext_update_ev(struct ath11k_base *ab,
 				ext_chan_list_event_hdr->domain_code_6g_client_sp[i];
 		reg_info->domain_code_6g_client[WMI_REG_VERY_LOW_POWER_AP][i] =
 				ext_chan_list_event_hdr->domain_code_6g_client_vlp[i];
+
+		ath11k_dbg(ab, ATH11K_DBG_WMI,
+			   "6 GHz client type %s client sub domain: lpi %s , sp %s , vlp %s\n",
+			   ath11k_6g_client_type_to_str(i),
+			   ath11k_sub_reg_6g_to_str
+			   (ext_chan_list_event_hdr->domain_code_6g_client_lpi[i]),
+			   ath11k_sub_reg_6g_to_str
+			   (ext_chan_list_event_hdr->domain_code_6g_client_sp[i]),
+			   ath11k_sub_reg_6g_to_str
+			   (ext_chan_list_event_hdr->domain_code_6g_client_vlp[i]));
 	}
 
 	reg_info->domain_code_6g_super_id =
 			ext_chan_list_event_hdr->domain_code_6g_super_id;
 
-	ath11k_dbg(ab, ATH11K_DBG_WMI, "6 GHz client_type: %d domain_code_6g_super_id: %d",
-		   reg_info->client_type, reg_info->domain_code_6g_super_id);
+	ath11k_dbg(ab, ATH11K_DBG_WMI, "6 GHz client type %s 6 GHz super domain %s",
+		   ath11k_6g_client_type_to_str(reg_info->client_type),
+		   ath11k_super_reg_6g_to_str(reg_info->domain_code_6g_super_id));
 
 	ath11k_dbg(ab, ATH11K_DBG_WMI, "processed regulatory ext channel list\n");
 
@@ -6509,7 +6694,8 @@ static int ath11k_reg_chan_list_event(struct ath11k_base *ab,
 	    !ath11k_reg_is_world_alpha((char *)reg_info->alpha2))
 		intersect = true;
 
-	regd = ath11k_reg_build_regd(ab, reg_info, intersect);
+	regd = ath11k_reg_build_regd(ab, reg_info, intersect,
+				     WMI_VDEV_TYPE_AP, IEEE80211_REG_UNSET_AP);
 	if (!regd) {
 		ath11k_warn(ab, "failed to build regd from reg_info\n");
 		goto fallback;

@@ -4118,7 +4118,30 @@ struct cur_reg_rule {
 	u8 ant_gain;
 	u16 flags;
 	bool psd_flag;
-	u16 psd_eirp;
+	s8 psd_eirp;
+};
+
+enum reg_subdomains_6g {
+	EMPTY_6G = 0x0,
+	FCC1_CLIENT_LPI_REGULAR_6G = 0x01,
+	FCC1_CLIENT_SP_6G = 0x02,
+	FCC1_AP_LPI_6G = 0x03,
+	FCC1_CLIENT_LPI_SUBORDINATE = FCC1_AP_LPI_6G,
+	FCC1_AP_SP_6G = 0x04,
+	ETSI1_LPI_6G = 0x10,
+	ETSI1_VLP_6G = 0x11,
+	ETSI2_LPI_6G = 0x12,
+	ETSI2_VLP_6G = 0x13,
+	APL1_LPI_6G = 0x20,
+	APL1_VLP_6G = 0x21,
+};
+
+enum reg_super_domain_6g {
+	FCC1_6G = 0x01,
+	ETSI1_6G = 0x02,
+	ETSI2_6G = 0x03,
+	APL1_6G = 0x04,
+	FCC1_6G_CL = 0x05,
 };
 
 struct cur_regulatory_info {
