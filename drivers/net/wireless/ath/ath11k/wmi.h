@@ -788,6 +788,7 @@ enum wmi_tlv_event_id {
 	WMI_RMC_NEW_LEADER_EVENTID = WMI_TLV_CMD(WMI_GRP_RMC),
 	WMI_REG_CHAN_LIST_CC_EVENTID = WMI_TLV_CMD(WMI_GRP_REGULATORY),
 	WMI_11D_NEW_COUNTRY_EVENTID,
+	WMI_REG_CHAN_LIST_CC_EXT_EVENTID,
 	WMI_NDI_CAP_RSP_EVENTID = WMI_TLV_CMD(WMI_GRP_PROTOTYPE),
 	WMI_NDP_INITIATOR_RSP_EVENTID,
 	WMI_NDP_RESPONDER_RSP_EVENTID,
@@ -1855,6 +1856,9 @@ enum wmi_tlv_tag {
 	WMI_TAG_PDEV_SRG_OBSS_BSSID_ENABLE_BITMAP_CMD,
 	WMI_TAG_PDEV_NON_SRG_OBSS_COLOR_ENABLE_BITMAP_CMD,
 	WMI_TAG_PDEV_NON_SRG_OBSS_BSSID_ENABLE_BITMAP_CMD,
+	WMI_TAG_REGULATORY_RULE_EXT_STRUCT = 0x3A9,
+	WMI_TAG_REG_CHAN_LIST_CC_EXT_EVENT,
+
 	WMI_TAG_MAX
 };
 
@@ -2084,6 +2088,8 @@ enum wmi_tlv_service {
 	/* The second 128 bits */
 	WMI_MAX_EXT_SERVICE = 256,
 
+	WMI_TLV_SERVICE_REG_CC_EXT_EVENT_SUPPORT = 281,
+
 	/* The third 128 bits */
 	WMI_MAX_EXT2_SERVICE = 384
 };
@@ -2297,6 +2303,8 @@ struct wmi_init_cmd {
 
 #define WMI_RSRC_CFG_FLAG1_BSS_CHANNEL_INFO_64 BIT(5)
 
+#define WMI_CFG_HOST_SERVICE_FLAG_REG_CC_EXT 4
+
 struct wmi_resource_config {
 	u32 tlv_header;
 	u32 num_vdevs;
@@ -2356,6 +2364,15 @@ struct wmi_resource_config {
 	u32 sched_params;
 	u32 twt_ap_pdev_count;
 	u32 twt_ap_sta_count;
+	u32 max_nlo_ssids;
+	u32 num_pkt_filters;
+	u32 num_max_sta_vdevs;
+	u32 max_bssid_indicator;
+	u32 ul_resp_config;
+	u32 msdu_flow_override_config0;
+	u32 msdu_flow_override_config1;
+	u32 flags2;
+	u32 host_service_flags;
 } __packed;
 
 struct wmi_service_ready_event {
@@ -2838,6 +2855,8 @@ struct rx_reorder_queue_remove_params {
 #define REG_RULE_MAX_BW				0x0000ffff
 #define REG_RULE_REG_PWR			0x00ff0000
 #define REG_RULE_ANT_GAIN			0xff000000
+#define REG_RULE_PSD_INFO			BIT(0)
+#define REG_RULE_PSD_EIRP			0xff0000
 
 #define WMI_VDEV_PARAM_TXBF_SU_TX_BFEE BIT(0)
 #define WMI_VDEV_PARAM_TXBF_MU_TX_BFEE BIT(1)
@@ -4012,6 +4031,8 @@ struct wmi_he_rate_set {
 
 #define MAX_REG_RULES 10
 #define REG_ALPHA2_LEN 2
+#define MAX_6G_REG_RULES 5
+#define REG_US_5G_NUM_REG_RULES 4
 
 enum wmi_start_event_param {
 	WMI_VDEV_START_RESP_EVENT = 0,
@@ -4074,6 +4095,21 @@ enum {
 	WMI_REG_SET_CC_STATUS_FAIL = 5,
 };
 
+enum wmi_reg_6g_ap_type {
+	WMI_REG_INDOOR_AP = 0,
+	WMI_REG_STANDARD_POWER_AP = 1,
+	WMI_REG_VERY_LOW_POWER_AP = 2,
+	WMI_REG_CURRENT_MAX_AP_TYPE,
+	WMI_REG_MAX_SUPP_AP_TYPE = WMI_REG_VERY_LOW_POWER_AP,
+	WMI_REG_MAX_AP_TYPE = 7,
+};
+
+enum wmi_reg_6g_client_type {
+	WMI_REG_DEFAULT_CLIENT = 0,
+	WMI_REG_SUBORDINATE_CLIENT = 1,
+	WMI_REG_MAX_CLIENT_TYPE = 2,
+};
+
 struct cur_reg_rule {
 	u16 start_freq;
 	u16 end_freq;
@@ -4081,6 +4117,8 @@ struct cur_reg_rule {
 	u8 reg_power;
 	u8 ant_gain;
 	u16 flags;
+	bool psd_flag;
+	u16 psd_eirp;
 };
 
 struct cur_regulatory_info {
@@ -4092,6 +4130,7 @@ struct cur_regulatory_info {
 	u8 alpha2[REG_ALPHA2_LEN + 1];
 	u32 dfs_region;
 	u32 phybitmap;
+	bool is_ext_reg_event;
 	u32 min_bw_2g;
 	u32 max_bw_2g;
 	u32 min_bw_5g;
@@ -4100,6 +4139,29 @@ struct cur_regulatory_info {
 	u32 num_5g_reg_rules;
 	struct cur_reg_rule *reg_rules_2g_ptr;
 	struct cur_reg_rule *reg_rules_5g_ptr;
+	enum wmi_reg_6g_client_type client_type;
+	bool rnr_tpe_usable;
+	bool unspecified_ap_usable;
+	/* TODO: All 6 GHz related info can be stored only for required
+	 * combination instead of all types, to optimize memory usage.
+	 */
+	u8 domain_code_6g_ap[WMI_REG_CURRENT_MAX_AP_TYPE];
+	u8 domain_code_6g_client[WMI_REG_CURRENT_MAX_AP_TYPE][WMI_REG_MAX_CLIENT_TYPE];
+	u32 domain_code_6g_super_id;
+	u32 min_bw_6g_ap[WMI_REG_CURRENT_MAX_AP_TYPE];
+	u32 max_bw_6g_ap[WMI_REG_CURRENT_MAX_AP_TYPE];
+	u32 min_bw_6g_client[WMI_REG_CURRENT_MAX_AP_TYPE][WMI_REG_MAX_CLIENT_TYPE];
+	u32 max_bw_6g_client[WMI_REG_CURRENT_MAX_AP_TYPE][WMI_REG_MAX_CLIENT_TYPE];
+	u32 num_6g_reg_rules_ap[WMI_REG_CURRENT_MAX_AP_TYPE];
+	u32 num_6g_reg_rules_client[WMI_REG_CURRENT_MAX_AP_TYPE][WMI_REG_MAX_CLIENT_TYPE];
+	struct cur_reg_rule *reg_rules_6g_ap_ptr[WMI_REG_CURRENT_MAX_AP_TYPE];
+	struct cur_reg_rule *reg_rules_6g_client_ptr
+		[WMI_REG_CURRENT_MAX_AP_TYPE][WMI_REG_MAX_CLIENT_TYPE];
+};
+
+enum wmi_reg_chan_list_cmd_type {
+	WMI_REG_CHAN_LIST_CC_ID = 0,
+	WMI_REG_CHAN_LIST_CC_EXT_ID = 1,
 };
 
 struct wmi_reg_chan_list_cc_event {
@@ -4129,6 +4191,61 @@ struct wmi_regulatory_rule_struct {
 struct wmi_vdev_delete_resp_event {
 	u32 vdev_id;
 } __packed;
+
+#define WMI_REG_CLIENT_MAX 4
+
+struct wmi_reg_chan_list_cc_ext_event {
+	u32 status_code;
+	u32 phy_id;
+	u32 alpha2;
+	u32 num_phy;
+	u32 country_id;
+	u32 domain_code;
+	u32 dfs_region;
+	u32 phybitmap;
+	u32 min_bw_2g;
+	u32 max_bw_2g;
+	u32 min_bw_5g;
+	u32 max_bw_5g;
+	u32 num_2g_reg_rules;
+	u32 num_5g_reg_rules;
+	u32 client_type;
+	u32 rnr_tpe_usable;
+	u32 unspecified_ap_usable;
+	u32 domain_code_6g_ap_lpi;
+	u32 domain_code_6g_ap_sp;
+	u32 domain_code_6g_ap_vlp;
+	u32 domain_code_6g_client_lpi[WMI_REG_CLIENT_MAX];
+	u32 domain_code_6g_client_sp[WMI_REG_CLIENT_MAX];
+	u32 domain_code_6g_client_vlp[WMI_REG_CLIENT_MAX];
+	u32 domain_code_6g_super_id;
+	u32 min_bw_6g_ap_sp;
+	u32 max_bw_6g_ap_sp;
+	u32 min_bw_6g_ap_lpi;
+	u32 max_bw_6g_ap_lpi;
+	u32 min_bw_6g_ap_vlp;
+	u32 max_bw_6g_ap_vlp;
+	u32 min_bw_6g_client_sp[WMI_REG_CLIENT_MAX];
+	u32 max_bw_6g_client_sp[WMI_REG_CLIENT_MAX];
+	u32 min_bw_6g_client_lpi[WMI_REG_CLIENT_MAX];
+	u32 max_bw_6g_client_lpi[WMI_REG_CLIENT_MAX];
+	u32 min_bw_6g_client_vlp[WMI_REG_CLIENT_MAX];
+	u32 max_bw_6g_client_vlp[WMI_REG_CLIENT_MAX];
+	u32 num_6g_reg_rules_ap_sp;
+	u32 num_6g_reg_rules_ap_lpi;
+	u32 num_6g_reg_rules_ap_vlp;
+	u32 num_6g_reg_rules_client_sp[WMI_REG_CLIENT_MAX];
+	u32 num_6g_reg_rules_client_lpi[WMI_REG_CLIENT_MAX];
+	u32 num_6g_reg_rules_client_vlp[WMI_REG_CLIENT_MAX];
+} __packed;
+
+struct wmi_regulatory_ext_rule {
+	u32 tlv_header;
+	u32 freq_info;
+	u32 bw_pwr_info;
+	u32 flag_info;
+	u32 psd_power_info;
+};
 
 struct wmi_peer_delete_resp_event {
 	u32 vdev_id;
@@ -5181,6 +5298,7 @@ struct target_resource_config {
 	u32 sched_params;
 	u32 twt_ap_pdev_count;
 	u32 twt_ap_sta_count;
+	u8 is_reg_cc_ext_event_supported;
 };
 
 enum wmi_sys_cap_info_flags {

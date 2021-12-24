@@ -183,6 +183,7 @@ struct ath11k_hw_params {
 	bool supports_suspend;
 	u32 hal_desc_sz;
 	bool supports_regdb;
+	bool supports_cc_ext;
 	bool fix_l1ss;
 	bool credit_flow;
 	u8 max_tx_ring;
@@ -276,6 +277,8 @@ static inline int ath11k_hw_mac_id_to_srng_id(struct ath11k_hw_params *hw,
 
 	return 0;
 }
+
+bool ath11k_hw_supports_cc_ext(struct ath11k_base *ab);
 
 struct ath11k_fw_ie {
 	__le32 id;
