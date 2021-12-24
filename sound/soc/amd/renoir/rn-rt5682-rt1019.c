@@ -44,7 +44,7 @@ static const struct dmi_system_id rn_quirk_table[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Google"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "Guybrush"),
-			DMI_MATCH(DMI_PRODUCT_VERSION, "rev1"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "rev3"),
 		},
 	},
 	{},
@@ -588,7 +588,7 @@ static int acp_card_dai_links_create(struct snd_soc_card *card)
 		links[1].stream_name = "HiFi Playback";
 		links[1].dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 				   SND_SOC_DAIFMT_CBS_CFS;
-		if (dmi_check_system(rn_quirk_table)) {
+		if (!dmi_check_system(rn_quirk_table)) {
 			links[1].codecs = rt1019;
 			links[1].num_codecs = ARRAY_SIZE(rt1019);
 		} else {
@@ -603,7 +603,7 @@ static int acp_card_dai_links_create(struct snd_soc_card *card)
 		links[1].dpcm_playback = 1;
 
 
-		if (dmi_check_system(rn_quirk_table)) {
+		if (!dmi_check_system(rn_quirk_table)) {
 			card->codec_conf = rt1019_conf;
 			card->num_configs = ARRAY_SIZE(rt1019_conf);
 		} else {
