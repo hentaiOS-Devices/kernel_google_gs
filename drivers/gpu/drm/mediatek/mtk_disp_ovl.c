@@ -76,7 +76,6 @@ struct mtk_disp_ovl {
 	struct drm_crtc			*crtc;
 	struct clk			*clk;
 	void __iomem			*regs;
-	spinlock_t			lock;
 	struct cmdq_client_reg		cmdq_reg;
 	const struct mtk_disp_ovl_data	*data;
 	void				(*vblank_cb)(void *data);
@@ -86,19 +85,14 @@ struct mtk_disp_ovl {
 static irqreturn_t mtk_disp_ovl_irq_handler(int irq, void *dev_id)
 {
 	struct mtk_disp_ovl *priv = dev_id;
-	unsigned long flags;
 
 	/* Clear frame completion interrupt */
 	writel(0x0, priv->regs + DISP_REG_OVL_INTSTA);
 
-	spin_lock_irqsave(&priv->lock, flags);
-	if (!priv->vblank_cb) {
-		spin_unlock_irqrestore(&priv->lock, flags);
+	if (!priv->vblank_cb)
 		return IRQ_NONE;
-	}
 
 	priv->vblank_cb(priv->vblank_cb_data);
-	spin_unlock_irqrestore(&priv->lock, flags);
 
 	return IRQ_HANDLED;
 }
@@ -108,13 +102,9 @@ void mtk_ovl_enable_vblank(struct device *dev,
 			   void *vblank_cb_data)
 {
 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
-	unsigned long flags;
 
-	spin_lock_irqsave(&ovl->lock, flags);
 	ovl->vblank_cb = vblank_cb;
 	ovl->vblank_cb_data = vblank_cb_data;
-	spin_unlock_irqrestore(&ovl->lock, flags);
-
 	writel(0x0, ovl->regs + DISP_REG_OVL_INTSTA);
 	writel_relaxed(OVL_FME_CPL_INT, ovl->regs + DISP_REG_OVL_INTEN);
 }
@@ -122,13 +112,9 @@ void mtk_ovl_enable_vblank(struct device *dev,
 void mtk_ovl_disable_vblank(struct device *dev)
 {
 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
-	unsigned long flags;
 
-	spin_lock_irqsave(&ovl->lock, flags);
 	ovl->vblank_cb = NULL;
 	ovl->vblank_cb_data = NULL;
-	spin_unlock_irqrestore(&ovl->lock, flags);
-
 	writel_relaxed(0x0, ovl->regs + DISP_REG_OVL_INTEN);
 }
 
@@ -420,7 +406,6 @@ static int mtk_disp_ovl_probe(struct platform_device *pdev)
 #endif
 
 	priv->data = of_device_get_match_data(dev);
-	spin_lock_init(&priv->lock);
 	platform_set_drvdata(pdev, priv);
 
 	ret = devm_request_irq(dev, irq, mtk_disp_ovl_irq_handler,
