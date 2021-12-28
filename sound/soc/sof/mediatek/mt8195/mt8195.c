@@ -24,9 +24,12 @@
 #include "../../ops.h"
 #include "../../sof-audio.h"
 #include "../adsp_helper.h"
+#include "../adsp-pcm.h"
 #include "../mediatek-ops.h"
 #include "mt8195.h"
 #include "mt8195-clk.h"
+
+#define CONTINUOUS_UPDATE_POSITION 1
 
 static struct snd_soc_acpi_mach sof_mt8195_mach = {
 	.drv_name = "mt8195_mt6359_rt1019_rt5682",
@@ -409,6 +412,8 @@ static int mt8195_dsp_probe(struct snd_sof_dev *sdev)
 	/* set default mailbox offset for FW ready message */
 	sdev->dsp_box.offset = mt8195_get_mailbox_offset(sdev);
 
+	mtk_adsp_stream_init(sdev);
+
 	return 0;
 
 exit_pdev_unregister:
@@ -494,11 +499,32 @@ static struct snd_soc_acpi_mach *mt8195_machine_select(struct snd_sof_dev *sdev)
 	return mach;
 }
 
+static int mt8195_dsp_pcm_hw_params(struct snd_sof_dev *sdev,
+			  struct snd_pcm_substream *substream,
+			  struct snd_pcm_hw_params *params,
+			  struct sof_ipc_stream_params *ipc_params)
+{
+	ipc_params->cont_update_posn = CONTINUOUS_UPDATE_POSITION;
+
+	return 0;
+}
+
 static int mt8195_ipc_msg_data(struct snd_sof_dev *sdev,
 				struct snd_pcm_substream *substream,
 				void *p, size_t sz)
 {
-	sof_mailbox_read(sdev, sdev->dsp_box.offset, p, sz);
+	if (!substream || !sdev->stream_box.size) {
+		sof_mailbox_read(sdev, sdev->dsp_box.offset, p, sz);
+	} else {
+		struct sof_mtk_adsp_stream *mstream = substream->runtime->private_data;
+
+		/* The stream might already be closed */
+		if (!mstream)
+			return -ESTRPIPE;
+
+		sof_mailbox_read(sdev, mstream->stream.posn_offset, p, sz);
+	}
+
 	return 0;
 }
 
@@ -506,6 +532,19 @@ static int mt8195_ipc_pcm_params(struct snd_sof_dev *sdev,
 				 struct snd_pcm_substream *substream,
 				 const struct sof_ipc_pcm_params_reply *reply)
 {
+	struct sof_mtk_adsp_stream *mstream = substream->runtime->private_data;
+	size_t posn_offset = reply->posn_offset;
+
+	/* check for unaligned offset or overflow */
+	if (posn_offset > sdev->stream_box.size ||
+	    posn_offset % sizeof(struct sof_ipc_stream_posn) != 0)
+		return -EINVAL;
+
+	mstream->stream.posn_offset = sdev->stream_box.offset + posn_offset;
+
+	dev_dbg(sdev->dev, "pcm: stream dir %d, posn mailbox offset is 0x%x",
+		substream->stream, mstream->stream.posn_offset);
+
 	return 0;
 }
 
@@ -574,6 +613,12 @@ const struct snd_sof_dsp_ops sof_mt8195_ops = {
 	/* machine driver */
 	.machine_select = mt8195_machine_select,
 
+	/* stream callbacks */
+	.pcm_open = mtk_adsp_pcm_open,
+	.pcm_hw_params = mt8195_dsp_pcm_hw_params,
+	.pcm_close = mtk_adsp_pcm_close,
+	.pcm_pointer = mtk_adsp_pcm_pointer,
+
 	/* module loading */
 	.load_module	= snd_sof_parse_module_memcpy,
 	/* firmware loading */
@@ -600,4 +645,6 @@ const struct snd_sof_dsp_ops sof_mt8195_ops = {
 EXPORT_SYMBOL(sof_mt8195_ops);
 
 MODULE_IMPORT_NS(SND_SOC_SOF_XTENSA);
+MODULE_IMPORT_NS(SND_SOC_SOF_MTK_COMMON);
+
 MODULE_LICENSE("Dual BSD/GPL");

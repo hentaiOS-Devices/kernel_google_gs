@@ -9,6 +9,8 @@
 
 #include <linux/firmware/mediatek/mtk-adsp-ipc.h>
 
+#define MTK_MAX_STREAM	8
+
 /*
  * Global important adsp data structure.
  */
@@ -29,16 +31,27 @@ struct mtk_adsp_chip_info {
 	int dram_offset; /*dram offset between system and dsp view*/
 };
 
+struct sof_mtk_stream {
+	size_t posn_offset;
+};
+
+struct sof_mtk_adsp_stream {
+	struct snd_sof_dev *sdev;
+	struct sof_mtk_stream stream;
+	int stream_tag;
+	int active;
+};
+
 struct adsp_priv {
 	struct device *dev;
 	struct snd_sof_dev *sdev;
 	struct mtk_adsp_ipc *dsp_ipc;
 	struct platform_device *ipc_dev;
 	struct mtk_adsp_chip_info *adsp;
+	struct sof_mtk_adsp_stream stream_buf[MTK_MAX_STREAM];
 	struct clk **clk;
 	u32 (*ap2adsp_addr)(u32 addr, void *data);
 	u32 (*adsp2ap_addr)(u32 addr, void *data);
-
 	void *private_data;
 };
 
