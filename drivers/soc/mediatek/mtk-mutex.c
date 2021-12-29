@@ -252,6 +252,7 @@ struct mtk_mutex_data {
 	const unsigned int mutex_mdp_mod_mask;
 	const unsigned int mutex_mdp_sof_mask;
 	const bool no_clk;
+	const bool has_gce_client_reg;
 };
 
 struct mtk_mutex_ctx {
@@ -261,7 +262,7 @@ struct mtk_mutex_ctx {
 	struct mtk_mutex		mutex[10];
 	const struct mtk_mutex_data	*data;
 	phys_addr_t			addr;
-	u8				subsys_id;
+	struct cmdq_client_reg		cmdq_reg;
 };
 
 static const unsigned long mt2701_mutex_mod[DDP_COMPONENT_ID_MAX] = {
@@ -489,6 +490,7 @@ static const struct mtk_mutex_data mt8183_mutex_driver_data = {
 	.mutex_mdp_mod_mask = MT8183_MUTEX_MDP_MOD_MASK,
 	.mutex_mdp_sof_mask = MT8183_MUTEX_MDP_SOF_MASK,
 	.no_clk = true,
+	.has_gce_client_reg = true,
 };
 
 static const struct mtk_mutex_data mt8192_mutex_driver_data = {
@@ -511,6 +513,7 @@ static const struct mtk_mutex_data mt8195_vpp0_mutex_driver_data = {
 	.mutex_mdp_offset = mt8195_mutex_vpp0_offset,
 	.mutex_mdp_mod_mask = MT8195_MUTEX_MDP_MOD_MASK,
 	.mutex_mdp_sof_mask = MT8195_MUTEX_MDP_SOF_MASK,
+	.has_gce_client_reg = true,
 };
 
 static const struct mtk_mutex_data mt8195_vpp1_mutex_driver_data = {
@@ -519,6 +522,7 @@ static const struct mtk_mutex_data mt8195_vpp1_mutex_driver_data = {
 	.mutex_mdp_offset = mt8195_mutex_vpp1_offset,
 	.mutex_mdp_mod_mask = MT8195_MUTEX_MDP_MOD_MASK,
 	.mutex_mdp_sof_mask = MT8195_MUTEX_MDP_SOF_MASK,
+	.has_gce_client_reg = true,
 };
 
 struct mtk_mutex *mtk_mutex_get(struct device *dev)
@@ -689,18 +693,18 @@ void mtk_mutex_add_mod_by_cmdq(struct mtk_mutex *mutex, u32 mod,
 
 	if (mod != MDP_PIPE_NONE) {
 		offset = DISP_REG_MUTEX_MOD(mtx->data->mutex_mod_reg, mutex->id);
-		cmdq_pkt_write_mask(cmd->pkt, mtx->subsys_id, mtx->addr + offset,
+		cmdq_pkt_write_mask(cmd->pkt, mtx->cmdq_reg.subsys, mtx->addr + offset,
 				    mod, mtx->data->mutex_mdp_mod_mask);
 	}
 
 	if (mod1 != MDP_PIPE_NONE) {
 		offset = DISP_REG_MUTEX_MOD1(mtx->data->mutex_mod_reg, mutex->id);
-		cmdq_pkt_write_mask(cmd->pkt, mtx->subsys_id, mtx->addr + offset,
+		cmdq_pkt_write_mask(cmd->pkt, mtx->cmdq_reg.subsys, mtx->addr + offset,
 				    mod1, mtx->data->mutex_mdp_mod_mask);
 	}
 
 	offset = DISP_REG_MUTEX_SOF(mtx->data->mutex_sof_reg, mutex->id);
-	cmdq_pkt_write_mask(cmd->pkt, mtx->subsys_id, mtx->addr + offset,
+	cmdq_pkt_write_mask(cmd->pkt, mtx->cmdq_reg.subsys, mtx->addr + offset,
 			    sof, mtx->data->mutex_mdp_sof_mask);
 }
 EXPORT_SYMBOL_GPL(mtk_mutex_add_mod_by_cmdq);
@@ -724,7 +728,7 @@ void mtk_mutex_enable_by_cmdq(struct mtk_mutex *mutex,
 
 	WARN_ON(&mtx->mutex[mutex->id] != mutex);
 
-	cmdq_pkt_write_mask(cmd->pkt, mtx->subsys_id,
+	cmdq_pkt_write_mask(cmd->pkt, mtx->cmdq_reg.subsys,
 			    mtx->addr + DISP_REG_MUTEX_EN(mutex->id),
 			    MTK_MUTEX_ENABLE, MTK_MUTEX_ENABLE);
 }
@@ -749,7 +753,7 @@ void mtk_mutex_disable_by_cmdq(struct mtk_mutex *mutex,
 
 	WARN_ON(&mtx->mutex[mutex->id] != mutex);
 
-	cmdq_pkt_write_mask(cmd->pkt, mtx->subsys_id,
+	cmdq_pkt_write_mask(cmd->pkt, mtx->cmdq_reg.subsys,
 			    mtx->addr + DISP_REG_MUTEX_EN(mutex->id),
 			    0x0, MTK_MUTEX_ENABLE);
 }
@@ -782,9 +786,8 @@ static int mtk_mutex_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct mtk_mutex_ctx *mtx;
-	struct cmdq_client_reg cmdq_reg;
 	struct resource *regs, addr;
-	int i;
+	int i, ret;
 
 	mtx = devm_kzalloc(dev, sizeof(*mtx), GFP_KERNEL);
 	if (!mtx)
@@ -794,6 +797,10 @@ static int mtk_mutex_probe(struct platform_device *pdev)
 		mtx->mutex[i].id = i;
 
 	mtx->data = of_device_get_match_data(dev);
+	if (!mtx->data) {
+		dev_err(dev, "Couldn't get match driver data\n");
+		return -EINVAL;
+	}
 
 	if (!mtx->data->no_clk) {
 		mtx->clk = devm_clk_get(dev, NULL);
@@ -809,9 +816,13 @@ static int mtk_mutex_probe(struct platform_device *pdev)
 	else
 		mtx->addr = addr.start;
 
-	if (cmdq_dev_get_client_reg(dev, &cmdq_reg, 0) != 0)
-		dev_info(dev, "cmdq subsys id has not been set\n");
-	mtx->subsys_id = cmdq_reg.subsys;
+	if (mtx->data->has_gce_client_reg) {
+		ret = cmdq_dev_get_client_reg(dev, &mtx->cmdq_reg, 0);
+		if (ret) {
+			dev_err(dev, "No mediatek,gce-client-reg!\n");
+			return ret;
+		}
+	}
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	mtx->regs = devm_ioremap_resource(dev, regs);
