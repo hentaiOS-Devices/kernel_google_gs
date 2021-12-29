@@ -20,6 +20,7 @@
 #include "mtk_dip-dev.h"
 #include "mtk_dip-hw.h"
 #include "mtk-mdp3-cmdq.h"
+#include "mtk-mdp3-core.h"
 
 static int mtk_dip_subdev_open(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_fh *fh)
@@ -2198,10 +2199,13 @@ static int __maybe_unused mtk_dip_pm_suspend(struct device *dev)
 {
 	struct mtk_dip_dev *dip_dev = dev_get_drvdata(dev);
 	int ret, num;
+	struct mdp_dev *mdp = platform_get_drvdata(dip_dev->mdp_pdev);
 
 	if (pm_runtime_suspended(dev))
 		return 0;
 
+	if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+		dev_err(dev, "suspend enter : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 	ret = wait_event_timeout
 		(dip_dev->flushing_waitq,
 		 !(num = atomic_read(&dip_dev->num_composing)),
@@ -2210,27 +2214,42 @@ static int __maybe_unused mtk_dip_pm_suspend(struct device *dev)
 		dev_err(dev, "%s: flushing SCP job timeout, num(%d)\n",
 			__func__, num);
 
+		if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+			dev_err(dev, "suspend timeout : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 		return -EBUSY;
 	}
 
 	ret = pm_runtime_force_suspend(dev);
-	if (ret)
+	if (ret) {
+		if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+			dev_err(dev, "suspend force : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 		return ret;
-
+	}
+	if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+		dev_err(dev, "suspend done : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 	return 0;
 }
 
 static int __maybe_unused mtk_dip_pm_resume(struct device *dev)
 {
 	int ret;
+	struct mtk_dip_dev *dip_dev = dev_get_drvdata(dev);
+	struct mdp_dev *mdp = platform_get_drvdata(dip_dev->mdp_pdev);
 
 	if (pm_runtime_suspended(dev))
 		return 0;
 
+	if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+		dev_err(dev, "resume start : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 	ret = pm_runtime_force_resume(dev);
-	if (ret)
+	if (ret) {
+		if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+			dev_err(dev, "resume force : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 		return ret;
+	}
 
+	if (MDP_STAGE_ERROR(mdp->stage_flag[0]) || MDP_STAGE_ERROR(mdp->stage_flag[1]))
+		dev_err(dev, "resume done : stage flag 1st %x, 2nd %x\n", mdp ->stage_flag[0], mdp->stage_flag[1]);
 	return 0;
 }
 
