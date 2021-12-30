@@ -1010,7 +1010,7 @@ crtc_needs_disable(struct drm_crtc_state *old_state,
 	 * disabled.
 	 */
 	return old_state->active ||
-	       (old_state->self_refresh_active && !new_state->enable) ||
+	       (old_state->self_refresh_active && !new_state->active) ||
 	       new_state->self_refresh_active;
 }
 
