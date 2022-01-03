@@ -225,3 +225,6 @@ static inline u64 acp_get_byte_count(struct i2s_stream_instance *rtd,
 
 void i2sdma_wq(struct i2s_dev_data *dev_data);
 void pdmdma_wq(struct pdm_dev_data *dev_data);
+
+/* Machine configuration */
+int snd_amd_acp_find_config(struct pci_dev *pci);

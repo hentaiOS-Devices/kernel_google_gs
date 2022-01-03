@@ -241,11 +241,16 @@ static int snd_rn_acp_probe(struct pci_dev *pci,
 	acpi_handle handle;
 	acpi_integer dmic_status;
 #endif
-	unsigned int irqflags;
+	unsigned int irqflags, flag;
 	int ret, index;
 	int acp_devs = 0x00;
 	int val =  0x00;
 	u32 addr;
+
+	/* Return if acp config flag is defined */
+	flag = snd_amd_acp_find_config(pci);
+	if (flag)
+		return -ENODEV;
 
 	if (pci->revision != 0x01)
 		return -ENODEV;
