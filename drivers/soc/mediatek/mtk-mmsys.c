@@ -165,7 +165,6 @@ void mtk_mmsys_mdp_isp_ctrl(struct device *dev, struct mmsys_cmdq_cmd *cmd,
 	const unsigned int *isp_ctrl = mmsys->data->mdp_isp_ctrl;
 	u32 reg;
 
-	WARN_ON(mmsys->cmdq_base.subsys == 0);
 	/* Direct link */
 	if (id == MDP_COMP_CAMIN) {
 		/* Reset MDP_DL_ASYNC_TX */
@@ -240,7 +239,6 @@ void mtk_mmsys_mdp_camin_ctrl(struct device *dev, struct mmsys_cmdq_cmd *cmd,
 	const unsigned int *isp_ctrl = mmsys->data->mdp_isp_ctrl;
 	u32 reg;
 
-	WARN_ON(mmsys->cmdq_base.subsys == 0);
 	/* Config for direct link */
 	if (id == MDP_COMP_CAMIN) {
 		if (isp_ctrl[ISP_REG_MDP_ASYNC_CFG_WD]) {
@@ -375,7 +373,6 @@ void mtk_mmsys_mdp_write_config(struct device *dev,
 	struct mtk_mmsys *mmsys = dev_get_drvdata(dev);
 	const u32 *configs = mmsys->data->mdp_mmsys_configs;
 
-	WARN_ON(mmsys->cmdq_base.subsys == 0);
 	cmdq_pkt_write_mask(cmd->pkt, mmsys->cmdq_base.subsys,
 			    mmsys->addr + configs[alias_id], value, mask);
 }
@@ -387,7 +384,6 @@ void mtk_mmsys_write_reg_by_cmdq(struct device *dev,
 {
 	struct mtk_mmsys *mmsys = dev_get_drvdata(dev);
 
-	WARN_ON(mmsys->cmdq_base.subsys == 0);
 	cmdq_pkt_write_mask(cmd->pkt, mmsys->cmdq_base.subsys,
 			    mmsys->addr + offset, value, mask);
 }
