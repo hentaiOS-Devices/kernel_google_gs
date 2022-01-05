@@ -102,44 +102,31 @@ void mtk_ethdr_enable_vblank(struct device *dev,
 			     void *vblank_cb_data)
 {
 	struct mtk_ethdr *priv = dev_get_drvdata(dev);
-	unsigned long flags;
 
-	spin_lock_irqsave(&priv->lock, flags);
 	priv->vblank_cb = vblank_cb;
 	priv->vblank_cb_data = vblank_cb_data;
-	spin_unlock_irqrestore(&priv->lock, flags);
-
 	writel(MIX_FME_CPL_INTEN, priv->ethdr_comp[ETHDR_MIXER].regs + MIX_INTEN);
 }
 
 void mtk_ethdr_disable_vblank(struct device *dev)
 {
 	struct mtk_ethdr *priv = dev_get_drvdata(dev);
-	unsigned long flags;
 
-	spin_lock_irqsave(&priv->lock, flags);
 	priv->vblank_cb = NULL;
 	priv->vblank_cb_data = NULL;
-	spin_unlock_irqrestore(&priv->lock, flags);
-
 	writel(0x0, priv->ethdr_comp[ETHDR_MIXER].regs + MIX_INTEN);
 }
 
 static irqreturn_t mtk_ethdr_irq_handler(int irq, void *dev_id)
 {
 	struct mtk_ethdr *priv = dev_id;
-	unsigned long flags;
 
 	writel(0x0, priv->ethdr_comp[ETHDR_MIXER].regs + MIX_INTSTA);
 
-	spin_lock_irqsave(&priv->lock, flags);
-	if (!priv->vblank_cb) {
-		spin_unlock_irqrestore(&priv->lock, flags);
+	if (!priv->vblank_cb)
 		return IRQ_NONE;
-	}
 
 	priv->vblank_cb(priv->vblank_cb_data);
-	spin_unlock_irqrestore(&priv->lock, flags);
 
 	return IRQ_HANDLED;
 }
