@@ -89,6 +89,8 @@ static struct dtt_leaf_entry *pfn_to_dtt_pte(struct coiommu_dtt *dtt,
 			if (cmpxchg64(&parent_pte->val, 0ULL, pteval))
 				/* Someone else set it, free this one */
 				free_page((unsigned long)pt);
+			else
+				atomic_inc(&dtt->pages);
 		}
 
 		pt = phys_to_virt(parent_pte_addr(parent_pte));
@@ -808,6 +810,76 @@ static int coiommu_setup_endpoint(struct device *dev)
 	return 0;
 }
 
+static unsigned long
+dtt_shrink_count(struct shrinker *shrink, struct shrink_control *sc)
+{
+	struct coiommu_dtt *dtt = container_of(shrink, struct coiommu_dtt,
+					dtt_shrinker);
+
+	return atomic_read(&dtt->pages);
+}
+
+static unsigned int dtt_shrink(struct coiommu_dtt *dtt,
+			       struct dtt_parent_entry *parentpt,
+			       void *pt, unsigned int level,
+			       bool *pt_freed)
+{
+	unsigned int free_count = 0;
+	struct dtt_parent_entry *pte;
+	bool has_child = false;
+	u64 phys;
+	int i;
+
+	if (level != DTT_LAST_LEVEL) {
+		for (i = 0; i < 1 << COIOMMU_UPPER_LEVEL_STRIDE; i++) {
+			bool child_freed = false;
+
+			pte = (struct dtt_parent_entry *)pt + i;
+			if (!parent_pte_present(pte))
+				continue;
+			phys = parent_pte_addr(pte);
+			free_count += dtt_shrink(dtt, pte, phys_to_virt(phys),
+						 level - 1, &child_freed);
+			has_child |= !child_freed;
+		}
+	}
+
+	if (!has_child && parentpt) {
+		unsigned long flags;
+
+		write_lock_irqsave(&dtt->lock, flags);
+		if (!memcmp(pt, dtt->zero_page, PAGE_SIZE)) {
+			free_page((unsigned long)pt);
+			atomic_dec(&dtt->pages);
+			parentpt->val = 0;
+			if (pt_freed)
+				*pt_freed = true;
+			free_count += 1;
+		}
+		write_unlock_irqrestore(&dtt->lock, flags);
+	}
+
+	return free_count;
+}
+
+static unsigned long
+dtt_shrink_scan(struct shrinker *shrink, struct shrink_control *sc)
+{
+	struct coiommu *coiommu = container_of(shrink, struct coiommu, dtt.dtt_shrinker);
+	struct coiommu_dtt *dtt = &coiommu->dtt;
+	unsigned int total = atomic_read(&dtt->pages);
+	unsigned int free;
+
+	coiommu->dev_ops->park_unpin(coiommu->dev, true);
+	free = dtt_shrink(dtt, NULL, (void *)dtt->root, dtt->level, NULL);
+	coiommu->dev_ops->park_unpin(coiommu->dev, false);
+
+	if (free)
+		pr_info("coiommu: DTT pages total %u free %u\n", total, free);
+
+	return free ? free : SHRINK_STOP;
+}
+
 int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 {
 	struct coiommu_dtt *dtt;
@@ -835,6 +907,8 @@ int coiommu_enable_dtt(u64 *dtt_addr, u64 *dtt_level)
 		goto free_page_cache;
 	}
 	kthread_init_work(&dtt->alloc_work, alloc_dtt_pages);
+
+	atomic_set(&dtt->pages, 0);
 
 	if (dtt_addr)
 		*dtt_addr = (u64)__pa(dtt->root);
@@ -883,6 +957,11 @@ void coiommu_disable_dtt(void)
 
 int coiommu_setup_dev_ops(const struct coiommu_dev_ops *ops, void *dev)
 {
+	struct coiommu_dtt *dtt;
+
+	if (!ops)
+		return -EINVAL;
+
 	if (!global_coiommu)
 		return -ENODEV;
 
@@ -901,7 +980,19 @@ int coiommu_setup_dev_ops(const struct coiommu_dev_ops *ops, void *dev)
 	global_coiommu->dev_ops = ops;
 	global_coiommu->dev = dev;
 
-	return 0;
+	if (!ops->park_unpin)
+		return 0;
+
+	dtt = &global_coiommu->dtt;
+
+	dtt->zero_page = (void *)get_zeroed_page(GFP_KERNEL_ACCOUNT);
+	if (!dtt->zero_page)
+		return -ENOMEM;
+	dtt->dtt_shrinker.count_objects = dtt_shrink_count;
+	dtt->dtt_shrinker.scan_objects = dtt_shrink_scan;
+	dtt->dtt_shrinker.seeks = DEFAULT_SEEKS;
+
+	return register_shrinker(&dtt->dtt_shrinker);
 }
 
 int coiommu_configure(struct device *dev)

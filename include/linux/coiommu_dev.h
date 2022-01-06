@@ -13,6 +13,7 @@ struct coiommu_dev;
 struct coiommu_dev_ops {
 	int (*execute_request)(struct coiommu_dev *dev, unsigned long pfn, unsigned short bdf);
 	int (*execute_requests)(struct coiommu_dev *dev, struct pin_pages_info *pin_info);
+	void (*park_unpin)(struct coiommu_dev *dev, bool park);
 };
 
 extern void coiommu_init(unsigned short ep_count, unsigned short *endpoints);

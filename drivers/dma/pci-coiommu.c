@@ -11,8 +11,10 @@
 #define COIOMMU_NOTIFY_BAR	2
 #define COIOMMU_TOPOLOGY_BAR	4
 
-#define COIOMMU_CMD_DEACTIVATE	0
-#define COIOMMU_CMD_ACTIVATE	1
+#define COIOMMU_CMD_DEACTIVATE		0
+#define COIOMMU_CMD_ACTIVATE		1
+#define COIOMMU_CMD_PARK_UNPIN		2
+#define COIOMMU_CMD_UNPARK_UNPIN	3
 #define PIN_PAGES_IN_BATCH	(1UL << 63)
 
 struct coiommu_mmio_info {
@@ -113,9 +115,17 @@ static int coiommu_execute_reqs(struct coiommu_dev *dev, struct pin_pages_info *
 	return 0;
 }
 
+static void coiommu_park_unpin(struct coiommu_dev *dev, bool park)
+{
+	u64 cmdval = park ? COIOMMU_CMD_PARK_UNPIN : COIOMMU_CMD_UNPARK_UNPIN;
+
+	coiommu_execute_cmd(cmdval, (void *__iomem)&dev->mmio_info->command);
+}
+
 static const struct coiommu_dev_ops dev_ops = {
 	.execute_request = coiommu_execute_req,
 	.execute_requests = coiommu_execute_reqs,
+	.park_unpin = coiommu_park_unpin,
 };
 
 static int pci_coiommu_probe(struct pci_dev *dev, const struct pci_device_id *id)

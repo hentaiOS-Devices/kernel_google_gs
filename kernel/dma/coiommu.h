@@ -4,6 +4,7 @@
 
 #include <linux/rwlock.h>
 #include <linux/kthread.h>
+#include <linux/shrinker.h>
 
 #define COIOMMU_INFO_NR_OBJS 64
 
@@ -17,10 +18,13 @@ struct coiommu_dtt {
 	unsigned int level;
 	int max_map_count;
 	rwlock_t lock;
+	void *zero_page;
+	struct shrinker dtt_shrinker;
 	spinlock_t alloc_lock;
 	int cur_cache;
 	struct kthread_worker *worker;
 	struct kthread_work alloc_work;
+	atomic_t pages;
 	struct dtt_page_cache cache[2];
 };
 
