@@ -115,7 +115,7 @@ static inline u32 enc_in_img_ctrl(struct hantro_ctx *ctx)
 
 	return H1_REG_IN_IMG_CTRL_ROW_LEN(bytes_per_line)
 			| H1_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r)
-			| H1_REG_IN_IMG_CTRL_OVRFLB_D4(overfill_b)
+			| H1_REG_IN_IMG_CTRL_OVRFLB(overfill_b)
 			| H1_REG_IN_IMG_CTRL_FMT(ctx->vpu_src_fmt->enc_fmt);
 }
 
