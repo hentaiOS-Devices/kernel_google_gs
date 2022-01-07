@@ -561,7 +561,10 @@ static int vidioc_g_selection(struct file *file, void *priv,
 		sel->r.height = ctx->src_fmt.height;
 		break;
 	case V4L2_SEL_TGT_CROP:
-		sel->r = ctx->src_crop;
+		sel->r.top = 0;
+		sel->r.left = 0;
+		sel->r.width = ctx->dst_fmt.width;
+		sel->r.height = ctx->dst_fmt.height;
 		break;
 	default:
 		return -EINVAL;
@@ -574,7 +577,6 @@ static int vidioc_s_selection(struct file *file, void *priv,
 			      struct v4l2_selection *sel)
 {
 	struct hantro_ctx *ctx = fh_to_ctx(priv);
-	struct v4l2_pix_format_mplane *fmt = &ctx->src_fmt;
 	struct v4l2_rect *rect = &sel->r;
 	struct vb2_queue *vq;
 
@@ -596,19 +598,20 @@ static int vidioc_s_selection(struct file *file, void *priv,
 	 * right-most or bottom-most macroblocks.
 	 */
 	if (rect->left != 0 || rect->top != 0 ||
-	    round_up(rect->width, MB_DIM) != fmt->width ||
-	    round_up(rect->height, MB_DIM) != fmt->height) {
+	    round_up(rect->width, MB_DIM) != ctx->src_fmt.width ||
+	    round_up(rect->height, MB_DIM) != ctx->src_fmt.height) {
 		/* Default to full frame for incorrect settings. */
 		rect->left = 0;
 		rect->top = 0;
-		rect->width = fmt->width;
-		rect->height = fmt->height;
+		rect->width = ctx->src_fmt.width;
+		rect->height = ctx->src_fmt.height;
 	} else {
 		/* We support widths aligned to 4 pixels and arbitrary heights. */
 		rect->width = round_up(rect->width, 4);
 	}
 
-	ctx->src_crop = *rect;
+	ctx->dst_fmt.width = rect->width;
+	ctx->dst_fmt.height = rect->height;
 
 	return 0;
 }

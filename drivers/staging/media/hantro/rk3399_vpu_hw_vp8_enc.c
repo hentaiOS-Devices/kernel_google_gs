@@ -215,10 +215,8 @@ static const s32 vp8_prob_cost[] = {
 
 static inline u32 enc_in_img_ctrl(struct hantro_ctx *ctx)
 {
-	struct v4l2_pix_format_mplane *pix_fmt = &ctx->src_fmt;
 	const struct rk3399_vp8_enc_reg_params *params =
 		hantro_get_ctrl(ctx, V4L2_CID_PRIVATE_HANTRO_REG_PARAMS);
-	struct v4l2_rect *crop = &ctx->src_crop;
 	unsigned int overfill_r, overfill_b;
 	u32 first_free_bits = (params->frm_hdr_size & 7) * 8;
 
@@ -227,14 +225,14 @@ static inline u32 enc_in_img_ctrl(struct hantro_ctx *ctx)
 	 * values of other planes are calculated internally based on
 	 * format setting.
 	 */
-	overfill_r = (pix_fmt->width - crop->width) / 4;
-	overfill_b = pix_fmt->height - crop->height;
+	overfill_r = ctx->src_fmt.width - ctx->dst_fmt.width;
+	overfill_b = ctx->src_fmt.height - ctx->dst_fmt.height;
 
 	/** TODO, finish first free bit when assemble frame header
 	 *  done
 	 */
 	return VEPU_REG_STREAM_START_OFFSET(first_free_bits) |
-		VEPU_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r) |
+		VEPU_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r / 4) |
 		VEPU_REG_IN_IMG_CTRL_OVRFLB(overfill_b) |
 		VEPU_REG_SKIP_MACROBLOCK_PENALTY(params->qp >= 100 ?
 						 (3 * params->qp / 4) : 0);

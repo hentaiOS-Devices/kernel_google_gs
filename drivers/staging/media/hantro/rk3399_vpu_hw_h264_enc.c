@@ -913,14 +913,12 @@ static void rk3399_vpu_h264_enc_set_params(struct hantro_dev *vpu,
 {
 	const struct hantro_h264_enc_reg_params *params =
 		hantro_get_ctrl(ctx, V4L2_CID_PRIVATE_HANTRO_REG_PARAMS);
-	struct v4l2_pix_format_mplane *pix_fmt = &ctx->src_fmt;
 	s32 scaler, i;
 	u32 reg;
 	u32 prev_mode_favor = h264_prev_mode_favor[params->qp];
 
 	u32 mbs_in_row = MB_WIDTH(ctx->src_fmt.width);
 	u32 mbs_in_col = MB_HEIGHT(ctx->src_fmt.height);
-	struct v4l2_rect *crop = &ctx->src_crop;
 	u32 overfill_r, overfill_b;
 	u32 constrained_intra_prediction = 0;
 	u32 skip_penalty;
@@ -934,8 +932,8 @@ static void rk3399_vpu_h264_enc_set_params(struct hantro_dev *vpu,
 	 * values of other planes are calculated internally based on
 	 * format setting.
 	 */
-	overfill_r = (pix_fmt->width - crop->width) / 4;
-	overfill_b = pix_fmt->height - crop->height;
+	overfill_r = ctx->src_fmt.width - ctx->dst_fmt.width;
+	overfill_b = ctx->src_fmt.height - ctx->dst_fmt.height;
 
 	vepu_write_relaxed(vpu, 0, VEPU_REG_INTRA_AREA_CTRL);
 
@@ -971,7 +969,7 @@ static void rk3399_vpu_h264_enc_set_params(struct hantro_dev *vpu,
 
 	reg = VEPU_REG_STREAM_START_OFFSET(0) |
 			VEPU_REG_SKIP_MACROBLOCK_PENALTY(skip_penalty) |
-			VEPU_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r) |
+			VEPU_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r / 4) |
 			VEPU_REG_IN_IMG_CTRL_OVRFLB(overfill_b);
 	vepu_write_relaxed(vpu, reg, VEPU_REG_ENC_OVER_FILL_STRM_OFFSET);
 
