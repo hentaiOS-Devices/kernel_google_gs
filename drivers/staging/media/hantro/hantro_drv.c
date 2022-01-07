@@ -220,6 +220,11 @@ queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	dst_vq->bidirectional = true;
 	dst_vq->mem_ops = &vb2_dma_contig_memops;
 	dst_vq->dma_attrs = DMA_ATTR_ALLOC_SINGLE_PAGES;
+	/*
+	 * The Kernel needs access to the JPEG destination buffer for the
+	 * JPEG encoder to fill in the JPEG headers, and for the VP8 encoder
+	 * to reassemble the VP8 bitstream.
+	 */
 	if (!ctx->is_encoder)
 		dst_vq->dma_attrs |= DMA_ATTR_NO_KERNEL_MAPPING;
 

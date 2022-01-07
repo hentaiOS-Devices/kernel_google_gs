@@ -191,9 +191,7 @@ static const struct hantro_codec_ops rk3288_vpu_codec_ops[] = {
 	[HANTRO_MODE_JPEG_ENC] = {
 		.run = hantro_h1_jpeg_enc_run,
 		.reset = rk3288_vpu_enc_reset,
-		.init = hantro_jpeg_enc_init,
 		.done = hantro_h1_jpeg_enc_done,
-		.exit = hantro_jpeg_enc_exit,
 	},
 	[HANTRO_MODE_VP8_ENC] = {
 		.run = hantro_h1_vp8_enc_run,

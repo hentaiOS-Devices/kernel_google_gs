@@ -176,14 +176,6 @@ struct hantro_aux_buf {
 };
 
 /**
- * struct hantro_jpeg_enc_hw_ctx
- * @bounce_buffer:	Bounce buffer
- */
-struct hantro_jpeg_enc_hw_ctx {
-	struct hantro_aux_buf bounce_buffer;
-};
-
-/**
  * struct hantro_h264_enc_hw_ctx - Context private data specific to
  * codec mode.
  * @ctrl_buf:		H264 control buffer.
@@ -368,8 +360,6 @@ void hantro_end_prepare_run(struct hantro_ctx *ctx);
 
 int hantro_h1_jpeg_enc_run(struct hantro_ctx *ctx);
 int rk3399_vpu_jpeg_enc_run(struct hantro_ctx *ctx);
-int hantro_jpeg_enc_init(struct hantro_ctx *ctx);
-void hantro_jpeg_enc_exit(struct hantro_ctx *ctx);
 void hantro_h1_jpeg_enc_done(struct hantro_ctx *ctx);
 void rk3399_vpu_jpeg_enc_done(struct hantro_ctx *ctx);
 
