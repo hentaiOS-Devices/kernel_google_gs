@@ -70,6 +70,7 @@ enum t7xx_md_irq_type {
 
 #define FSM_CMD_FLAG_WAIT_FOR_COMPLETION	BIT(0)
 #define FSM_CMD_FLAG_FLIGHT_MODE		BIT(1)
+#define FSM_CMD_FLAG_IN_INTERRUPT		BIT(2)
 #define FSM_CMD_EX_REASON			GENMASK(23, 16)
 
 struct coprocessor_ctl {
