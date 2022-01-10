@@ -19,15 +19,6 @@ static inline struct mdp_dev *vpu_to_mdp(struct mdp_vpu_dev *vpu)
 
 static int mdp_vpu_shared_mem_alloc(struct mdp_vpu_dev *vpu)
 {
-	if (vpu->work && vpu->work_addr)
-		return 0;
-
-	if (vpu->config && vpu->config_addr)
-		return 0;
-
-	if (vpu->path && vpu->path_addr)
-		return 0;
-
 	vpu->work = dma_alloc_wc(scp_get_device(vpu->scp), vpu->work_size,
 				 &vpu->work_addr, GFP_KERNEL);
 	if (!vpu->work)
@@ -202,7 +193,8 @@ int mdp_vpu_dev_init(struct mdp_vpu_dev *vpu, struct mtk_scp *scp,
 
 	vpu->config_size = MDP_DUAL_PIPE * sizeof(struct img_config);
 	vpu->path_size = MDP_VPU_PATH_SIZE;
-	if (mdp_vpu_shared_mem_alloc(vpu)) {
+	err = mdp_vpu_shared_mem_alloc(vpu);
+	if (err) {
 		dev_err(&mdp->pdev->dev, "VPU memory alloc fail!");
 		goto err_mem_alloc;
 	}
@@ -292,16 +284,8 @@ int mdp_vpu_ctx_deinit(struct mdp_vpu_ctx *ctx)
 
 int mdp_vpu_process(struct mdp_vpu_ctx *ctx, struct img_ipi_frameparam *param)
 {
-	struct mdp_vpu_dev *vpu = ctx->vpu_dev;
-	struct mdp_dev *mdp = vpu_to_mdp(vpu);
 	struct img_sw_addr addr;
 
-	if (!ctx->vpu_dev->work || !ctx->vpu_dev->work_addr) {
-		if (mdp_vpu_shared_mem_alloc(vpu)) {
-			dev_err(&mdp->pdev->dev, "VPU memory alloc fail!");
-			return -ENOMEM;
-		}
-	}
 	memset((void *)ctx->vpu_dev->work, 0, ctx->vpu_dev->work_size);
 
 	if (param->frame_change)
