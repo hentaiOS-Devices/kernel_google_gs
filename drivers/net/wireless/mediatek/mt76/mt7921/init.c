@@ -230,7 +230,9 @@ int mt7921_register_device(struct mt7921_dev *dev)
 	dev->pm.idle_timeout = MT7921_PM_TIMEOUT;
 	dev->pm.stats.last_wake_event = jiffies;
 	dev->pm.stats.last_doze_event = jiffies;
+	dev->pm.enable_user = true;
 	dev->pm.enable = true;
+	dev->pm.ds_enable_user = true;
 	dev->pm.ds_enable = true;
 
 	if (mt76_is_sdio(&dev->mt76))
