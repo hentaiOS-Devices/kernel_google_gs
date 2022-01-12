@@ -1138,6 +1138,7 @@ static int ov2740_probe(struct i2c_client *client)
 	if (!ov2740)
 		return -ENOMEM;
 
+	v4l2_i2c_subdev_init(&ov2740->sd, client, &ov2740_subdev_ops);
 	full_power = acpi_dev_state_d0(&client->dev);
 	if (full_power) {
 		ret = ov2740_identify_module(ov2740);
@@ -1145,13 +1146,6 @@ static int ov2740_probe(struct i2c_client *client)
 			dev_err(&client->dev, "failed to find sensor: %d", ret);
 			return ret;
 		}
-	}
-
-	v4l2_i2c_subdev_init(&ov2740->sd, client, &ov2740_subdev_ops);
-	ret = ov2740_identify_module(ov2740);
-	if (ret) {
-		dev_err(&client->dev, "failed to find sensor: %d", ret);
-		return ret;
 	}
 
 	mutex_init(&ov2740->mutex);
