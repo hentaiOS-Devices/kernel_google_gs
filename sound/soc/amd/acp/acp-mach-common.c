@@ -284,8 +284,8 @@ SND_SOC_DAILINK_DEF(rt1019,
 			  COMP_CODEC("i2c-10EC1019:01", "rt1019-aif")));
 
 SND_SOC_DAILINK_DEF(rt1019_1,
-	DAILINK_COMP_ARRAY(COMP_CODEC("i2c-10EC1019:01", "rt1019-aif"),
-			  COMP_CODEC("i2c-10EC1019:02", "rt1019-aif")));
+	DAILINK_COMP_ARRAY(COMP_CODEC("i2c-10EC1019:02", "rt1019-aif"),
+			  COMP_CODEC("i2c-10EC1019:01", "rt1019-aif")));
 
 static const struct snd_soc_dapm_route rt1019_map_lr[] = {
 	{ "Left Spk", NULL, "Left SPO" },
@@ -305,11 +305,11 @@ static struct snd_soc_codec_conf rt1019_conf[] = {
 
 static struct snd_soc_codec_conf rt1019_1_conf[] = {
 	{
-		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:01"),
+		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:02"),
 		 .name_prefix = "Left",
 	},
 	{
-		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:02"),
+		 .dlc = COMP_CODEC_CONF("i2c-10EC1019:01"),
 		 .name_prefix = "Right",
 	},
 };
