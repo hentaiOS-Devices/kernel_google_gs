@@ -269,7 +269,6 @@ static const struct ath11k_hw_params ath11k_hw_params[] = {
 		.supports_suspend = true,
 		.hal_desc_sz = sizeof(struct hal_rx_desc_wcn6855),
 		.fix_l1ss = false,
-		.check_dynamic_smps = true,
 		.max_tx_ring = DP_TCL_NUM_RING_MAX_QCA6390,
 	},
 };
