@@ -27,6 +27,18 @@
 #include "avs.h"
 #include "cldma.h"
 
+static u32 pgctl_mask = AZX_PGCTL_LSRMD_MASK;
+module_param(pgctl_mask, uint, 0444);
+MODULE_PARM_DESC(pgctl_mask, "PCI PGCTL policy override");
+
+static u32 cgctl_mask = AZX_CGCTL_MISCBDCGE_MASK;
+module_param(cgctl_mask, uint, 0444);
+MODULE_PARM_DESC(cgctl_mask, "PCI CGCTL policy override");
+
+static bool allow_dmil1 = true;
+module_param(allow_dmil1, bool, 0444);
+MODULE_PARM_DESC(allow_dmil1, "Allow for DMI L1-support manipulation");
+
 static void
 avs_hda_update_config_dword(struct hdac_bus *bus, u32 reg, u32 mask, u32 value)
 {
@@ -43,17 +55,17 @@ void avs_hda_power_gating_enable(struct avs_dev *adev, bool enable)
 {
 	u32 value;
 
-	value = enable ? 0 : AZX_PGCTL_LSRMD_MASK;
+	value = enable ? 0 : pgctl_mask;
 	avs_hda_update_config_dword(&adev->base.core, AZX_PCIREG_PGCTL,
-				    AZX_PGCTL_LSRMD_MASK, value);
+				    pgctl_mask, value);
 }
 
 static void avs_hdac_clock_gating_enable(struct hdac_bus *bus, bool enable)
 {
 	u32 value;
 
-	value = enable ? AZX_CGCTL_MISCBDCGE_MASK : 0;
-	avs_hda_update_config_dword(bus, AZX_PCIREG_CGCTL, AZX_CGCTL_MISCBDCGE_MASK, value);
+	value = enable ? cgctl_mask : 0;
+	avs_hda_update_config_dword(bus, AZX_PCIREG_CGCTL, cgctl_mask, value);
 }
 
 void avs_hda_clock_gating_enable(struct avs_dev *adev, bool enable)
@@ -65,8 +77,10 @@ void avs_hda_l1sen_enable(struct avs_dev *adev, bool enable)
 {
 	u32 value;
 
-	value = enable ? AZX_VS_EM2_L1SEN : 0;
-	snd_hdac_chip_updatel(&adev->base.core, VS_EM2, AZX_VS_EM2_L1SEN, value);
+	if (allow_dmil1) {
+		value = enable ? AZX_VS_EM2_L1SEN : 0;
+		snd_hdac_chip_updatel(&adev->base.core, VS_EM2, AZX_VS_EM2_L1SEN, value);
+	}
 }
 
 static int avs_hdac_bus_init_streams(struct hdac_bus *bus)

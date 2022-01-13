@@ -605,6 +605,7 @@ int avs_dsp_boot_firmware(struct avs_dev *adev, bool purge)
 	for (i = 1; i < adev->fw_cfg.max_libs_count; i++)
 		memset(adev->lib_names[i], 0, AVS_LIB_NAME_SIZE);
 
+	avs_hda_power_gating_enable(adev, false);
 	avs_hda_clock_gating_enable(adev, false);
 	avs_hda_l1sen_enable(adev, false);
 
@@ -625,6 +626,7 @@ int avs_dsp_boot_firmware(struct avs_dev *adev, bool purge)
 reenable_gating:
 	avs_hda_l1sen_enable(adev, true);
 	avs_hda_clock_gating_enable(adev, true);
+	avs_hda_power_gating_enable(adev, true);
 
 	if (ret < 0)
 		return ret;
