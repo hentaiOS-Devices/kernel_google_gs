@@ -723,6 +723,13 @@ static int at24_probe(struct i2c_client *client)
 	 */
 	nvmem_config.id = NVMEM_DEVID_AUTO;
 
+	if (device_property_present(dev, "device-id")) {
+		u32 device_id = 0;
+		err = device_property_read_u32(dev, "device-id", &device_id);
+		if (!err)
+			nvmem_config.id = device_id;
+	}
+
 	if (device_property_present(dev, "label")) {
 		err = device_property_read_string(dev, "label",
 						  &nvmem_config.name);
