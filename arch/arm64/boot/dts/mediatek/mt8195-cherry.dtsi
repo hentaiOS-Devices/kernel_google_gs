@@ -1329,6 +1329,12 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
+		cros_ec_pwm: ec-pwm {
+			compatible = "google,cros-ec-pwm";
+			#pwm-cells = <1>;
+			status = "disabled";
+		};
+
 		i2c_tunnel: i2c-tunnel {
 			compatible = "google,cros-ec-i2c-tunnel";
 			google,remote-bus = <0>;
