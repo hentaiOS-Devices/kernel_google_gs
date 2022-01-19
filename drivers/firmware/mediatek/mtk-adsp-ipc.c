@@ -158,3 +158,4 @@ builtin_platform_driver(mtk_adsp_ipc_driver);
 
 MODULE_AUTHOR("Allen-KH Cheng <allen-kh.cheng@mediatek.com>");
 MODULE_DESCRIPTION("MTK ADSP IPC Driver");
+MODULE_LICENSE("GPL v2");

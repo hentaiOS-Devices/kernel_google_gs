@@ -173,3 +173,4 @@ module_platform_driver(mtk_adsp_mbox_driver);
 
 MODULE_AUTHOR("Allen-KH Cheng <Allen-KH.Cheng@mediatek.com>");
 MODULE_DESCRIPTION("MTK ADSP Mailbox Controller");
+MODULE_LICENSE("GPL v2");
