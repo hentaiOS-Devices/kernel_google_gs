@@ -91,33 +91,34 @@ static inline struct mtk_crtc_state *to_mtk_crtc_state(struct drm_crtc_state *s)
 static void mtk_drm_crtc_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 {
 	struct drm_crtc *crtc = &mtk_crtc->base;
-	unsigned long flags;
 
 	if (!crtc->dev)
-		DRM_WARN("crtc 0x%px already free!!!! %s %d\n", crtc, __func__, __LINE__);
+		DRM_WARN("crtc 0x%px already free=== %s %d\n", crtc, __func__, __LINE__);
 
 	if (!mtk_crtc->event)
-		DRM_WARN("crtc event 0x%px already free!!!! %s %d\n", mtk_crtc->event, __func__, __LINE__);
+		DRM_WARN("crtc event 0x%px already free=== %s %d\n", mtk_crtc->event, __func__, __LINE__);
 
-	spin_lock_irqsave(&crtc->dev->event_lock, flags);
 	drm_crtc_send_vblank_event(crtc, mtk_crtc->event);
 	drm_crtc_vblank_put(crtc);
 	mtk_crtc->event = NULL;
-	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
 }
 
 static void mtk_drm_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 {
 	struct drm_crtc *crtc = &mtk_crtc->base;
+	unsigned long flags;
 
 	if (!crtc->dev)
 		DRM_WARN("crtc 0x%px already free!!!! %s %d\n", crtc, __func__, __LINE__);
 
 	drm_crtc_handle_vblank(&mtk_crtc->base);
+
+	spin_lock_irqsave(&crtc->dev->event_lock, flags);
 	if (!mtk_crtc->config_updating && mtk_crtc->pending_needs_vblank) {
 		mtk_drm_crtc_finish_page_flip(mtk_crtc);
 		mtk_crtc->pending_needs_vblank = false;
 	}
+	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
 }
 
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
