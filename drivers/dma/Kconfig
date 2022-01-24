@@ -483,7 +483,7 @@ config PCH_DMA
 
 config PCI_COIOMMU
 	bool "Virtual PCI CoIOMMU device driver"
-	depends on PCI && 64BIT
+	depends on PCI && 64BIT && SPARSEMEM
 	select COIOMMU
 	help
 	  Select if your platform uses the virtual CoIommu device.

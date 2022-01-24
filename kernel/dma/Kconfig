@@ -82,7 +82,7 @@ config DMA_VIRT_OPS
 
 config COIOMMU
 	bool
-	depends on HAS_DMA
+	depends on HAS_DMA && SPARSEMEM
 	select DMA_OPS
 	select IOMMU_API
 
