@@ -60,7 +60,9 @@ static bool mtk_vdec_get_cap_fmt(struct mtk_vcodec_ctx *ctx, int format_index)
 			ret = true;
 		break;
 	case V4L2_PIX_FMT_H264_SLICE:
+#if 0
 	case V4L2_PIX_FMT_VP9_FRAME:
+#endif
 		if (fmt->fourcc == V4L2_PIX_FMT_MM21)
 			ret = false;
 		break;
