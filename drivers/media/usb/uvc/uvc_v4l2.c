@@ -26,6 +26,55 @@
 #include "uvcvideo.h"
 
 /* ------------------------------------------------------------------------
+ * UVC power management
+ */
+
+static int uvc_pm_get(struct uvc_streaming *stream)
+{
+	int ret = 0;
+
+	if (!video_is_registered(&stream->vdev))
+		return -ENODEV;
+
+	/*
+	 * We cannot hold dev->lock when we call autopm_get_interface
+	 */
+	ret = usb_autopm_get_interface(stream->dev->intf);
+	if (ret)
+		return ret;
+
+	mutex_lock(&stream->dev->lock);
+	if (!stream->dev->users)
+		ret = uvc_status_start(stream->dev, GFP_KERNEL);
+	if (!ret)
+		stream->dev->users++;
+	mutex_unlock(&stream->dev->lock);
+
+	if (ret)
+		usb_autopm_put_interface(stream->dev->intf);
+
+	return ret;
+}
+
+static void uvc_pm_put(struct uvc_streaming *stream)
+{
+	if (!video_is_registered(&stream->vdev))
+		return;
+
+	mutex_lock(&stream->dev->lock);
+	if (WARN_ON(!stream->dev->users)) {
+		mutex_unlock(&stream->dev->lock);
+		return;
+	}
+	stream->dev->users--;
+	if (!stream->dev->users)
+		uvc_status_stop(stream->dev);
+	mutex_unlock(&stream->dev->lock);
+
+	usb_autopm_put_interface(stream->dev->intf);
+}
+
+/* ------------------------------------------------------------------------
  * UVC ioctls
  */
 static int uvc_ioctl_ctrl_map(struct uvc_video_chain *chain,
@@ -244,7 +293,9 @@ static int uvc_v4l2_try_format(struct uvc_streaming *stream,
 	 * the Windows driver).
 	 */
 	mutex_lock(&stream->mutex);
-	if (!video_is_registered(&stream->vdev)) {
+
+	ret = uvc_pm_get(stream);
+	if (ret) {
 		mutex_unlock(&stream->mutex);
 		ret = -ENODEV;
 		goto done;
@@ -257,6 +308,7 @@ static int uvc_v4l2_try_format(struct uvc_streaming *stream,
 	/* Probe the device. */
 	ret = uvc_probe_video(stream, probe);
 	mutex_unlock(&stream->mutex);
+	uvc_pm_put(stream);
 	if (ret < 0)
 		goto done;
 
@@ -484,7 +536,13 @@ static int uvc_v4l2_set_streamparm(struct uvc_streaming *stream,
 	}
 
 	/* Probe the device with the new settings. */
+	ret = uvc_pm_get(stream);
+	if (ret) {
+		mutex_unlock(&stream->mutex);
+		return ret;
+	}
 	ret = uvc_probe_video(stream, &probe);
+	uvc_pm_put(stream);
 	if (ret < 0) {
 		mutex_unlock(&stream->mutex);
 		return ret;
@@ -575,41 +633,26 @@ static int uvc_v4l2_open(struct file *file)
 {
 	struct uvc_streaming *stream;
 	struct uvc_fh *handle;
-	int ret = 0;
 
 	stream = video_drvdata(file);
 	uvc_dbg(stream->dev, CALLS, "%s\n", __func__);
 
-	ret = usb_autopm_get_interface(stream->dev->intf);
-	if (ret < 0)
-		return ret;
+	if (!video_is_registered(&stream->vdev))
+		return -ENODEV;
 
 	/* Create the device handle. */
 	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
-	if (handle == NULL) {
-		usb_autopm_put_interface(stream->dev->intf);
+	if (!handle)
 		return -ENOMEM;
-	}
 
-	mutex_lock(&stream->dev->lock);
-	if (!video_is_registered(&stream->vdev)) {
-		mutex_unlock(&stream->dev->lock);
-		usb_autopm_put_interface(stream->dev->intf);
+	/*
+	 * If the uvc evdev exists we cannot suspend when the device
+	 * is idle. Otherwise we will miss button actions.
+	 */
+	if (stream->dev->input && uvc_pm_get(stream)) {
 		kfree(handle);
 		return -ENODEV;
 	}
-	if (stream->dev->users == 0) {
-		ret = uvc_status_start(stream->dev, GFP_KERNEL);
-		if (ret < 0) {
-			mutex_unlock(&stream->dev->lock);
-			usb_autopm_put_interface(stream->dev->intf);
-			kfree(handle);
-			return ret;
-		}
-	}
-
-	stream->dev->users++;
-	mutex_unlock(&stream->dev->lock);
 
 	v4l2_fh_init(&handle->vfh, &stream->vdev);
 	v4l2_fh_add(&handle->vfh);
@@ -632,6 +675,12 @@ static int uvc_v4l2_release(struct file *file)
 	if (uvc_has_privileges(handle))
 		uvc_queue_release(&stream->queue);
 
+	if (handle->is_streaming)
+		uvc_pm_put(stream);
+
+	if (stream->dev->input)
+		uvc_pm_put(stream);
+
 	/* Release the file handle. */
 	uvc_dismiss_privileges(handle);
 	v4l2_fh_del(&handle->vfh);
@@ -639,12 +688,6 @@ static int uvc_v4l2_release(struct file *file)
 	kfree(handle);
 	file->private_data = NULL;
 
-	mutex_lock(&stream->dev->lock);
-	if (--stream->dev->users == 0 && video_is_registered(&stream->vdev))
-		uvc_status_stop(stream->dev);
-	mutex_unlock(&stream->dev->lock);
-
-	usb_autopm_put_interface(stream->dev->intf);
 	return 0;
 }
 
@@ -872,11 +915,20 @@ static int uvc_ioctl_streamon(struct file *file, void *fh,
 		return -EBUSY;
 
 	mutex_lock(&stream->mutex);
-	if (!video_is_registered(&stream->vdev)) {
-		ret = -ENODEV;
-		goto unlock;
+
+	if (!handle->is_streaming) {
+		ret = uvc_pm_get(stream);
+		if (ret)
+			goto unlock;
 	}
+
 	ret = uvc_queue_streamon(&stream->queue, type);
+
+	if (ret && !handle->is_streaming)
+		uvc_pm_put(stream);
+
+	if (!ret)
+		handle->is_streaming = true;
 unlock:
 	mutex_unlock(&stream->mutex);
 
@@ -899,6 +951,10 @@ static int uvc_ioctl_streamoff(struct file *file, void *fh,
 		goto unlock;
 	}
 	uvc_queue_streamoff(&stream->queue, type);
+	if (handle->is_streaming) {
+		handle->is_streaming = false;
+		uvc_pm_put(stream);
+	}
 unlock:
 	mutex_unlock(&stream->mutex);
 
@@ -950,6 +1006,7 @@ static int uvc_ioctl_g_input(struct file *file, void *fh, unsigned int *input)
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
 	u8 *buf;
 	int ret;
 
@@ -963,9 +1020,16 @@ static int uvc_ioctl_g_input(struct file *file, void *fh, unsigned int *input)
 	if (!buf)
 		return -ENOMEM;
 
+	ret = uvc_pm_get(stream);
+	if (ret) {
+		kfree(buf);
+		return ret;
+	}
+
 	ret = uvc_query_ctrl(chain->dev, UVC_GET_CUR, chain->selector->id,
 			     chain->dev->intfnum,  UVC_SU_INPUT_SELECT_CONTROL,
 			     buf, 1);
+	uvc_pm_put(stream);
 	if (!ret)
 		*input = *buf - 1;
 
@@ -978,6 +1042,7 @@ static int uvc_ioctl_s_input(struct file *file, void *fh, unsigned int input)
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
 	u8 *buf;
 	int ret;
 
@@ -999,10 +1064,17 @@ static int uvc_ioctl_s_input(struct file *file, void *fh, unsigned int input)
 	if (!buf)
 		return -ENOMEM;
 
+	ret = uvc_pm_get(stream);
+	if (ret) {
+		kfree(buf);
+		return ret;
+	}
+
 	*buf = input + 1;
 	ret = uvc_query_ctrl(chain->dev, UVC_SET_CUR, chain->selector->id,
 			     chain->dev->intfnum, UVC_SU_INPUT_SELECT_CONTROL,
 			     buf, 1);
+	uvc_pm_put(stream);
 	kfree(buf);
 
 	return ret;
@@ -1013,8 +1085,15 @@ static int uvc_ioctl_queryctrl(struct file *file, void *fh,
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
+	int ret;
 
-	return uvc_query_v4l2_ctrl(chain, qc);
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
+	ret = uvc_query_v4l2_ctrl(chain, qc);
+	uvc_pm_put(stream);
+	return ret;
 }
 
 static int uvc_ioctl_query_ext_ctrl(struct file *file, void *fh,
@@ -1022,10 +1101,15 @@ static int uvc_ioctl_query_ext_ctrl(struct file *file, void *fh,
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
 	struct v4l2_queryctrl qc = { qec->id };
 	int ret;
 
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
 	ret = uvc_query_v4l2_ctrl(chain, &qc);
+	uvc_pm_put(stream);
 	if (ret)
 		return ret;
 
@@ -1071,6 +1155,7 @@ static int uvc_ioctl_g_ext_ctrls(struct file *file, void *fh,
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
 	struct v4l2_ext_control *ctrl = ctrls->controls;
 	unsigned int i;
 	int ret;
@@ -1095,22 +1180,30 @@ static int uvc_ioctl_g_ext_ctrls(struct file *file, void *fh,
 		return 0;
 	}
 
-	ret = uvc_ctrl_begin(chain);
-	if (ret < 0)
+	ret = uvc_pm_get(stream);
+	if (ret)
 		return ret;
+	ret = uvc_ctrl_begin(chain);
+	if (ret < 0) {
+		uvc_pm_put(stream);
+		return ret;
+	}
 
 	for (i = 0; i < ctrls->count; ++ctrl, ++i) {
 		ret = uvc_ctrl_get(chain, ctrl);
 		if (ret < 0) {
 			uvc_ctrl_rollback(handle);
 			ctrls->error_idx = i;
+			uvc_pm_put(stream);
 			return ret;
 		}
 	}
 
 	ctrls->error_idx = 0;
 
-	return uvc_ctrl_rollback(handle);
+	ret = uvc_ctrl_rollback(handle);
+	uvc_pm_put(stream);
+	return ret;
 }
 
 static int uvc_ioctl_s_try_ext_ctrls(struct uvc_fh *handle,
@@ -1119,6 +1212,7 @@ static int uvc_ioctl_s_try_ext_ctrls(struct uvc_fh *handle,
 {
 	struct v4l2_ext_control *ctrl = ctrls->controls;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
 	unsigned int i;
 	int ret;
 
@@ -1126,9 +1220,15 @@ static int uvc_ioctl_s_try_ext_ctrls(struct uvc_fh *handle,
 	if (ret < 0)
 		return ret;
 
-	ret = uvc_ctrl_begin(chain);
-	if (ret < 0)
+	ret = uvc_pm_get(stream);
+	if (ret)
 		return ret;
+
+	ret = uvc_ctrl_begin(chain);
+	if (ret < 0) {
+		uvc_pm_put(stream);
+		return ret;
+	}
 
 	for (i = 0; i < ctrls->count; ++ctrl, ++i) {
 		ret = uvc_ctrl_set(handle, ctrl);
@@ -1136,6 +1236,7 @@ static int uvc_ioctl_s_try_ext_ctrls(struct uvc_fh *handle,
 			uvc_ctrl_rollback(handle);
 			ctrls->error_idx = ioctl == VIDIOC_S_EXT_CTRLS ?
 						    ctrls->count : i;
+			uvc_pm_put(stream);
 			return ret;
 		}
 	}
@@ -1143,9 +1244,12 @@ static int uvc_ioctl_s_try_ext_ctrls(struct uvc_fh *handle,
 	ctrls->error_idx = 0;
 
 	if (ioctl == VIDIOC_S_EXT_CTRLS)
-		return uvc_ctrl_commit(handle, ctrls);
+		ret = uvc_ctrl_commit(handle, ctrls);
 	else
-		return uvc_ctrl_rollback(handle);
+		ret = uvc_ctrl_rollback(handle);
+
+	uvc_pm_put(stream);
+	return ret;
 }
 
 static int uvc_ioctl_s_ext_ctrls(struct file *file, void *fh,
@@ -1160,8 +1264,16 @@ static int uvc_ioctl_try_ext_ctrls(struct file *file, void *fh,
 				   struct v4l2_ext_controls *ctrls)
 {
 	struct uvc_fh *handle = fh;
+	struct uvc_streaming *stream = handle->stream;
+	int ret;
 
-	return uvc_ioctl_s_try_ext_ctrls(handle, ctrls, VIDIOC_TRY_EXT_CTRLS);
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
+	ret = uvc_ioctl_s_try_ext_ctrls(handle, ctrls, VIDIOC_TRY_EXT_CTRLS);
+	uvc_pm_put(stream);
+
+	return ret;
 }
 
 static int uvc_ioctl_querymenu(struct file *file, void *fh,
@@ -1169,8 +1281,16 @@ static int uvc_ioctl_querymenu(struct file *file, void *fh,
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_streaming *stream = handle->stream;
+	int ret;
 
-	return uvc_query_v4l2_menu(chain, qm);
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
+	ret = uvc_query_v4l2_menu(chain, qm);
+	uvc_pm_put(stream);
+
+	return ret;
 }
 
 static int uvc_ioctl_g_roi_target(struct file *file, void *fh,
@@ -1200,6 +1320,9 @@ static int uvc_ioctl_g_roi_target(struct file *file, void *fh,
 		return -EINVAL;
 	}
 
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
 	/*
 	 * Synchronize with uvc_ioctl_query_ext_ctrl() that can set
 	 * ROI auto_controls concurrently.
@@ -1229,6 +1352,7 @@ static int uvc_ioctl_g_roi_target(struct file *file, void *fh,
 	sel->r.width	= roi->wROI_Right - roi->wROI_Left + 1;
 
 out:
+	uvc_pm_put(stream);
 	mutex_unlock(&chain->ctrl_mutex);
 	return ret;
 }
@@ -1320,6 +1444,9 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 	struct uvc_roi *roi;
 	int ret;
 
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
 	/*
 	 * Synchronize with uvc_ioctl_query_ext_ctrl() that can set
 	 * ROI auto_controls concurrently.
@@ -1329,6 +1456,7 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 	roi = uvc_ctrl_roi(chain, UVC_GET_CUR);
 	if (!roi) {
 		mutex_unlock(&chain->ctrl_mutex);
+		uvc_pm_put(stream);
 		return -EINVAL;
 	}
 
@@ -1367,6 +1495,7 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 		goto out;
 
 out:
+	uvc_pm_put(stream);
 	mutex_unlock(&stream->mutex);
 	mutex_unlock(&chain->ctrl_mutex);
 	return ret;
