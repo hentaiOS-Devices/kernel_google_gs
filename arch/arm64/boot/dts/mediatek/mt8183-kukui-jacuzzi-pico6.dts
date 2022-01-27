@@ -75,6 +75,16 @@
 		drive-strength = <MTK_DRIVE_6mA>;
 	};
 };
+
+&mmc1 {
+	bt_reset: bt-reset {
+		compatible = "mediatek,mt7921s-bluetooth";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_pins_reset>;
+		reset-gpios = <&pio 120 GPIO_ACTIVE_LOW>;
+	};
+};
+
 &pio {
 	bt_pins_wakeup: bt-pins-wakeup {
 		pins_bt_wakeup {
@@ -82,6 +92,14 @@
 			input-enable;
 		};
 	};
+
+	bt_pins_reset: bt-pins-reset {
+		pins_bt_reset {
+			pinmux = <PINMUX_GPIO120__FUNC_GPIO120>;
+			output-high;
+		};
+	};
 };
 
 /delete-node/ &bluetooth;
+/delete-node/ &bt_pins;
