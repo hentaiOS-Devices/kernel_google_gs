@@ -468,6 +468,16 @@ static struct snd_soc_card acp3x_rn_5682_1019 = {
 	.num_controls = ARRAY_SIZE(acp3x_rn_mc_1019_controls),
 };
 
+static struct snd_soc_card acp3x_rn_5682s_1019 = {
+	.name = "acp3xalc5682s1019",
+	.owner = THIS_MODULE,
+	.dapm_widgets = acp3x_rn_1019_widgets,
+	.num_dapm_widgets = ARRAY_SIZE(acp3x_rn_1019_widgets),
+	.dapm_routes = acp3x_rn_1019_route,
+	.num_dapm_routes = ARRAY_SIZE(acp3x_rn_1019_route),
+	.controls = acp3x_rn_mc_1019_controls,
+	.num_controls = ARRAY_SIZE(acp3x_rn_mc_1019_controls),
+};
 static struct snd_soc_card acp3x_rn_5682_m98360 = {
 	.name = "acp3xalc5682m98360",
 	.owner = THIS_MODULE,
@@ -611,6 +621,41 @@ static int acp_card_dai_links_create(struct snd_soc_card *card)
 			card->num_configs = ARRAY_SIZE(rt1019_conf_1);
 		}
 	}
+	else if(!(strcmp(card->name,"acp3xalc5682s1019")))
+	{
+		/* Initialize Headset codec dai link if defined */
+		links[0].name = "acp3x-5682s-play";
+		links[0].stream_name = "Playback";
+		links[0].dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+				   SND_SOC_DAIFMT_CBM_CFM;
+
+		links[0].codecs = rt5682s;
+		links[0].num_codecs = ARRAY_SIZE(rt5682s);
+		links[0].cpus = acp3x_i2s;
+		links[0].num_cpus = ARRAY_SIZE(acp3x_i2s);
+		links[0].platforms = i2s_platform;
+		links[0].num_platforms = ARRAY_SIZE(i2s_platform);
+		links[0].ops = &acp3x_rn_5682_ops;
+		links[0].init = acp3x_rn_5682s_init;
+		links[0].dpcm_playback = 1;
+		links[0].dpcm_capture = 1;
+
+		/* Initialize Amp codec dai link if defined */
+		links[1].name = "acp3x-rt1019-play";
+		links[1].stream_name = "HiFi Playback";
+		links[1].dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+				   SND_SOC_DAIFMT_CBS_CFS;
+		links[1].codecs = rt1019;
+		links[1].num_codecs = ARRAY_SIZE(rt1019);
+		links[1].cpus = acp3x_i2s;
+		links[1].num_cpus = ARRAY_SIZE(acp3x_i2s);
+		links[1].platforms = i2s_platform;
+		links[1].num_platforms = ARRAY_SIZE(i2s_platform);
+		links[1].ops = &acp3x_rn_rt1019_play_ops;
+		links[1].dpcm_playback = 1;
+		card->codec_conf = rt1019_conf;
+		card->num_configs = ARRAY_SIZE(rt1019_conf);
+	}
 	else if(!(strcmp(card->name , "acp3xalc5682m98360")))
 	{
 		/* Initialize Headset codec dai link if defined */
@@ -738,6 +783,7 @@ static const struct acpi_device_id acp3x_rn_audio_acpi_match[] = {
 	{ "10025682", (unsigned long)&acp3x_rn_5682},
 	{ "10029836", (unsigned long)&acp3x_rn_5682s_m98360},
 	{ "AMDI9836", (unsigned long)&acp3x_rn_5682_m98360},
+	{ "AMDI5619", (unsigned long)&acp3x_rn_5682s_1019},
 	{},
 };
 MODULE_DEVICE_TABLE(acpi, acp3x_rn_audio_acpi_match);
