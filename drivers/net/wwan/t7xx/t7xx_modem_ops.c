@@ -242,7 +242,6 @@ static void t7xx_md_exception(struct t7xx_modem *md, enum hif_ex_stage stage)
 	}
 
 	t7xx_cldma_exception(md->md_ctrl[ID_CLDMA1], stage);
-	t7xx_cldma_exception(md->md_ctrl[ID_CLDMA0], stage);
 
 	if (stage == HIF_EX_INIT)
 		t7xx_mhccif_h2d_swint_trigger(t7xx_dev, H2D_CH_EXCEPTION_ACK);

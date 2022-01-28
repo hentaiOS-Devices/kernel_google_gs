@@ -353,15 +353,16 @@ static void t7xx_cldma_txq_empty_hndl(struct cldma_queue *queue)
 		ul_curr_addr = ioread64(hw_info->ap_pdn_base + REG_CLDMA_UL_CURRENT_ADDRL_0 +
 					queue->index * sizeof(u64));
 		if (req->gpd_addr != ul_curr_addr) {
-			/*struct t7xx_fsm_ctl *ctl = queue->md->fsm_ctl;*/
+			struct t7xx_fsm_ctl *ctl = queue->md->fsm_ctl;
 
-			/*spin_unlock_irqrestore(&md_ctrl->cldma_lock, flags);*/
+			spin_unlock_irqrestore(&md_ctrl->cldma_lock, flags);
 			dev_err(md_ctrl->dev, "CLDMA%d queue %d is not empty\n",
 				md_ctrl->hif_id, queue->index);
-			/*t7xx_fsm_append_cmd(ctl, FSM_CMD_RECOVER, 0);
-			return; */
-		} else
-			t7xx_cldma_hw_resume_queue(hw_info, queue->index, MTK_TX);
+			t7xx_fsm_append_cmd(ctl, FSM_CMD_RECOVER, 0);
+			return;
+		}
+
+		t7xx_cldma_hw_resume_queue(hw_info, queue->index, MTK_TX);
 	}
 
 	spin_unlock_irqrestore(&md_ctrl->cldma_lock, flags);
