@@ -56,7 +56,7 @@ static void mtk_remove_rescan(struct work_struct *work)
 	if (pdev) {
 		/* bus provided remove function */
 		pci_stop_and_remove_bus_device_locked(pdev);
-		pr_info("start mtk remove and rescan flow\n");
+		dev_info(&pdev->dev, "start mtk remove and rescan flow\n");
 	}
 
 	for (retry = 35; retry > 0; retry--) {
@@ -69,7 +69,7 @@ static void mtk_remove_rescan(struct work_struct *work)
 		}
 		spin_unlock_irqrestore(&g_mtk_rescan_context.dev_lock, flags);
 	}
-	pr_info("rescan try times left %d\n", retry);
+	dev_info(&pdev->dev, "rescan try times left %d\n", retry);
 }
 
 void mtk_queue_rescan_work(struct pci_dev *pdev)
