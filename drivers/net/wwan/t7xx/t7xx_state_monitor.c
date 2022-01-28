@@ -638,7 +638,7 @@ int t7xx_fsm_append_cmd(struct t7xx_fsm_ctl *ctl, enum t7xx_fsm_cmd_state cmd_id
 	unsigned long flags;
 	int ret;
 
-	cmd = kzalloc(sizeof(*cmd), flag & FSM_CMD_FLAG_IN_INTERRUPT ? GFP_ATOMIC : GFP_KERNEL);
+	cmd = kzalloc(sizeof(*cmd), GFP_ATOMIC);
 	if (!cmd)
 		return -ENOMEM;
 
@@ -735,16 +735,13 @@ unsigned int t7xx_fsm_get_ctl_state(struct t7xx_fsm_ctl *ctl)
 
 void t7xx_fsm_recv_md_intr(struct t7xx_fsm_ctl *ctl, enum t7xx_md_irq_type type)
 {
-	unsigned int cmd_flags = FSM_CMD_FLAG_IN_INTERRUPT;
-
 	if (type == MD_IRQ_PORT_ENUM) {
-		t7xx_fsm_append_cmd(ctl, FSM_CMD_START, cmd_flags);
+		t7xx_fsm_append_cmd(ctl, FSM_CMD_START, 0);
 	} else if (type == MD_IRQ_CCIF_EX) {
 		ctl->exp_flg = true;
 		wake_up(&ctl->async_hk_wq);
-		cmd_flags |= FIELD_PREP(FSM_CMD_EX_REASON, EXCEPTION_EVENT);
-		t7xx_fsm_append_cmd(ctl, FSM_CMD_EXCEPTION, cmd_flags);
-
+		t7xx_fsm_append_cmd(ctl, FSM_CMD_EXCEPTION,
+				    FIELD_PREP(FSM_CMD_EX_REASON, EXCEPTION_EVENT));
 	}
 }
 
