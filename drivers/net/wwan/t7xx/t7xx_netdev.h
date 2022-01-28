@@ -57,6 +57,5 @@ struct t7xx_ccmni_ctrl {
 
 int t7xx_ccmni_init(struct t7xx_pci_dev *t7xx_dev);
 void t7xx_ccmni_exit(struct t7xx_pci_dev *t7xx_dev);
-int t7xx_ccmni_late_init(struct t7xx_pci_dev *mtk_dev);
 
 #endif /* __T7XX_NETDEV_H__ */
