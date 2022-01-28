@@ -90,10 +90,6 @@ static void control_msg_handler(struct t7xx_port *port, struct sk_buff *skb)
 			t7xx_fsm_append_event(ctl, FSM_EVENT_MD_HS2,
 					      skb->data, le32_to_cpu(ctrl_msg_h->data_length));
 
-		if (port_static->rx_ch == CCCI_SAP_CONTROL_RX)
-			t7xx_fsm_append_event(ctl, FSM_EVENT_AP_HS2,
-					 skb->data, ctrl_msg_h->data_length);
-
 		dev_kfree_skb_any(skb);
 		break;
 
