@@ -41,7 +41,6 @@
 #include "t7xx_port_proxy.h"
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
-#include "t7xx_pci_rescan.h"
 
 #define FSM_DRM_DISABLE_DELAY_MS		200
 #define FSM_EVENT_POLL_INTERVAL_MS		20
@@ -179,7 +178,6 @@ static void fsm_routine_exception(struct t7xx_fsm_ctl *ctl, struct t7xx_fsm_comm
 		break;
 
 	case EXCEPTION_EVENT:
-		port_ee_disable_wwan();
 		t7xx_fsm_broadcast_state(ctl, MD_STATE_EXCEPTION);
 		t7xx_pci_pm_exp_detected(ctl->md->t7xx_dev);
 		t7xx_md_exception_handshake(ctl->md);
@@ -318,7 +316,6 @@ static inline void brom_stage_event_handling(struct t7xx_fsm_ctl *ctl, unsigned 
 			dl_port_static->ops->disable_chl(dl_port);
 		} else
 			dev_err(dev, "can't found DL port\n");
-		start_brom_event_start_timer(ctl);
 		break;
 	case BROM_EVENT_JUMP_DA:
 		dev_info(dev, "jump DA and wait reset signal\n");
@@ -348,8 +345,6 @@ static inline void brom_stage_event_handling(struct t7xx_fsm_ctl *ctl, unsigned 
 		start_brom_event_start_timer(ctl);
 		break;
 	case BROM_EVENT_RESET:
-		host_event_notify(ctl->md, 1);
-		mtk_queue_rescan_work(ctl->md->t7xx_dev->pdev);
 		break;
 	default:
 		dev_err(dev, "Brom Event region content error\n");

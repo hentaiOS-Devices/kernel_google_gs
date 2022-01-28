@@ -42,7 +42,6 @@
 #include "t7xx_port_proxy.h"
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
-#include "t7xx_pci_rescan.h"
 
 #define RT_ID_MD_PORT_ENUM	0
 #define RT_ID_SAP_PORT_ENUM 1
@@ -197,10 +196,6 @@ static irqreturn_t t7xx_rgu_isr_thread(int irq, void *data)
 
 	msleep(RGU_RESET_DELAY_MS);
 	t7xx_reset_device_via_pmic(t7xx_dev);
-
-	if (!t7xx_dev->hp_enable)
-		mtk_queue_rescan_work(t7xx_dev->pdev);
-
 	return IRQ_HANDLED;
 }
 
