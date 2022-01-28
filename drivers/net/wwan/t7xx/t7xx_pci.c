@@ -659,7 +659,7 @@ static int t7xx_interrupt_init(struct t7xx_pci_dev *t7xx_dev)
 	return 0;
 }
 
-static void t7xx_pci_infracfg_ao_calc(struct t7xx_pci_dev *t7xx_dev)
+static inline void t7xx_pci_infracfg_ao_calc(struct t7xx_pci_dev *t7xx_dev)
 {
 	t7xx_dev->base_addr.infracfg_ao_base = t7xx_dev->base_addr.pcie_ext_reg_base +
 					      INFRACFG_AO_DEV_CHIP -

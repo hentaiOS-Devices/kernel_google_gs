@@ -63,7 +63,7 @@ enum mtk_feature_support_type {
 	MTK_FEATURE_MUST_BE_SUPPORTED,
 };
 
-static unsigned int t7xx_get_interrupt_status(struct t7xx_pci_dev *t7xx_dev)
+static inline unsigned int t7xx_get_interrupt_status(struct t7xx_pci_dev *t7xx_dev)
 {
 	return t7xx_mhccif_read_sw_int_sts(t7xx_dev) & D2H_SW_INT_MASK;
 }
