@@ -78,7 +78,7 @@ static ssize_t drivers_allowlist_store(struct bus_type *bus, const char *buf,
 
 	/* Driver names cannot have special characters */
 	for (i = 0; i < strlen(drv); i++)
-		if (!isalnum(drv[i]) && drv[i] != '_') {
+		if (!isalnum(drv[i]) && drv[i] != '_' && drv[i] != '-') {
 			ret = -EINVAL;
 			goto out_kfree;
 		}
