@@ -174,8 +174,10 @@ static void tty_ccci_uninit(void)
 		tty_driver_kref_put(tty_drv);
 
 		/*free memory*/
-		kfree(tty_ctlb->ccci_ops);
-		tty_ctlb->ccci_ops = NULL;
+		if (tty_ctlb->ccci_ops != NULL) {
+			kfree(tty_ctlb->ccci_ops);
+			tty_ctlb->ccci_ops = NULL;
+		}
 		kfree(tty_ctlb);
 	}
 }

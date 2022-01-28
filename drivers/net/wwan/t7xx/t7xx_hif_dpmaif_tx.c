@@ -640,7 +640,7 @@ static void t7xx_dpmaif_tx_free_drb_skb(struct dpmaif_tx_queue *txq)
 
 		if (!(FIELD_GET(DRB_SKB_IS_MSG, drb_skb->config))) {
 			dma_unmap_single(txq->dpmaif_ctrl->dev, drb_skb->bus_addr,
-					 drb_skb->data_len, DMA_TO_DEVICE);
+				drb_skb->data_len, DMA_TO_DEVICE);
 		}
 
 		if (FIELD_GET(DRB_SKB_IS_LAST, drb_skb->config)) {

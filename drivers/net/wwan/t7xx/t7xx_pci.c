@@ -421,7 +421,6 @@ static int __t7xx_pci_pm_resume(struct pci_dev *pdev, bool state_check)
 		return 0;
 	}
 
-	t7xx_pcie_mac_interrupts_en(t7xx_dev);
 	prev_state = ioread32(IREG_BASE(t7xx_dev) + PCIE_PM_RESUME_STATE);
 
 	if (state_check) {
@@ -523,11 +522,16 @@ static int __t7xx_pci_pm_resume(struct pci_dev *pdev, bool state_check)
 
 static int t7xx_pci_pm_resume_noirq(struct device *dev)
 {
-	struct pci_dev *pdev = to_pci_dev(dev);
 	struct t7xx_pci_dev *t7xx_dev;
+	struct pci_dev *pdev;
+	void __iomem *pbase;
 
+	pdev = to_pci_dev(dev);
 	t7xx_dev = pci_get_drvdata(pdev);
-	t7xx_pcie_mac_interrupts_dis(t7xx_dev);
+	pbase = IREG_BASE(t7xx_dev);
+
+	/* Disable interrupt then let the IPs enable them */
+	iowrite32(MSIX_MSK_SET_ALL, pbase + IMASK_HOST_MSIX_CLR_GRP0_0);
 
 	return 0;
 }
@@ -665,7 +669,8 @@ static void t7xx_pci_infracfg_ao_calc(struct t7xx_pci_dev *t7xx_dev)
 					      t7xx_dev->base_addr.pcie_dev_reg_trsl_addr;
 }
 
-static ssize_t  post_dump_port_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t  post_dump_port_show(struct kobject *kobj,
+	struct kobj_attribute *attr, char *buf)
 {
 	int ret = 0;
 
@@ -700,8 +705,9 @@ static int mtk_pcie_driver_info_attr_init(void)
 	sprintf(strdocname, "mtk_wwan_%x_pcie", 0x4d70);
 	pcie_drv_info_kobj = kobject_create_and_add(strdocname, kernel_kobj);
 
-	/* Create the files associated with this kobject */
-	retval = sysfs_create_group(pcie_drv_info_kobj, &pcie_driver_info_group);
+		/* Create the files associated with this kobject */
+	retval = sysfs_create_group(pcie_drv_info_kobj,
+		&pcie_driver_info_group);
 	if (retval) {
 		pr_err("sysfs_create_group fail (%d)\n", retval);
 		kobject_put(pcie_drv_info_kobj);
@@ -773,8 +779,9 @@ static int t7xx_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	mtk_rescan_done();
 
 	ret = mtk_pcie_driver_info_attr_init();
-	if (ret < 0)
+	if (ret < 0) {
 		pr_err("mtk_pcie_driver_info_attr_init fail (%d)\n", ret);
+	}
 
 	t7xx_pcie_mac_set_int(t7xx_dev, MHCCIF_INT);
 	t7xx_pcie_mac_interrupts_en(t7xx_dev);
@@ -844,16 +851,17 @@ static int mtk_always_match(struct device *dev, const void *data)
 static void __exit t7xx_pci_cleanup(void)
 {
 	struct device *dev;
-	int remove_flag = 0;
+	int remove_flag=0;
 
-	dev = driver_find_device(&t7xx_pci_driver.driver, NULL, NULL, mtk_always_match);
-	if (dev) { /* dev pointer maybe modified by bus, so judge it first */
-		pr_info("unregister MTK PCIe driver while device is still exist.\n");
-		put_device(dev);
-		remove_flag = 1;
-	} else {
-		pr_info("unregister MTK PCIe driver with no device exist.\n");
-	}
+	dev = driver_find_device(&t7xx_pci_driver.driver,NULL,NULL,mtk_always_match);
+	if(dev != NULL)  /*dev pointer maybe modified by bus, so judge it first*/
+        {
+                pr_info("unregister MTK PCIe driver while device is still exist.\n");
+                put_device(dev);
+                remove_flag=1;
+        }
+        else
+                pr_info("unregister MTK PCIe driver with no device exist.\n");
 
 	pci_lock_rescan_remove();
 	pci_unregister_driver(&t7xx_pci_driver);
@@ -861,9 +869,9 @@ static void __exit t7xx_pci_cleanup(void)
 	mtk_rescan_deinit();
 
 	if (remove_flag) {
-		pr_info("start remove MTK PCI device\n");
-		pci_stop_and_remove_bus_device_locked(to_pci_dev(dev));
-	}
+                pr_info("start remove MTK PCI device\n");
+                pci_stop_and_remove_bus_device_locked(to_pci_dev(dev));
+        }
 }
 module_exit(t7xx_pci_cleanup);
 

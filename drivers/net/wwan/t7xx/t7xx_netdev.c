@@ -409,21 +409,20 @@ int t7xx_ccmni_init(struct t7xx_pci_dev *t7xx_dev)
 		return -ENOMEM;
 
 	/* WWAN core will create a netdev for the default IP MUX channel */
-	/* ret = wwan_register_ops(dev, &ccmni_wwan_ops, ctlb, IP_MUX_SESSION_DEFAULT);
-	 * if (ret)
-	 *	goto err_unregister_ops;
-	 */
+	/*ret = wwan_register_ops(dev, &ccmni_wwan_ops, ctlb, IP_MUX_SESSION_DEFAULT);
+	if (ret)
+		goto err_unregister_ops;
+	*/
 
 	init_md_status_notifier(t7xx_dev);
 
 	return 0;
 
 /*
- * err_unregister_ops:
- *	wwan_unregister_ops(dev);
- *
- *	return ret;
- */
+err_unregister_ops:
+	wwan_unregister_ops(dev);
+
+	return ret;*/
 }
 
 int t7xx_ccmni_late_init(struct t7xx_pci_dev *t7xx_dev)
