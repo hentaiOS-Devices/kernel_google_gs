@@ -1201,7 +1201,6 @@ void ath11k_core_halt(struct ath11k *ar)
 	ath11k_mac_peer_cleanup_all(ar);
 	cancel_delayed_work_sync(&ar->scan.timeout);
 	cancel_work_sync(&ar->regd_update_work);
-	cancel_work_sync(&ab->update_11d_work);
 	cancel_work_sync(&ab->rfkill_work);
 
 	rcu_assign_pointer(ab->pdevs_active[ar->pdev_idx], NULL);
@@ -1229,34 +1228,6 @@ static void ath11k_rfkill_work(struct work_struct *work)
 		/* notify cfg80211 radio state change */
 		ath11k_mac_rfkill_enable_radio(ar, rfkill_radio_on);
 		wiphy_rfkill_set_hw_state(ar->hw->wiphy, !rfkill_radio_on);
-	}
-}
-
-static void ath11k_update_11d(struct work_struct *work)
-{
-	struct ath11k_base *ab = container_of(work, struct ath11k_base, update_11d_work);
-	struct ath11k *ar;
-	struct ath11k_pdev *pdev;
-	struct wmi_set_current_country_params set_current_param = {};
-	int ret, i;
-
-	spin_lock_bh(&ab->base_lock);
-	memcpy(&set_current_param.alpha2, &ab->new_alpha2, 2);
-	spin_unlock_bh(&ab->base_lock);
-
-	ath11k_dbg(ab, ATH11K_DBG_WMI, "update 11d new cc %c%c\n",
-		   set_current_param.alpha2[0],
-		   set_current_param.alpha2[1]);
-
-	for (i = 0; i < ab->num_radios; i++) {
-		pdev = &ab->pdevs[i];
-		ar = pdev->ar;
-
-		ret = ath11k_wmi_send_set_current_country_cmd(ar, &set_current_param);
-		if (ret)
-			ath11k_warn(ar->ab,
-				    "pdev id %d failed set current country code: %d\n",
-				    i, ret);
 	}
 }
 
@@ -1430,14 +1401,12 @@ struct ath11k_base *ath11k_core_alloc(struct device *dev, size_t priv_size,
 
 	mutex_init(&ab->core_lock);
 	spin_lock_init(&ab->base_lock);
-	mutex_init(&ab->vdev_id_11d_lock);
 
 	INIT_LIST_HEAD(&ab->peers);
 	init_waitqueue_head(&ab->peer_mapping_wq);
 	init_waitqueue_head(&ab->wmi_ab.tx_credits_wq);
 	init_waitqueue_head(&ab->qmi.cold_boot_waitq);
 	INIT_WORK(&ab->restart_work, ath11k_core_restart);
-	INIT_WORK(&ab->update_11d_work, ath11k_update_11d);
 	INIT_WORK(&ab->rfkill_work, ath11k_rfkill_work);
 	timer_setup(&ab->rx_replenish_retry, ath11k_ce_rx_replenish_retry, 0);
 	init_completion(&ab->htc_suspend);
