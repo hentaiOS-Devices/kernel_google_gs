@@ -194,6 +194,7 @@ struct drm_i915_gem_object {
 #define I915_BO_READONLY         BIT(4)
 #define I915_TILING_QUIRK_BIT    5 /* unknown swizzling; do not release! */
 #define I915_BO_PROTECTED        BIT(8)
+#define I915_BO_WAS_BOUND_BIT    9
 
 	/*
 	 * Is the object to be mapped as read-only to the GPU
