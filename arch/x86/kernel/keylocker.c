@@ -39,6 +39,10 @@ static void __init generate_keylocker_data(void)
 
 void __init destroy_keylocker_data(void)
 {
+	if (!cpu_feature_enabled(X86_FEATURE_KEYLOCKER) ||
+	    cpu_feature_enabled(X86_FEATURE_HYPERVISOR))
+	        return;
+
 	memset(&kl_setup.key, KEY_DESTROY, sizeof(kl_setup.key));
 	kl_setup.initialized = true;
 	valid_kl = true;
