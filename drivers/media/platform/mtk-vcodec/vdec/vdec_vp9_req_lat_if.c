@@ -2066,8 +2066,9 @@ static int vdec_vp9_slice_core_decode(
 err:
 	if (ctx) {
 		/* always update read pointer */
-		vdec_msg_queue_update_ube_rptr(&ctx->msg_queue,
-			pfc->vsi.trans.dma_addr_end);
+		if (pfc)
+			vdec_msg_queue_update_ube_rptr(&ctx->msg_queue,
+				pfc->vsi.trans.dma_addr_end);
 
 		if (fb)
 			ctx->dev->vdec_pdata->cap_to_disp(ctx, fb, 1);
