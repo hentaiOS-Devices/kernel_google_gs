@@ -742,6 +742,7 @@ struct dc_dsc_config {
 	bool ycbcr422_simple; /* Tell DSC engine to convert YCbCr 4:2:2 to 'YCbCr 4:2:2 simple'. */
 	int32_t rc_buffer_size; /* DSC RC buffer block size in bytes */
 	bool is_dp; /* indicate if DSC is applied based on DP's capability */
+	uint32_t mst_pbn; /* pbn of display on dsc mst hub */
 };
 struct dc_crtc_timing {
 	uint32_t h_total;
