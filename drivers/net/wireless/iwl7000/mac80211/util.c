@@ -3287,13 +3287,13 @@ u8 *ieee80211_ie_build_he_oper(u8 *pos, struct cfg80211_chan_def *chandef)
 #if CFG80211_VERSION >= KERNEL_VERSION(9,9,9)
 	case NL80211_CHAN_WIDTH_320:
 		/* keep code in case of fall-through (spatch generated) */
-#endif
 		/*
 		 * TODO: mesh operation is not defined over 6GHz 320 MHz
 		 * channels.
 		 */
 		WARN_ON(1);
 		break;
+#endif
 	case NL80211_CHAN_WIDTH_160:
 		/* Convert 160 MHz channel width to new style as interop
 		 * workaround.
