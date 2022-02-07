@@ -794,8 +794,8 @@ static int coiommu_setup_endpoint(struct device *dev)
 
 	if (dev->iommu) {
 		if (dev_iommu_priv_get(dev)) {
-			dev_err(dev, "%s: already translated by other iommu?\n", __func__);
-			return -EINVAL;
+			dev_info(dev, "%s: already translated by coiommu\n", __func__);
+			return 0;
 		}
 	} else {
 		dev->iommu = kzalloc(sizeof(struct dev_iommu), GFP_KERNEL);
