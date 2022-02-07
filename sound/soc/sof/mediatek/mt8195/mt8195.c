@@ -541,7 +541,7 @@ static int mt8195_ipc_pcm_params(struct snd_sof_dev *sdev,
 
 	mstream->stream.posn_offset = sdev->stream_box.offset + posn_offset;
 
-	dev_dbg(sdev->dev, "pcm: stream dir %d, posn mailbox offset is 0x%x",
+	dev_dbg(sdev->dev, "pcm: stream dir %d, posn mailbox offset is 0x%zx",
 		substream->stream, mstream->stream.posn_offset);
 
 	return 0;
