@@ -9,6 +9,7 @@
 #include <sound/compress_driver.h>
 #include "sof-audio.h"
 #include "sof-priv.h"
+#include "sof-utils.h"
 
 static void snd_sof_compr_fragment_elapsed_work(struct work_struct *work)
 {
