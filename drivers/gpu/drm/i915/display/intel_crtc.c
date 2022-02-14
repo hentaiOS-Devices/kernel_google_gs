@@ -486,7 +486,7 @@ void intel_pipe_update_start(struct intel_crtc_state *new_crtc_state)
 
 	intel_psr_lock(new_crtc_state);
 
-	if (new_crtc_state->uapi.async_flip)
+	if (new_crtc_state->do_async_flip)
 		return;
 
 	if (intel_crtc_needs_vblank_work(new_crtc_state))
@@ -629,7 +629,7 @@ void intel_pipe_update_end(struct intel_crtc_state *new_crtc_state)
 
 	intel_psr_unlock(new_crtc_state);
 
-	if (new_crtc_state->uapi.async_flip)
+	if (new_crtc_state->do_async_flip)
 		return;
 
 	trace_intel_pipe_update_end(crtc, end_vbl_count, scanline_end);
