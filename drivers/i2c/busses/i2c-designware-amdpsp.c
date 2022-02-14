@@ -175,7 +175,7 @@ static int check_i2c_req_sts(struct psp_i2c_req *req)
 	case PSP_I2C_REQ_STS_INV_PARAM:
 	default:
 		return -EIO;
-	};
+	}
 }
 
 static int psp_send_check_i2c_req(struct psp_i2c_req *req)
