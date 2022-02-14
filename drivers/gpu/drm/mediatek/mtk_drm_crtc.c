@@ -1012,7 +1012,8 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 	mutex_init(&mtk_crtc->hw_lock);
 
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
-	i = (priv->data->mbox_index) ? priv->data->mbox_index[drm_crtc_index(&mtk_crtc->base)] : 0;
+	i = (priv->data->mbox_index) ? priv->data->mbox_index[drm_crtc_index(&mtk_crtc->base)] :
+				       drm_crtc_index(&mtk_crtc->base);
 	mtk_crtc->cmdq_client.client.dev = mtk_crtc->mmsys_dev;
 	mtk_crtc->cmdq_client.client.tx_block = false;
 	mtk_crtc->cmdq_client.client.knows_txdone = true;
@@ -1020,7 +1021,7 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 	mtk_crtc->cmdq_client.chan =
 			mbox_request_channel(&mtk_crtc->cmdq_client.client, i);
 	if (IS_ERR(mtk_crtc->cmdq_client.chan)) {
-		dev_dbg(dev, "mtk_crtc %d failed to create mailbox client, writing register by CPU now\n",
+		dev_info(dev, "mtk_crtc %d failed to create mailbox client, writing register by CPU now\n",
 			drm_crtc_index(&mtk_crtc->base));
 		mtk_crtc->cmdq_client.chan = NULL;
 	}
