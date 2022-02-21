@@ -66,6 +66,26 @@
 	status = "okay";
 };
 
+&pio_default{
+	low_power_pu_pd_pins {
+		pinmux = <PINMUX_GPIO8__FUNC_GPIO8>,
+			 <PINMUX_GPIO9__FUNC_GPIO9>,
+			 <PINMUX_GPIO25__FUNC_GPIO25>,
+			 <PINMUX_GPIO26__FUNC_GPIO26>,
+			 <PINMUX_GPIO46__FUNC_GPIO46>,
+			 <PINMUX_GPIO47__FUNC_GPIO47>,
+			 <PINMUX_GPIO48__FUNC_GPIO48>,
+			 <PINMUX_GPIO65__FUNC_GPIO65>,
+			 <PINMUX_GPIO66__FUNC_GPIO66>,
+			 <PINMUX_GPIO67__FUNC_GPIO67>,
+			 <PINMUX_GPIO68__FUNC_GPIO68>,
+			 <PINMUX_GPIO128__FUNC_GPIO128>,
+			 <PINMUX_GPIO129__FUNC_GPIO129>;
+		input-enable;
+		bias-pull-down;
+	};
+};
+
 &touchscreen {
 	compatible = "hid-over-i2c";
 
