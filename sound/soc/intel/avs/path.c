@@ -352,7 +352,7 @@ static int avs_peakvol_create(struct avs_dev *adev, struct avs_path_module *mod)
 
 	cfg = kzalloc(sizeof(*cfg) + data_size, GFP_KERNEL);
 	if (!cfg) {
-		avs_kcontrol_volume_module_deinit(mod);
+		avs_kcontrol_module_deinit(mod);
 		kfree(vols);
 		return -ENOMEM;
 	}
@@ -369,7 +369,7 @@ static int avs_peakvol_create(struct avs_dev *adev, struct avs_path_module *mod)
 				  t->core_id, t->domain, cfg,
 				  sizeof(*cfg) + data_size, &mod->instance_id);
 	if (ret)
-		avs_kcontrol_volume_module_deinit(mod);
+		avs_kcontrol_module_deinit(mod);
 
 	kfree(cfg);
 	kfree(vols);
@@ -675,7 +675,7 @@ avs_path_module_create(struct avs_dev *adev,
 	ret = kobject_init_and_add(&mod->kobj, &avs_path_module_ktype,
 				   &owner->kobj, "%d", template->id);
 	if (ret) {
-		avs_kcontrol_volume_module_deinit(mod);
+		avs_kcontrol_module_deinit(mod);
 		kobject_put(&mod->kobj);
 		return ERR_PTR(ret);
 	}
@@ -876,7 +876,7 @@ static void avs_path_pipeline_free(struct avs_dev *adev,
 
 	/* unlink kcontrols from active modules, before we start deleting pipelines */
 	list_for_each_entry(mod, &ppl->mod_list, node)
-		avs_kcontrol_volume_module_deinit(mod);
+		avs_kcontrol_module_deinit(mod);
 
 	list_for_each_entry_safe(binding, bsave, &ppl->binding_list, node) {
 		list_del(&binding->node);

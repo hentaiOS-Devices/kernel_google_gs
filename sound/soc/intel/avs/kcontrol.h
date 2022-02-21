@@ -13,10 +13,14 @@
 #include <sound/soc-dapm.h>
 
 struct avs_kcontrol_volume_data {
-	struct avs_dev *adev;
-	struct avs_path_module *active_module;
 	int channels;
 	long volume[AVS_CHANNELS_MAX];
+};
+
+struct avs_kcontrol_data {
+	struct avs_dev *adev;
+	struct avs_path_module *active_module;
+	void *data;
 };
 
 struct snd_kcontrol *
@@ -26,6 +30,6 @@ avs_kcontrol_volume_register(struct avs_dev *adev,
 int avs_kcontrol_volume_module_init(struct avs_path_module *module,
 				    struct avs_volume_cfg **vols,
 				    size_t *vols_size);
-int avs_kcontrol_volume_module_deinit(struct avs_path_module *module);
+int avs_kcontrol_module_deinit(struct avs_path_module *module);
 
 #endif

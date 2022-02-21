@@ -1526,9 +1526,8 @@ static int avs_widget_load(struct snd_soc_component *comp, int index,
 	return 0;
 }
 
-static int avs_widget_ready(struct snd_soc_component *comp, int index,
-			    struct snd_soc_dapm_widget *w,
-			    struct snd_soc_tplg_dapm_widget *dw)
+static int avs_register_volume_kcontrols(struct snd_soc_component *comp,
+					 struct snd_soc_dapm_widget *w)
 {
 	struct avs_tplg_path_template *template = w->priv;
 	struct avs_tplg_pipeline *pipeline;
@@ -1538,11 +1537,7 @@ static int avs_widget_ready(struct snd_soc_component *comp, int index,
 	int i, k, max = 0;
 	int *chns; /* maximum channels per kcontrol */
 
-	/*
-	 * Count PEAKVOLs on each path template before creating kcontrols for
-	 * path. This is needed to index them if there is more than one
-	 * PEAKVOL present in any of path templates.
-	 */
+	/* Find maximum number of peakvols on path. */
 	list_for_each_entry(path, &template->path_list, node) {
 		i = 0;
 
@@ -1560,16 +1555,11 @@ static int avs_widget_ready(struct snd_soc_component *comp, int index,
 			max = i;
 	}
 
-	/* No PEAKVOLs found, so leave early */
+	/* No kcontrols, don't loop unnecessarily */
 	if (!max)
 		return 0;
 
-	/*
-	 * Now that PEAKVOLs are counted, find number of channels needed.
-	 * We walk all path templates again, as for example one path
-	 * template can have PEAKVOL in 2 channel configuration, while
-	 * another in 4 channel.
-	 */
+	/* Find maximum number of channels we will need on each kcontrol. */
 	chns = kcalloc(max, sizeof(*chns), GFP_KERNEL);
 	if (!chns)
 		return -ENOMEM;
@@ -1591,10 +1581,7 @@ static int avs_widget_ready(struct snd_soc_component *comp, int index,
 		}
 	}
 
-	/*
-	 * For each PAEKVOL we found, create and assign kcontrol to tplg module
-	 * template.
-	 */
+	/* Create and assign kcontrol to tplg module. */
 	for (k = 0; k < max; k++) {
 		struct snd_kcontrol *kctrl;
 
@@ -1625,6 +1612,19 @@ static int avs_widget_ready(struct snd_soc_component *comp, int index,
 	kfree(chns);
 
 	return 0;
+}
+
+static int avs_widget_ready(struct snd_soc_component *comp, int index,
+			    struct snd_soc_dapm_widget *w,
+			    struct snd_soc_tplg_dapm_widget *dw)
+{
+	int ret;
+
+	ret = avs_register_volume_kcontrols(comp, w);
+	if (ret < 0)
+		dev_err(comp->dev, "failed to register volume kcontrol: %d\n", ret);
+
+	return ret;
 }
 
 static int avs_dai_load(struct snd_soc_component *comp, int index,
