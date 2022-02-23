@@ -559,6 +559,10 @@ static int avs_modext_create(struct avs_dev *adev, struct avs_path_module *mod)
 				  t->core_id, t->domain, cfg, cfg_size,
 				  &mod->instance_id);
 	kfree(cfg);
+	if (ret)
+		return ret;
+
+	ret = avs_kcontrol_tlv_module_init(mod);
 	return ret;
 }
 

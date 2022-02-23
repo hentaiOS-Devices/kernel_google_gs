@@ -303,3 +303,128 @@ int avs_kcontrol_module_deinit(struct avs_path_module *module)
 
 	return 0;
 }
+
+#define TL_SIZE 2 * sizeof(u32)
+
+static int avs_tlv_set_large_config(struct avs_dev *adev,
+				    struct avs_path_module *module,
+				    struct avs_kcontrol_tlv_data *kctrl_tlv_data)
+{
+	struct avs_tlv *tlv;
+	int i;
+
+	tlv = kctrl_tlv_data->tlv;
+
+	for (i = 0; i < kctrl_tlv_data->count; i++) {
+		int ret;
+
+		ret = avs_ipc_set_large_config(adev, module->module_id, module->instance_id,
+					       tlv->type, (u8*)tlv->value, tlv->length);
+		if (ret)
+			return AVS_IPC_RET(ret);
+
+		tlv = (struct avs_tlv *)((u8*)tlv + TL_SIZE + tlv->length);
+	}
+
+	return 0;
+}
+
+int avs_tlv_control_set(struct snd_kcontrol *kcontrol, const unsigned int __user *data,
+			       unsigned int size)
+{
+	struct avs_kcontrol_data *kctrl_data = kcontrol->private_data;
+	struct avs_kcontrol_tlv_data *kctrl_tlv_data;
+	struct avs_path_module *active_module;
+	struct snd_ctl_tlv tlv;
+	struct avs_tlv *atlv;
+	size_t check_size;
+	int ret = 0;
+	bool cache;
+	int i;
+
+	/* check if TL part of TLV makes sense */
+	if (size < sizeof(tlv))
+		return -EINVAL;
+	if (copy_from_user(&tlv, data, sizeof(tlv)))
+		return -EFAULT;
+	if (tlv.length != size - sizeof(tlv)) /* sanity check */
+		return -EINVAL;
+
+	/* check if V part of TLV makes sense */
+	if (tlv.length <= sizeof(*kctrl_tlv_data))
+		return -EINVAL;
+
+	kctrl_tlv_data = kzalloc(tlv.length, GFP_KERNEL);
+	if (!kctrl_tlv_data)
+		return -ENOMEM;
+	if (copy_from_user(kctrl_tlv_data, (u8*)data + sizeof(tlv), tlv.length)) {
+		ret = -EFAULT;
+		goto err;
+	}
+
+	/* validate data before cacheing/sending */
+	atlv = kctrl_tlv_data->tlv;
+	check_size = TL_SIZE; /* TL of kctrl_tlv_data */
+	for (i = 0; i < kctrl_tlv_data->count; i++) {
+		check_size += TL_SIZE + atlv->length; /* V[i] of kctrl_tlv_data */
+		if (check_size > tlv.length) {
+			ret = -EINVAL;
+			goto err;
+		}
+		atlv = (struct avs_tlv *)((u8*)atlv + TL_SIZE + atlv->length);
+	}
+
+	cache = !!(kctrl_tlv_data->flags & AVS_KCTRL_TLV_FLAGS_CACHE);
+	active_module = kctrl_data->active_module;
+
+	/* if no module is active and we don't cache data, then there is no target to talk to... */
+	if (!cache && !active_module) {
+		ret = -EINVAL;
+		goto err;
+	}
+
+	/* send data to active module */
+	if (active_module) {
+		ret = avs_tlv_set_large_config(kctrl_data->adev, active_module, kctrl_tlv_data);
+		if (ret) {
+			ret = -EINVAL;
+			goto err;
+		}
+	}
+
+	if (cache) {
+		if (kctrl_data->data)
+			kfree(kctrl_data->data);
+		kctrl_data->data = kctrl_tlv_data;
+	} else {
+		kfree(kctrl_tlv_data);
+	}
+
+	return 0;
+err:
+	kfree(kctrl_tlv_data);
+	return ret;
+}
+
+int avs_kcontrol_tlv_module_init(struct avs_path_module *module)
+{
+	struct avs_kcontrol_data *kctrl_data = NULL;
+	int ret;
+
+	if (!module || !module->template || !module->template->kctrl || !module->template->kctrl->private_data)
+		return 0;
+
+	// set active module
+	kctrl_data = module->template->kctrl->private_data;
+	kctrl_data->active_module = module;
+
+	if (kctrl_data->data) {
+		struct avs_kcontrol_tlv_data *kctrl_tlv_data = kctrl_data->data;
+
+		ret = avs_tlv_set_large_config(kctrl_data->adev, module, kctrl_tlv_data);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}

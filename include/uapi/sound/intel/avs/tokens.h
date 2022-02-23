@@ -109,6 +109,7 @@ enum avs_tplg_token {
 	AVS_TKN_MOD_CORE_ID_U8				= 1704,
 	AVS_TKN_MOD_PROC_DOMAIN_U8			= 1705,
 	AVS_TKN_MOD_MODCFG_EXT_ID_U32			= 1706,
+	AVS_TKN_MOD_KCTRL_ID_U32			= 1707,
 
 	/* struct avs_tplg_path_template */
 	AVS_TKN_PATH_TMPL_ID_U32			= 1801,
@@ -137,6 +138,9 @@ enum avs_tplg_token {
 	AVS_TKN_PIN_FMT_INDEX_U32			= 2201,
 	AVS_TKN_PIN_FMT_IOBS_U32			= 2202,
 	AVS_TKN_PIN_FMT_AFMT_ID_U32			= 2203,
+
+	/* struct avs_tplg_kcontrol */
+	AVS_TKN_KCONTROL_ID_U32				= 2301,
 };
 
 #endif

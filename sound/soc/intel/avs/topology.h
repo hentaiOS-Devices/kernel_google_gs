@@ -37,6 +37,7 @@ struct avs_tplg {
 	u32 num_condpath_tmpls;
 
 	struct list_head path_tmpl_list;
+	struct list_head kctrl_list;
 };
 
 struct avs_tplg_library {
@@ -192,11 +193,25 @@ struct avs_tplg_module {
 	u8 core_id;
 	u8 domain;
 	struct avs_tplg_modcfg_ext *cfg_ext;
-	/* KControl if any. */
+	/*
+	 * kctrl_id - used for connecting modules to kcontrols coming from
+	 *            topology
+	 * kctrl - pointer to existing kernel kcontrol, can be NULL if module
+	 *         has no kcontrol assigned, used for internally created
+	 *         kcontrol or one coming from topology
+	 */
+	u32 kctrl_id;
 	struct snd_kcontrol *kctrl;
 
 	struct avs_tplg_pipeline *owner;
 	/* Pipeline modules management. */
+	struct list_head node;
+};
+
+struct avs_tplg_kctrl {
+	u32 id;
+	struct snd_kcontrol *kctrl;
+
 	struct list_head node;
 };
 
