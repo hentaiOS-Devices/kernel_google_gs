@@ -445,8 +445,21 @@ static int mt8195_dsp_suspend(struct snd_sof_dev *sdev, u32 target_state)
 {
 	struct platform_device *pdev = container_of(sdev->dev, struct platform_device, dev);
 	int ret;
+	int reset_sw, dbg_pc, sleep_try = 2000, sleep_cnt = 0;
 
-	/* stall and reset dsp */
+	/* wait 2 second to wait dsp enter wait for interrupt */
+	do {
+		reset_sw = snd_sof_dsp_read(sdev, DSP_REG_BAR, DSP_RESET_SW);
+		mdelay(1);
+		sleep_cnt++;
+		if (sleep_cnt > sleep_try) {
+			dbg_pc = snd_sof_dsp_read(sdev, DSP_REG_BAR, DSP_PDEBUGPC);
+			dev_err(sdev->dev, "dsp not idle : swrest 0x%x, pc 0x%x\n",
+				reset_sw, dbg_pc);
+			break;
+		}
+	} while((reset_sw & ADSP_PWAIT) != ADSP_PWAIT);
+
 	sof_hifixdsp_shutdown(sdev);
 
 	/* power down adsp sram */

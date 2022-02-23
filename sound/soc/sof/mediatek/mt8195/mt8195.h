@@ -34,6 +34,7 @@ struct snd_sof_dev;
 #define ADSP_DRESET_SW			BIT(1)
 #define ADSP_RUNSTALL			BIT(3)
 #define STATVECTOR_SEL			BIT(4)
+#define ADSP_PWAIT			BIT(16)
 #define DSP_PFAULTBUS			0x0028
 #define DSP_PFAULTINFO			0x002c
 #define DSP_GPR00			0x0030
