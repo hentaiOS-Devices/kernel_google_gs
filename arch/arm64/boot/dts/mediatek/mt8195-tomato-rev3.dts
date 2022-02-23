@@ -8,7 +8,7 @@
 
 / {
 	model = "MediaTek Tomato board";
-	compatible = "google,tomato-rev3", "google,tomato", "mediatek,mt8195";
+	compatible = "google,tomato-rev3", "google,tomato-rev4", "google,tomato", "mediatek,mt8195";
 };
 
 &pio_default {
