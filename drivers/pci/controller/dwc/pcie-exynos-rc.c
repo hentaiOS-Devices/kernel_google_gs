@@ -2853,9 +2853,10 @@ int exynos_pcie_rc_poweron(int ch_num)
 			exynos_pcie->pci_saved_configs =
 				pci_store_saved_state(exynos_pcie->pci_dev);
 
+			exynos_pcie->ep_pci_dev = exynos_pcie_get_pci_dev(&pci->pp);
+
 #if IS_ENABLED(CONFIG_GS_S2MPU)
 			if (exynos_pcie->s2mpu) {
-				exynos_pcie->ep_pci_dev = exynos_pcie_get_pci_dev(&pci->pp);
 				set_dma_ops(&exynos_pcie->ep_pci_dev->dev, &gs101_pcie_dma_ops);
 				dev_info(dev, "Wifi DMA operations are changed\n");
 			}
@@ -3201,7 +3202,7 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 							     exp_cap_off + PCI_EXP_DEVCTL2, 4, val);
 
 				/* [EP] set TPOWERON */
-				/* Set TPOWERON value for EP: 90->180 usec */
+				/* Set TPOWERON value for EP: 90->130 usec */
 				exynos_pcie_rc_wr_other_conf(pp, ep_pci_bus, 0,
 							     exynos_pcie->ep_l1ss_ctrl2_off, 4,
 							     PORT_LINK_TPOWERON_130US);
