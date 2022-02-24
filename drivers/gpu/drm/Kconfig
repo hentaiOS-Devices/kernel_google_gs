@@ -79,7 +79,7 @@ config DRM_DEBUG_SELFTEST
 config DRM_INPUT_HELPER
 	def_bool y
 	depends on DRM_KMS_HELPER
-	depends on INPUT
+	depends on INPUT=y
 
 config DRM_SELF_REFRESH_INPUT_BOOST_DEFAULT
 	bool "Preemptively exit panel self-refresh on input device activity" if EXPERT
@@ -100,7 +100,7 @@ config DRM_SELF_REFRESH_INPUT_BOOST_DEFAULT
 config DRM_KMS_HELPER
 	tristate
 	depends on DRM
-	select DRM_INPUT_HELPER if INPUT
+	select DRM_INPUT_HELPER if INPUT=y
 	help
 	  CRTC helpers for KMS drivers.
 
