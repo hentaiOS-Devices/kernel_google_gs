@@ -569,8 +569,6 @@ void pcie_aspm_init_link_state(struct pci_dev *pdev);
 void pcie_aspm_exit_link_state(struct pci_dev *pdev);
 void pcie_aspm_pm_state_change(struct pci_dev *pdev);
 void pcie_aspm_powersave_config_link(struct pci_dev *pdev);
-void pci_save_aspm_l1ss_state(struct pci_dev *dev);
-void pci_restore_aspm_l1ss_state(struct pci_dev *dev);
 void pcie_save_aspm_control(struct pci_dev *dev);
 void pcie_restore_aspm_control(struct pci_dev *dev);
 void pcie_disable_aspm(struct pci_dev *pdev);
@@ -579,8 +577,6 @@ static inline void pcie_aspm_init_link_state(struct pci_dev *pdev) { }
 static inline void pcie_aspm_exit_link_state(struct pci_dev *pdev) { }
 static inline void pcie_aspm_pm_state_change(struct pci_dev *pdev) { }
 static inline void pcie_aspm_powersave_config_link(struct pci_dev *pdev) { }
-static inline void pci_save_aspm_l1ss_state(struct pci_dev *dev) { }
-static inline void pci_restore_aspm_l1ss_state(struct pci_dev *dev) { }
 static inline void pcie_save_aspm_control(struct pci_dev *dev) { }
 static inline void pcie_restore_aspm_control(struct pci_dev *dev) { }
 static inline void pcie_disable_aspm(struct pci_dev *pdev) { }
