@@ -36,7 +36,7 @@ static const struct config_entry config_table[] = {
 		},
 	},
 	{
-		.flags = FLAG_AMD_SOF,
+		.flags = FLAG_AMD_LEGACY,
 		.device = ACP_PCI_DEV_ID,
 		.dmi_table = (const struct dmi_system_id []) {
 			{
