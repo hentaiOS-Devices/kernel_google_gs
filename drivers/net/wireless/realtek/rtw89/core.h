@@ -2384,6 +2384,7 @@ struct rtw89_fw_info {
 	bool fw_log_enable;
 	bool old_ht_ra_format;
 	bool scan_offload;
+	bool tx_wake;
 };
 
 struct rtw89_cam_info {
@@ -2885,6 +2886,8 @@ struct rtw89_dev {
 	/* txqs to setup ba session */
 	struct list_head ba_list;
 	struct work_struct ba_work;
+	/* used to protect rpwm */
+	spinlock_t rpwm_lock;
 
 	struct rtw89_cam_info cam_info;
 
