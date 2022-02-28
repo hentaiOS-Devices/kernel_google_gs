@@ -1463,7 +1463,7 @@ static void ath11k_core_reset(struct work_struct *work)
 
 		ab->reset_fail_timeout = jiffies + ATH11K_RESET_FAIL_TIMEOUT_HZ;
 		/* Record the continuous recovery fail count when recovery failed*/
-		fail_cont_count = atomic_inc_return(&ab->fail_cont_count);
+		atomic_inc(&ab->fail_cont_count);
 	}
 
 	ath11k_dbg(ab, ATH11K_DBG_BOOT, "reset starting\n");
