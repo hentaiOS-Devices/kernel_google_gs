@@ -83,7 +83,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_jsl_machines[] = {
 	{
 		.id = "ESSX8336",
 		.drv_name = "sof-essx8336",
-		.sof_fw_filename = "sof-jsl.ri",
 		.sof_tplg_filename = "sof-jsl-es8336.tplg",
 	},
 	{},

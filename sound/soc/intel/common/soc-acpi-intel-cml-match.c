@@ -78,7 +78,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_cml_machines[] = {
 	{
 		.id = "ESSX8336",
 		.drv_name = "sof-essx8336",
-		.sof_fw_filename = "sof-cml.ri",
 		.sof_tplg_filename = "sof-cml-es8336.tplg",
 	},
 	{},

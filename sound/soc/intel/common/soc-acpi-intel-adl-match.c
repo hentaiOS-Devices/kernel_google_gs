@@ -468,7 +468,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_machines[] = {
 		.drv_name = "adl_max98390_rt5682",
 		.machine_quirk = snd_soc_acpi_codec_list,
 		.quirk_data = &adl_max98390_amp,
-		.sof_fw_filename = "sof-adl.ri",
 		.sof_tplg_filename = "sof-adl-max98390-rt5682.tplg",
 	},
 	{
@@ -517,21 +516,18 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_sdw_machines[] = {
 		.link_mask = 0xF, /* 4 active links required */
 		.links = adl_sdw_rt711_link2_rt1316_link01_rt714_link3,
 		.drv_name = "sof_sdw",
-		.sof_fw_filename = "sof-adl.ri",
 		.sof_tplg_filename = "sof-adl-rt711-l2-rt1316-l01-rt714-l3.tplg",
 	},
 	{
 		.link_mask = 0xC, /* rt1316 on link2 & rt714 on link3 */
 		.links = adl_sdw_rt1316_link2_rt714_link3,
 		.drv_name = "sof_sdw",
-		.sof_fw_filename = "sof-adl.ri",
 		.sof_tplg_filename = "sof-adl-rt1316-l2-mono-rt714-l3.tplg",
 	},
 	{
 		.link_mask = 0x7, /* rt714 on link0 & two rt1316s on link1 and link2 */
 		.links = adl_sdw_rt1316_link12_rt714_link0,
 		.drv_name = "sof_sdw",
-		.sof_fw_filename = "sof-adl.ri",
 		.sof_tplg_filename = "sof-adl-rt1316-l12-rt714-l0.tplg",
 	},
 	{
