@@ -80,12 +80,20 @@ static int ipc_devlink_flash_update(struct devlink *devlink,
 	struct iosm_devlink *ipc_devlink = devlink_priv(devlink);
 	enum iosm_flash_comp_type fls_type;
 	struct iosm_devlink_image *header;
+	const struct firmware *fw = NULL;
 	int rc = -EINVAL;
 	u8 *mdm_rsp;
+	int ret = 0;
 
-	header = (struct iosm_devlink_image *)params->fw->data;
+	ret = request_firmware(&fw, params->file_name, devlink->dev);
+	if (ret) {
+		dev_dbg(devlink->dev, "requested firmware file not found");
+		return ret;
+	}
 
-	if (!header || params->fw->size <= IOSM_DEVLINK_HDR_SIZE ||
+	header = (struct iosm_devlink_image *)fw->data;
+
+	if (!header || fw->size <= IOSM_DEVLINK_HDR_SIZE ||
 	    (memcmp(header->magic_header, IOSM_DEVLINK_MAGIC_HEADER,
 	     IOSM_DEVLINK_MAGIC_HEADER_LEN) != 0))
 		return -EINVAL;
@@ -99,10 +107,10 @@ static int ipc_devlink_flash_update(struct devlink *devlink,
 
 	switch (fls_type) {
 	case FLASH_COMP_TYPE_PSI:
-		rc = ipc_flash_boot_psi(ipc_devlink, params->fw);
+		rc = ipc_flash_boot_psi(ipc_devlink, fw);
 		break;
 	case FLASH_COMP_TYPE_EBL:
-		rc = ipc_flash_boot_ebl(ipc_devlink, params->fw);
+		rc = ipc_flash_boot_ebl(ipc_devlink, fw);
 		if (rc)
 			break;
 		rc = ipc_flash_boot_set_capabilities(ipc_devlink, mdm_rsp);
@@ -111,7 +119,7 @@ static int ipc_devlink_flash_update(struct devlink *devlink,
 		rc = ipc_flash_read_swid(ipc_devlink, mdm_rsp);
 		break;
 	case FLASH_COMP_TYPE_FLS:
-		rc = ipc_flash_send_fls(ipc_devlink, params->fw, mdm_rsp);
+		rc = ipc_flash_send_fls(ipc_devlink, fw, mdm_rsp);
 		break;
 	default:
 		devlink_flash_update_status_notify(devlink, "Invalid component",
@@ -243,8 +251,7 @@ struct iosm_devlink *ipc_devlink_init(struct iosm_imem *ipc_imem)
 	int rc;
 
 	devlink_ctx = devlink_alloc(&devlink_flash_ops,
-				    sizeof(struct iosm_devlink),
-				    ipc_imem->dev);
+				    sizeof(struct iosm_devlink));
 	if (!devlink_ctx) {
 		dev_err(ipc_imem->dev, "devlink_alloc failed");
 		goto devlink_alloc_fail;
@@ -281,7 +288,7 @@ struct iosm_devlink *ipc_devlink_init(struct iosm_imem *ipc_imem)
 	init_completion(&ipc_devlink->devlink_sio.read_sem);
 	skb_queue_head_init(&ipc_devlink->devlink_sio.rx_list);
 
-	devlink_register(devlink_ctx);
+	devlink_register(devlink_ctx, ipc_devlink->dev);
 	dev_dbg(ipc_devlink->dev, "iosm devlink register success");
 
 	return ipc_devlink;

@@ -6,6 +6,8 @@
 #ifndef _IOSM_IPC_FLASH_H
 #define _IOSM_IPC_FLASH_H
 
+#include <linux/firmware.h>
+
 /* Buffer size used to read the fls image */
 #define IOSM_FLS_BUF_SIZE 0x00100000
 /* Full erase start address */
