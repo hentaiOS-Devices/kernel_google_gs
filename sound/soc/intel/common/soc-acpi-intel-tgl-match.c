@@ -325,6 +325,11 @@ static const struct snd_soc_acpi_codecs tgl_rt5682_rt5682s_hp = {
 	.codecs = {"10EC5682", "RTL5682"},
 };
 
+static const struct snd_soc_acpi_codecs tgl_lt6911_hdmi = {
+	.num_codecs = 1,
+	.codecs = {"INTC10B0"}
+};
+
 struct snd_soc_acpi_mach snd_soc_acpi_intel_tgl_machines[] = {
 	{
 		.comp_ids = &tgl_rt5682_rt5682s_hp,
@@ -346,6 +351,13 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_tgl_machines[] = {
 		.machine_quirk = snd_soc_acpi_codec_list,
 		.quirk_data = &tgl_rt1011_amp,
 		.sof_tplg_filename = "sof-tgl-rt1011-rt5682.tplg",
+	},
+	{
+		.id = "10EC1308",
+		.drv_name = "tgl_rt1308_hdmi_ssp",
+		.machine_quirk = snd_soc_acpi_codec_list,
+		.quirk_data = &tgl_lt6911_hdmi,
+		.sof_tplg_filename = "sof-tgl-rt1308-ssp2-hdmi-ssp15.tplg"
 	},
 	{},
 };
