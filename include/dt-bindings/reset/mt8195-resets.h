@@ -24,7 +24,7 @@
 #define MT8195_TOPRGU_DPTX_SW_RST              22
 #define MT8195_TOPRGU_SPMI_MST_SW_RST          23
 
-#define MT8195_TOPRGU_SW_RST_NUM               16
+#define MT8195_TOPRGU_SW_RST_NUM               24
 
 /* VDOSYS1 */
 #define MT8195_VDOSYS1_SW0_RST_B_MERGE0_DL_ASYNC          25
