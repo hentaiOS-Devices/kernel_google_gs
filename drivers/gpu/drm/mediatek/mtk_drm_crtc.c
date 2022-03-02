@@ -169,8 +169,6 @@ static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	int i;
 
-	DRM_INFO("crtc destroy\n");
-
 	mtk_mutex_put(mtk_crtc->mutex);
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	mtk_drm_cmdq_pkt_destroy(&mtk_crtc->cmdq_handle);
@@ -195,8 +193,6 @@ static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
 static void mtk_drm_crtc_reset(struct drm_crtc *crtc)
 {
 	struct mtk_crtc_state *state;
-
-	DRM_INFO("%s crtc %d reset\n", __func__, drm_crtc_index(crtc));
 
 	if (crtc->state)
 		__drm_atomic_helper_crtc_destroy_state(crtc->state);
@@ -446,8 +442,6 @@ static void mtk_crtc_ddp_hw_fini(struct mtk_drm_crtc *mtk_crtc)
 	struct drm_crtc *crtc = &mtk_crtc->base;
 	int i;
 
-	DRM_INFO("%s\n", __func__);
-
 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
 		mtk_ddp_comp_stop(mtk_crtc->ddp_comp[i]);
 		if (i == 1)
@@ -474,7 +468,6 @@ static void mtk_crtc_ddp_hw_fini(struct mtk_drm_crtc *mtk_crtc)
 	if (crtc->state->event && !crtc->state->active) {
 		spin_lock_irq(&crtc->dev->event_lock);
 		drm_crtc_send_vblank_event(crtc, crtc->state->event);
-		DRM_INFO("clear crtc state event!!!\n");
 		crtc->state->event = NULL;
 		spin_unlock_irq(&crtc->dev->event_lock);
 	}
@@ -632,14 +625,14 @@ static void mtk_crtc_ddp_irq(void *data)
 	struct mtk_drm_private *priv;
 
 	if (!crtc)
-		DRM_INFO("%s crtc is null\n", __func__);
+		DRM_ERROR("%s crtc is null\n", __func__);
 	mtk_crtc = to_mtk_crtc(crtc);
 
 	if (!crtc->dev)
-		DRM_INFO("%s crtc->dev is null\n", __func__);
+		DRM_ERROR("%s crtc->dev is null\n", __func__);
 
 	if (!crtc->dev->dev_private)
-		DRM_INFO("%s dev_private is null\n", __func__);
+		DRM_ERROR("%s dev_private is null\n", __func__);
 	priv = crtc->dev->dev_private;
 
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
@@ -660,8 +653,6 @@ static int mtk_drm_crtc_enable_vblank(struct drm_crtc *crtc)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[0];
 
-	DRM_INFO("%s crtc %d enable vblank\n", __func__, drm_crtc_index(crtc));
-
 	mtk_ddp_comp_enable_vblank(comp);
 
 	return 0;
@@ -671,8 +662,6 @@ static void mtk_drm_crtc_disable_vblank(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[0];
-
-	DRM_INFO("%s crtc %d disable vblank\n", __func__, drm_crtc_index(crtc));
 
 	mtk_ddp_comp_disable_vblank(comp);
 }

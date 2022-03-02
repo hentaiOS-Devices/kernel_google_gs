@@ -7,7 +7,6 @@
 
 #include <linux/clk.h>
 #include <linux/component.h>
-#include <drm/drm_print.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_irq.h>
@@ -90,10 +89,8 @@ static irqreturn_t mtk_disp_ovl_irq_handler(int irq, void *dev_id)
 	/* Clear frame completion interrupt */
 	writel(0x0, priv->regs + DISP_REG_OVL_INTSTA);
 
-	if (!priv->vblank_cb) {
-		DRM_INFO("%s vblank already disabled!!\n", __func__);
+	if (!priv->vblank_cb)
 		return IRQ_NONE;
-	}
 
 	priv->vblank_cb(priv->vblank_cb_data);
 
@@ -105,8 +102,6 @@ void mtk_ovl_register_vblank_cb(struct device *dev,
 				void *vblank_cb_data)
 {
 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
-
-	DRM_INFO("%s enable vblank\n", __func__);
 
 	ovl->vblank_cb = vblank_cb;
 	ovl->vblank_cb_data = vblank_cb_data;
@@ -132,8 +127,6 @@ void mtk_ovl_disable_vblank(struct device *dev)
 {
 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
 
-	DRM_INFO("%s disable vlbank\n", __func__);
-
 	writel_relaxed(0x0, ovl->regs + DISP_REG_OVL_INTEN);
 }
 
@@ -141,16 +134,12 @@ int mtk_ovl_clk_enable(struct device *dev)
 {
 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
 
-	DRM_INFO("%s enable clock\n", __func__);
-
 	return clk_prepare_enable(ovl->clk);
 }
 
 void mtk_ovl_clk_disable(struct device *dev)
 {
 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
-
-	DRM_INFO("%s disable clock\n", __func__);
 
 	clk_disable_unprepare(ovl->clk);
 }
