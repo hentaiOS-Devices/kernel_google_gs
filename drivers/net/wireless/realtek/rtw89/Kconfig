@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 menuconfig RTW89
 	tristate "Realtek 802.11ax wireless chips support"
 	depends on MAC80211

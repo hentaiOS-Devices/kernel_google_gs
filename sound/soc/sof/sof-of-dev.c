@@ -7,14 +7,21 @@
 
 #include <linux/firmware.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/pm_runtime.h>
 #include <sound/sof.h>
 
 #include "ops.h"
+#include "imx/imx-ops.h"
+#include "mediatek/mediatek-ops.h"
 
-extern struct snd_sof_dsp_ops sof_imx8_ops;
-extern struct snd_sof_dsp_ops sof_imx8x_ops;
-extern struct snd_sof_dsp_ops sof_imx8m_ops;
+static char *fw_path;
+module_param(fw_path, charp, 0444);
+MODULE_PARM_DESC(fw_path, "alternate path for SOF firmware.");
+
+static char *tplg_path;
+module_param(tplg_path, charp, 0444);
+MODULE_PARM_DESC(tplg_path, "alternate path for SOF topology.");
 
 /* platform specific devices */
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_IMX8)
@@ -44,6 +51,15 @@ static struct sof_dev_desc sof_of_imx8mp_desc = {
 	.ops = &sof_imx8m_ops,
 };
 #endif
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_MT8195)
+static const struct sof_dev_desc sof_of_mt8195_desc = {
+	.default_fw_path = "mediatek/sof",
+	.default_tplg_path = "mediatek/sof-tplg",
+	.default_fw_filename = "sof-mt8195.ri",
+	.nocodec_tplg_filename = "sof-mt8195-nocodec.tplg",
+	.ops = &sof_mt8195_ops,
+};
+#endif
 
 static const struct dev_pm_ops sof_of_pm = {
 	.prepare = snd_sof_prepare,
@@ -58,11 +74,9 @@ static void sof_of_probe_complete(struct device *dev)
 	/* allow runtime_pm */
 	pm_runtime_set_autosuspend_delay(dev, SND_SOF_SUSPEND_DELAY_MS);
 	pm_runtime_use_autosuspend(dev);
+	pm_runtime_mark_last_busy(dev);
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
-
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
 }
 
 static int sof_of_probe(struct platform_device *pdev)
@@ -70,7 +84,6 @@ static int sof_of_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	const struct sof_dev_desc *desc;
 	struct snd_sof_pdata *sof_pdata;
-	const struct snd_sof_dsp_ops *ops;
 
 	dev_info(&pdev->dev, "DT DSP detected");
 
@@ -82,9 +95,7 @@ static int sof_of_probe(struct platform_device *pdev)
 	if (!desc)
 		return -ENODEV;
 
-	/* get ops for platform */
-	ops = desc->ops;
-	if (!ops) {
+	if (!desc->ops) {
 		dev_err(dev, "error: no matching DT descriptor ops\n");
 		return -ENODEV;
 	}
@@ -93,9 +104,15 @@ static int sof_of_probe(struct platform_device *pdev)
 	sof_pdata->dev = &pdev->dev;
 	sof_pdata->fw_filename = desc->default_fw_filename;
 
-	/* TODO: read alternate fw and tplg filenames from DT */
-	sof_pdata->fw_filename_prefix = sof_pdata->desc->default_fw_path;
-	sof_pdata->tplg_filename_prefix = sof_pdata->desc->default_tplg_path;
+	if (fw_path)
+		sof_pdata->fw_filename_prefix = fw_path;
+	else
+		sof_pdata->fw_filename_prefix = sof_pdata->desc->default_fw_path;
+
+	if (tplg_path)
+		sof_pdata->tplg_filename_prefix = tplg_path;
+	else
+		sof_pdata->tplg_filename_prefix = sof_pdata->desc->default_tplg_path;
 
 	/* set callback to be called on successful device probe to enable runtime_pm */
 	sof_pdata->sof_probe_complete = sof_of_probe_complete;
@@ -121,6 +138,9 @@ static const struct of_device_id sof_of_ids[] = {
 #endif
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_IMX8M)
 	{ .compatible = "fsl,imx8mp-dsp", .data = &sof_of_imx8mp_desc},
+#endif
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_MT8195)
+	{ .compatible = "mediatek,mt8195-dsp", .data = &sof_of_mt8195_desc},
 #endif
 	{ }
 };

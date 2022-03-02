@@ -769,7 +769,7 @@ static const struct net_device_ops ieee80211_dataif_8023_ops = {
 	.ndo_get_stats64	= ieee80211_get_stats64,
 };
 
-static bool ieee80211_iftype_supports_encap_offload(enum nl80211_iftype iftype)
+static bool ieee80211_iftype_supports_hdr_offload(enum nl80211_iftype iftype)
 {
 	switch (iftype) {
 	/* P2P GO and client are mapped to AP/STATION types */
@@ -789,7 +789,7 @@ static bool ieee80211_set_sdata_offload_flags(struct ieee80211_sub_if_data *sdat
 	flags = sdata->vif.offload_flags;
 
 	if (ieee80211_hw_check(&local->hw, SUPPORTS_TX_ENCAP_OFFLOAD) &&
-	    ieee80211_iftype_supports_encap_offload(sdata->vif.type)) {
+	    ieee80211_iftype_supports_hdr_offload(sdata->vif.type)) {
 		flags |= IEEE80211_OFFLOAD_ENCAP_ENABLED;
 
 		if (!ieee80211_hw_check(&local->hw, SUPPORTS_TX_FRAG) &&
@@ -802,10 +802,21 @@ static bool ieee80211_set_sdata_offload_flags(struct ieee80211_sub_if_data *sdat
 		flags &= ~IEEE80211_OFFLOAD_ENCAP_ENABLED;
 	}
 
+	if (ieee80211_hw_check(&local->hw, SUPPORTS_RX_DECAP_OFFLOAD) &&
+	    ieee80211_iftype_supports_hdr_offload(sdata->vif.type)) {
+		flags |= IEEE80211_OFFLOAD_DECAP_ENABLED;
+
+		if (local->monitors)
+			flags &= ~IEEE80211_OFFLOAD_DECAP_ENABLED;
+	} else {
+		flags &= ~IEEE80211_OFFLOAD_DECAP_ENABLED;
+	}
+
 	if (sdata->vif.offload_flags == flags)
 		return false;
 
 	sdata->vif.offload_flags = flags;
+	ieee80211_check_fast_rx_iface(sdata);
 	return true;
 }
 
@@ -823,7 +834,7 @@ static void ieee80211_set_vif_encap_ops(struct ieee80211_sub_if_data *sdata)
 	}
 
 	if (!ieee80211_hw_check(&local->hw, SUPPORTS_TX_ENCAP_OFFLOAD) ||
-	    !ieee80211_iftype_supports_encap_offload(bss->vif.type))
+	    !ieee80211_iftype_supports_hdr_offload(bss->vif.type))
 		return;
 
 	enabled = bss->vif.offload_flags & IEEE80211_OFFLOAD_ENCAP_ENABLED;
@@ -2000,9 +2011,16 @@ int ieee80211_if_add(struct ieee80211_local *local, const char *name,
 
 		netdev_set_default_ethtool_ops(ndev, &ieee80211_ethtool_ops);
 
-		/* MTU range: 256 - 2304 */
+		/* MTU range is normally 256 - 2304, where the upper limit is
+		 * the maximum MSDU size. Monitor interfaces send and receive
+		 * MPDU and A-MSDU frames which may be much larger so we do
+		 * not impose an upper limit in that case.
+		 */
 		ndev->min_mtu = 256;
-		ndev->max_mtu = local->hw.max_mtu;
+		if (type == NL80211_IFTYPE_MONITOR)
+			ndev->max_mtu = 0;
+		else
+			ndev->max_mtu = local->hw.max_mtu;
 
 		ret = register_netdevice(ndev);
 		if (ret) {

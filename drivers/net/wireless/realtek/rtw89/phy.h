@@ -35,21 +35,24 @@
 #define RA_MASK_HT_2SS_RATES	GENMASK_ULL(31, 24)
 #define RA_MASK_HT_3SS_RATES	GENMASK_ULL(43, 36)
 #define RA_MASK_HT_4SS_RATES	GENMASK_ULL(55, 48)
+#define RA_MASK_HT_RATES	GENMASK_ULL(55, 12)
 #define RA_MASK_VHT_1SS_RATES	GENMASK_ULL(21, 12)
 #define RA_MASK_VHT_2SS_RATES	GENMASK_ULL(33, 24)
 #define RA_MASK_VHT_3SS_RATES	GENMASK_ULL(45, 36)
 #define RA_MASK_VHT_4SS_RATES	GENMASK_ULL(57, 48)
+#define RA_MASK_VHT_RATES	GENMASK_ULL(57, 12)
 #define RA_MASK_HE_1SS_RATES	GENMASK_ULL(23, 12)
 #define RA_MASK_HE_2SS_RATES	GENMASK_ULL(35, 24)
 #define RA_MASK_HE_3SS_RATES	GENMASK_ULL(47, 36)
 #define RA_MASK_HE_4SS_RATES	GENMASK_ULL(59, 48)
+#define RA_MASK_HE_RATES	GENMASK_ULL(59, 12)
 
-#define CFO_TRK_ENABLE_TH (5 << 2)
+#define CFO_TRK_ENABLE_TH (2 << 2)
 #define CFO_TRK_STOP_TH_4 (30 << 2)
 #define CFO_TRK_STOP_TH_3 (20 << 2)
 #define CFO_TRK_STOP_TH_2 (10 << 2)
 #define CFO_TRK_STOP_TH_1 (00 << 2)
-#define CFO_TRK_STOP_TH (5 << 2)
+#define CFO_TRK_STOP_TH (2 << 2)
 #define CFO_SW_COMP_FINE_TUNE (2 << 2)
 #define CFO_PERIOD_CNT 15
 #define CFO_TP_UPPER 100
@@ -129,6 +132,66 @@ enum rtw89_ccx_unit {
 	RTW89_CCX_8_US = 1,
 	RTW89_CCX_16_US = 2,
 	RTW89_CCX_32_US = 3
+};
+
+enum rtw89_phy_status_ie_type {
+	RTW89_PHYSTS_IE00_CMN_CCK			= 0,
+	RTW89_PHYSTS_IE01_CMN_OFDM			= 1,
+	RTW89_PHYSTS_IE02_CMN_EXT_AX			= 2,
+	RTW89_PHYSTS_IE03_CMN_EXT_SEG_1			= 3,
+	RTW89_PHYSTS_IE04_CMN_EXT_PATH_A		= 4,
+	RTW89_PHYSTS_IE05_CMN_EXT_PATH_B		= 5,
+	RTW89_PHYSTS_IE06_CMN_EXT_PATH_C		= 6,
+	RTW89_PHYSTS_IE07_CMN_EXT_PATH_D		= 7,
+	RTW89_PHYSTS_IE08_FTR_CH			= 8,
+	RTW89_PHYSTS_IE09_FTR_0				= 9,
+	RTW89_PHYSTS_IE10_FTR_PLCP_EXT			= 10,
+	RTW89_PHYSTS_IE11_FTR_PLCP_HISTOGRAM		= 11,
+	RTW89_PHYSTS_IE12_MU_EIGEN_INFO			= 12,
+	RTW89_PHYSTS_IE13_DL_MU_DEF			= 13,
+	RTW89_PHYSTS_IE14_TB_UL_CQI			= 14,
+	RTW89_PHYSTS_IE15_TB_UL_DEF			= 15,
+	RTW89_PHYSTS_IE16_RSVD16			= 16,
+	RTW89_PHYSTS_IE17_TB_UL_CTRL			= 17,
+	RTW89_PHYSTS_IE18_DBG_OFDM_FD_CMN		= 18,
+	RTW89_PHYSTS_IE19_DBG_OFDM_TD_CMN		= 19,
+	RTW89_PHYSTS_IE20_DBG_OFDM_FD_USER_SEG_0	= 20,
+	RTW89_PHYSTS_IE21_DBG_OFDM_FD_USER_SEG_1	= 21,
+	RTW89_PHYSTS_IE22_DBG_OFDM_FD_USER_AGC		= 22,
+	RTW89_PHYSTS_IE23_RSVD23			= 23,
+	RTW89_PHYSTS_IE24_OFDM_TD_PATH_A		= 24,
+	RTW89_PHYSTS_IE25_OFDM_TD_PATH_B		= 25,
+	RTW89_PHYSTS_IE26_OFDM_TD_PATH_C		= 26,
+	RTW89_PHYSTS_IE27_OFDM_TD_PATH_D		= 27,
+	RTW89_PHYSTS_IE28_DBG_CCK_PATH_A		= 28,
+	RTW89_PHYSTS_IE29_DBG_CCK_PATH_B		= 29,
+	RTW89_PHYSTS_IE30_DBG_CCK_PATH_C		= 30,
+	RTW89_PHYSTS_IE31_DBG_CCK_PATH_D		= 31,
+
+	/* keep last */
+	RTW89_PHYSTS_IE_NUM,
+	RTW89_PHYSTS_IE_MAX = RTW89_PHYSTS_IE_NUM - 1
+};
+
+enum rtw89_phy_status_bitmap {
+	RTW89_TD_SEARCH_FAIL  = 0,
+	RTW89_BRK_BY_TX_PKT   = 1,
+	RTW89_CCA_SPOOF       = 2,
+	RTW89_OFDM_BRK        = 3,
+	RTW89_CCK_BRK         = 4,
+	RTW89_DL_MU_SPOOFING  = 5,
+	RTW89_HE_MU           = 6,
+	RTW89_VHT_MU          = 7,
+	RTW89_UL_TB_SPOOFING  = 8,
+	RTW89_RSVD_9          = 9,
+	RTW89_TRIG_BASE_PPDU  = 10,
+	RTW89_CCK_PKT         = 11,
+	RTW89_LEGACY_OFDM_PKT = 12,
+	RTW89_HT_PKT          = 13,
+	RTW89_VHT_PKT         = 14,
+	RTW89_HE_PKT          = 15,
+
+	RTW89_PHYSTS_BITMAP_NUM
 };
 
 enum rtw89_dig_gain_type {
@@ -288,6 +351,9 @@ s8 rtw89_phy_read_txpwr_limit(struct rtw89_dev *rtwdev,
 void rtw89_phy_ra_assoc(struct rtw89_dev *rtwdev, struct ieee80211_sta *sta);
 void rtw89_phy_ra_update(struct rtw89_dev *rtwdev);
 void rtw89_phy_ra_updata_sta(struct rtw89_dev *rtwdev, struct ieee80211_sta *sta);
+void rtw89_phy_rate_pattern_vif(struct rtw89_dev *rtwdev,
+				struct ieee80211_vif *vif,
+				const struct cfg80211_bitrate_mask *mask);
 void rtw89_phy_c2h_handle(struct rtw89_dev *rtwdev, struct sk_buff *skb,
 			  u32 len, u8 class, u8 func);
 void rtw89_phy_cfo_track(struct rtw89_dev *rtwdev);

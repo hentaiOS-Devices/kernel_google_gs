@@ -13,6 +13,7 @@
 #include "intel_display_types.h"
 #include "intel_dmc.h"
 #include "intel_dp.h"
+#include "intel_drrs.h"
 #include "intel_fbc.h"
 #include "intel_hdcp.h"
 #include "intel_hdmi.h"
@@ -302,8 +303,7 @@ psr_source_status(struct intel_dp *intel_dp, struct seq_file *m)
 		};
 		val = intel_de_read(dev_priv,
 				    EDP_PSR2_STATUS(intel_dp->psr.transcoder));
-		status_val = (val & EDP_PSR2_STATUS_STATE_MASK) >>
-			      EDP_PSR2_STATUS_STATE_SHIFT;
+		status_val = REG_FIELD_GET(EDP_PSR2_STATUS_STATE_MASK, val);
 		if (status_val < ARRAY_SIZE(live_status))
 			status = live_status[status_val];
 	} else {
@@ -2043,11 +2043,9 @@ static int i915_drrs_ctl_set(void *data, u64 val)
 
 			intel_dp = enc_to_intel_dp(encoder);
 			if (val)
-				intel_edp_drrs_enable(intel_dp,
-						      crtc_state);
+				intel_drrs_enable(intel_dp, crtc_state);
 			else
-				intel_edp_drrs_disable(intel_dp,
-						       crtc_state);
+				intel_drrs_disable(intel_dp, crtc_state);
 		}
 		drm_connector_list_iter_end(&conn_iter);
 

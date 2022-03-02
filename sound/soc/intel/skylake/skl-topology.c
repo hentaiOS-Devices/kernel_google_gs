@@ -113,7 +113,7 @@ static int is_skl_dsp_widget_type(struct snd_soc_dapm_widget *w,
 
 static void skl_dump_mconfig(struct skl_dev *skl, struct skl_module_cfg *mcfg)
 {
-	struct skl_module_iface *iface = &mcfg->module->formats[0];
+	struct skl_module_iface *iface = &mcfg->module->formats[mcfg->fmt_idx];
 
 	dev_dbg(skl->dev, "Dumping config\n");
 	dev_dbg(skl->dev, "Input Format:\n");
@@ -195,8 +195,8 @@ static void skl_tplg_update_params_fixup(struct skl_module_cfg *m_cfg,
 	struct skl_module_fmt *in_fmt, *out_fmt;
 
 	/* Fixups will be applied to pin 0 only */
-	in_fmt = &m_cfg->module->formats[0].inputs[0].fmt;
-	out_fmt = &m_cfg->module->formats[0].outputs[0].fmt;
+	in_fmt = &m_cfg->module->formats[m_cfg->fmt_idx].inputs[0].fmt;
+	out_fmt = &m_cfg->module->formats[m_cfg->fmt_idx].outputs[0].fmt;
 
 	if (params->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (is_fe) {
@@ -239,9 +239,9 @@ static void skl_tplg_update_buffer_size(struct skl_dev *skl,
 	/* Since fixups is applied to pin 0 only, ibs, obs needs
 	 * change for pin 0 only
 	 */
-	res = &mcfg->module->resources[0];
-	in_fmt = &mcfg->module->formats[0].inputs[0].fmt;
-	out_fmt = &mcfg->module->formats[0].outputs[0].fmt;
+	res = &mcfg->module->resources[mcfg->res_idx];
+	in_fmt = &mcfg->module->formats[mcfg->fmt_idx].inputs[0].fmt;
+	out_fmt = &mcfg->module->formats[mcfg->fmt_idx].outputs[0].fmt;
 
 	if (mcfg->m_type == SKL_MODULE_TYPE_SRCINT)
 		multiplier = 5;
@@ -285,7 +285,7 @@ static int skl_tplg_update_be_blob(struct snd_soc_dapm_widget *w,
 {
 	struct skl_module_cfg *m_cfg = w->priv;
 	int link_type, dir;
-	u32 ch, s_freq, s_fmt;
+	u32 ch, s_freq, s_fmt, s_cont;
 	struct nhlt_specific_cfg *cfg;
 	u8 dev_type = skl_tplg_be_dev_type(m_cfg->dev_type);
 	int fmt_idx = m_cfg->fmt_idx;
@@ -301,7 +301,8 @@ static int skl_tplg_update_be_blob(struct snd_soc_dapm_widget *w,
 		link_type = NHLT_LINK_DMIC;
 		dir = SNDRV_PCM_STREAM_CAPTURE;
 		s_freq = m_iface->inputs[0].fmt.s_freq;
-		s_fmt = m_iface->inputs[0].fmt.bit_depth;
+		s_fmt = m_iface->inputs[0].fmt.valid_bit_depth;
+		s_cont = m_iface->inputs[0].fmt.bit_depth;
 		ch = m_iface->inputs[0].fmt.channels;
 		break;
 
@@ -310,12 +311,14 @@ static int skl_tplg_update_be_blob(struct snd_soc_dapm_widget *w,
 		if (m_cfg->hw_conn_type == SKL_CONN_SOURCE) {
 			dir = SNDRV_PCM_STREAM_PLAYBACK;
 			s_freq = m_iface->outputs[0].fmt.s_freq;
-			s_fmt = m_iface->outputs[0].fmt.bit_depth;
+			s_fmt = m_iface->outputs[0].fmt.valid_bit_depth;
+			s_cont = m_iface->outputs[0].fmt.bit_depth;
 			ch = m_iface->outputs[0].fmt.channels;
 		} else {
 			dir = SNDRV_PCM_STREAM_CAPTURE;
 			s_freq = m_iface->inputs[0].fmt.s_freq;
-			s_fmt = m_iface->inputs[0].fmt.bit_depth;
+			s_fmt = m_iface->inputs[0].fmt.valid_bit_depth;
+			s_cont = m_iface->inputs[0].fmt.bit_depth;
 			ch = m_iface->inputs[0].fmt.channels;
 		}
 		break;
@@ -325,16 +328,17 @@ static int skl_tplg_update_be_blob(struct snd_soc_dapm_widget *w,
 	}
 
 	/* update the blob based on virtual bus_id and default params */
-	cfg = skl_get_ep_blob(skl, m_cfg->vbus_id, link_type,
-					s_fmt, ch, s_freq, dir, dev_type);
+	cfg = intel_nhlt_get_endpoint_blob(skl->dev, skl->nhlt, m_cfg->vbus_id,
+					   link_type, s_fmt, s_cont, ch,
+					   s_freq, dir, dev_type);
 	if (cfg) {
 		m_cfg->formats_config.caps_size = cfg->size;
 		m_cfg->formats_config.caps = (u32 *) &cfg->caps;
 	} else {
 		dev_err(skl->dev, "Blob NULL for id %x type %d dirn %d\n",
 					m_cfg->vbus_id, link_type, dir);
-		dev_err(skl->dev, "PCM: ch %d, freq %d, fmt %d\n",
-					ch, s_freq, s_fmt);
+		dev_err(skl->dev, "PCM: ch %d, freq %d, fmt %d/%d\n",
+					ch, s_freq, s_fmt, s_cont);
 		return -EIO;
 	}
 
@@ -1463,12 +1467,6 @@ static int skl_tplg_tlv_control_set(struct snd_kcontrol *kcontrol,
 	struct skl_dev *skl = get_skl_ctx(w->dapm->dev);
 
 	if (ac->params) {
-		/*
-		 * Widget data is expected to be stripped of T and L
-		 */
-		size -= 2 * sizeof(unsigned int);
-		data += 2;
-
 		if (size > ac->max)
 			return -EINVAL;
 		ac->size = size;
@@ -1637,11 +1635,12 @@ int skl_tplg_update_pipe_params(struct device *dev,
 			struct skl_module_cfg *mconfig,
 			struct skl_pipe_params *params)
 {
-	struct skl_module_res *res = &mconfig->module->resources[0];
+	struct skl_module_res *res;
 	struct skl_dev *skl = get_skl_ctx(dev);
 	struct skl_module_fmt *format = NULL;
 	u8 cfg_idx = mconfig->pipe->cur_config_idx;
 
+	res = &mconfig->module->resources[mconfig->res_idx];
 	skl_tplg_fill_dma_id(mconfig, params);
 	mconfig->fmt_idx = mconfig->mod_cfg[cfg_idx].fmt_idx;
 	mconfig->res_idx = mconfig->mod_cfg[cfg_idx].res_idx;
@@ -1650,9 +1649,9 @@ int skl_tplg_update_pipe_params(struct device *dev,
 		return 0;
 
 	if (params->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		format = &mconfig->module->formats[0].inputs[0].fmt;
+		format = &mconfig->module->formats[mconfig->fmt_idx].inputs[0].fmt;
 	else
-		format = &mconfig->module->formats[0].outputs[0].fmt;
+		format = &mconfig->module->formats[mconfig->fmt_idx].outputs[0].fmt;
 
 	/* set the hw_params */
 	format->s_freq = params->s_freq;
@@ -1827,7 +1826,7 @@ static u8 skl_tplg_be_link_type(int dev_type)
  * Fill the BE gateway parameters
  * The BE gateway expects a blob of parameters which are kept in the ACPI
  * NHLT blob, so query the blob for interface type (i2s/pdm) and instance.
- * The port can have multiple settings so pick based on the PCM
+ * The port can have multiple settings so pick based on the pipeline
  * parameters
  */
 static int skl_tplg_be_fill_pipe_params(struct snd_soc_dai *dai,
@@ -1835,6 +1834,8 @@ static int skl_tplg_be_fill_pipe_params(struct snd_soc_dai *dai,
 				struct skl_pipe_params *params)
 {
 	struct nhlt_specific_cfg *cfg;
+	struct skl_pipe *pipe = mconfig->pipe;
+	struct skl_pipe_fmt *pipe_fmt;
 	struct skl_dev *skl = get_skl_ctx(dai->dev);
 	int link_type = skl_tplg_be_link_type(mconfig->dev_type);
 	u8 dev_type = skl_tplg_be_dev_type(mconfig->dev_type);
@@ -1844,20 +1845,24 @@ static int skl_tplg_be_fill_pipe_params(struct snd_soc_dai *dai,
 	if (link_type == NHLT_LINK_HDA)
 		return 0;
 
+	if (pipe->direction == SNDRV_PCM_STREAM_PLAYBACK)
+		pipe_fmt = &pipe->configs[pipe->pipe_config_idx].out_fmt;
+	else
+		pipe_fmt = &pipe->configs[pipe->pipe_config_idx].in_fmt;
+
 	/* update the blob based on virtual bus_id*/
-	cfg = skl_get_ep_blob(skl, mconfig->vbus_id, link_type,
-					params->s_fmt, params->ch,
-					params->s_freq, params->stream,
-					dev_type);
+	cfg = intel_nhlt_get_endpoint_blob(dai->dev, skl->nhlt,
+					mconfig->vbus_id, link_type,
+					pipe_fmt->bps, params->s_cont,
+					pipe_fmt->channels, pipe_fmt->freq,
+					pipe->direction, dev_type);
 	if (cfg) {
 		mconfig->formats_config.caps_size = cfg->size;
 		mconfig->formats_config.caps = (u32 *) &cfg->caps;
 	} else {
-		dev_err(dai->dev, "Blob NULL for id %x type %d dirn %d\n",
-					mconfig->vbus_id, link_type,
-					params->stream);
-		dev_err(dai->dev, "PCM: ch %d, freq %d, fmt %d\n",
-				 params->ch, params->s_freq, params->s_fmt);
+		dev_err(dai->dev, "Blob NULL for id:%d type:%d dirn:%d ch:%d, freq:%d, fmt:%d\n",
+			mconfig->vbus_id, link_type, params->stream,
+			params->ch, params->s_freq, params->s_fmt);
 		return -EINVAL;
 	}
 
@@ -3610,7 +3615,7 @@ static int skl_manifest_load(struct snd_soc_component *cmpnt, int index,
 	return 0;
 }
 
-static void skl_tplg_complete(struct snd_soc_component *component)
+static int skl_tplg_complete(struct snd_soc_component *component)
 {
 	struct snd_soc_dobj *dobj;
 	struct snd_soc_acpi_mach *mach;
@@ -3619,7 +3624,7 @@ static void skl_tplg_complete(struct snd_soc_component *component)
 
 	val = kmalloc(sizeof(*val), GFP_KERNEL);
 	if (!val)
-		return;
+		return -ENOMEM;
 
 	mach = dev_get_platdata(component->card->dev);
 	list_for_each_entry(dobj, &component->dobj_list, list) {
@@ -3644,7 +3649,9 @@ static void skl_tplg_complete(struct snd_soc_component *component)
 			}
 		}
 	}
+
 	kfree(val);
+	return 0;
 }
 
 static struct snd_soc_tplg_ops skl_tplg_ops  = {

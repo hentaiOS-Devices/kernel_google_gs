@@ -270,6 +270,7 @@ enum tc_port {
 };
 
 enum tc_port_mode {
+	TC_PORT_DISCONNECTED,
 	TC_PORT_TBT_ALT,
 	TC_PORT_DP_ALT,
 	TC_PORT_LEGACY,
@@ -561,6 +562,7 @@ struct drm_display_mode *
 intel_encoder_current_mode(struct intel_encoder *encoder);
 bool intel_phy_is_combo(struct drm_i915_private *dev_priv, enum phy phy);
 bool intel_phy_is_tc(struct drm_i915_private *dev_priv, enum phy phy);
+bool intel_phy_is_snps(struct drm_i915_private *dev_priv, enum phy phy);
 enum tc_port intel_port_to_tc(struct drm_i915_private *dev_priv,
 			      enum port port);
 int intel_get_pipe_from_crtc_id_ioctl(struct drm_device *dev, void *data,
@@ -643,6 +645,7 @@ void intel_display_driver_register(struct drm_i915_private *i915);
 void intel_display_driver_unregister(struct drm_i915_private *i915);
 
 /* modesetting */
+bool intel_modeset_probe_defer(struct pci_dev *pdev);
 void intel_modeset_init_hw(struct drm_i915_private *i915);
 int intel_modeset_init_noirq(struct drm_i915_private *i915);
 int intel_modeset_init_nogem(struct drm_i915_private *i915);

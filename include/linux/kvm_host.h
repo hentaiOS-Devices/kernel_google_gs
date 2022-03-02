@@ -148,6 +148,7 @@ static inline bool is_error_page(struct page *page)
 #define KVM_REQ_MMU_RELOAD        (1 | KVM_REQUEST_WAIT | KVM_REQUEST_NO_WAKEUP)
 #define KVM_REQ_PENDING_TIMER     2
 #define KVM_REQ_UNHALT            3
+#define KVM_REQ_SUSPEND_TIME_ADJ  5
 #define KVM_REQUEST_ARCH_BASE     8
 
 #define KVM_ARCH_REQ_FLAGS(nr, flags) ({ \
@@ -304,6 +305,11 @@ struct kvm_vcpu {
 		struct list_head done;
 		spinlock_t lock;
 	} async_pf;
+#endif
+
+#ifdef CONFIG_KVM_VIRT_SUSPEND_TIMING
+	u64 suspend_time_ns;
+	spinlock_t suspend_time_ns_lock;
 #endif
 
 #ifdef CONFIG_HAVE_KVM_CPU_RELAX_INTERCEPT
@@ -512,6 +518,12 @@ struct kvm {
 
 #ifdef CONFIG_HAVE_KVM_PM_NOTIFIER
 	struct notifier_block pm_notifier;
+#endif
+#ifdef CONFIG_KVM_VIRT_SUSPEND_TIMING
+	u64 suspend_time_ns;
+	spinlock_t suspend_time_ns_lock;
+	u64 base_offs_boot_ns;
+	struct gfn_to_hva_cache suspend_time_ghc;
 #endif
 };
 
@@ -1537,5 +1549,41 @@ static inline void kvm_handle_signal_exit(struct kvm_vcpu *vcpu)
 	vcpu->stat.signal_exits++;
 }
 #endif /* CONFIG_KVM_XFER_TO_GUEST_WORK */
+
+#ifdef CONFIG_KVM_VIRT_SUSPEND_TIMING
+bool virt_suspend_time_enabled(struct kvm *kvm);
+void kvm_write_suspend_time(struct kvm *kvm);
+int kvm_init_suspend_time_ghc(struct kvm *kvm, gpa_t gpa);
+static inline u64 kvm_total_suspend_time(struct kvm *kvm)
+{
+	return ktime_get_offs_boot_ns() - kvm->base_offs_boot_ns;
+}
+
+static inline u64 vcpu_suspend_time_injected(struct kvm_vcpu *vcpu)
+{
+	return vcpu->suspend_time_ns;
+}
+#else
+static inline bool virt_suspend_time_enabled(struct kvm *kvm)
+{
+	return 0;
+}
+static inline void kvm_write_suspend_time(struct kvm *kvm)
+{
+}
+static inline int kvm_init_suspend_time_ghc(struct kvm *kvm, gpa_t gpa)
+{
+	return 1;
+}
+static inline u64 kvm_total_suspend_time(struct kvm *kvm)
+{
+	return 0;
+}
+
+static inline u64 vcpu_suspend_time_injected(struct kvm_vcpu *vcpu)
+{
+	return 0;
+}
+#endif /* CONFIG_KVM_VIRT_SUSPEND_TIMING */
 
 #endif

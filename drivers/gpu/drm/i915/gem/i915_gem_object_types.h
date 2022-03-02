@@ -193,6 +193,8 @@ struct drm_i915_gem_object {
 			     I915_BO_ALLOC_CPU_CLEAR)
 #define I915_BO_READONLY         BIT(4)
 #define I915_TILING_QUIRK_BIT    5 /* unknown swizzling; do not release! */
+#define I915_BO_PROTECTED        BIT(8)
+#define I915_BO_WAS_BOUND_BIT    9
 
 	/*
 	 * Is the object to be mapped as read-only to the GPU
@@ -309,6 +311,13 @@ struct drm_i915_gem_object {
 		 */
 		bool dirty:1;
 	} mm;
+
+	/*
+	 * Record which PXP key instance this object was created against (if
+	 * any), so we can use it to determine if the encryption is valid by
+	 * comparing against the current key instance.
+	 */
+	u32 pxp_key_instance;
 
 	/** Record of address bit 17 of each page at last unbind. */
 	unsigned long *bit_17;

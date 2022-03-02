@@ -9,6 +9,8 @@
 #include <linux/kernel.h>
 #include <linux/acpi.h>
 #include <linux/acpi_iort.h>
+#include <linux/acpi_viot.h>
+#include <linux/iommu.h>
 #include <linux/signal.h>
 #include <linux/kthread.h>
 #include <linux/dmi.h>
@@ -16,6 +18,7 @@
 #include <linux/dma-map-ops.h>
 #include <linux/platform_data/x86/apple.h>
 #include <linux/pgtable.h>
+#include <linux/crc32.h>
 
 #include "internal.h"
 
@@ -648,6 +651,18 @@ static int acpi_device_set_name(struct acpi_device *device,
 	dev_set_name(&device->dev, "%s:%02x", acpi_device_bus_id->bus_id, result);
 	return 0;
 }
+static void acpi_store_pld_crc(struct acpi_device *adev)
+{
+	struct acpi_pld_info *pld;
+	acpi_status status;
+
+	status = acpi_get_physical_device_location(adev->handle, &pld);
+	if (ACPI_FAILURE(status))
+		return;
+
+	adev->pld_crc = crc32(~0, pld, sizeof(*pld));
+	ACPI_FREE(pld);
+}
 
 int acpi_device_add(struct acpi_device *device,
 		    void (*release)(struct device *))
@@ -718,6 +733,9 @@ int acpi_device_add(struct acpi_device *device,
 
 	if (device->wakeup.flags.valid)
 		list_add_tail(&device->wakeup_list, &acpi_wakeup_device_list);
+
+	acpi_store_pld_crc(device);
+
 	mutex_unlock(&acpi_device_lock);
 
 	if (device->parent)
@@ -972,6 +990,7 @@ static void acpi_bus_init_power_state(struct acpi_device *device, int state)
 
 static void acpi_bus_get_power_flags(struct acpi_device *device)
 {
+	unsigned long long dsc = ACPI_STATE_D0;
 	u32 i;
 
 	/* Presence of _PS0|_PR0 indicates 'power manageable' */
@@ -992,6 +1011,9 @@ static void acpi_bus_get_power_flags(struct acpi_device *device)
 
 	if (acpi_has_method(device->handle, "_DSW"))
 		device->power.flags.dsw_present = 1;
+
+	acpi_evaluate_integer(device->handle, "_DSC", NULL, &dsc);
+	device->power.state_for_enumeration = dsc;
 
 	/*
 	 * Enumerate supported power management states
@@ -1486,6 +1508,78 @@ int acpi_dma_get_range(struct device *dev, u64 *dma_addr, u64 *offset,
 	return ret >= 0 ? 0 : ret;
 }
 
+#ifdef CONFIG_IOMMU_API
+int acpi_iommu_fwspec_init(struct device *dev, u32 id,
+			   struct fwnode_handle *fwnode,
+			   const struct iommu_ops *ops)
+{
+	int ret = iommu_fwspec_init(dev, fwnode, ops);
+
+	if (!ret)
+		ret = iommu_fwspec_add_ids(dev, &id, 1);
+
+	return ret;
+}
+
+static inline const struct iommu_ops *acpi_iommu_fwspec_ops(struct device *dev)
+{
+	struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);
+
+	return fwspec ? fwspec->ops : NULL;
+}
+
+static const struct iommu_ops *acpi_iommu_configure_id(struct device *dev,
+						       const u32 *id_in)
+{
+	int err;
+	const struct iommu_ops *ops;
+
+	/*
+	 * If we already translated the fwspec there is nothing left to do,
+	 * return the iommu_ops.
+	 */
+	ops = acpi_iommu_fwspec_ops(dev);
+	if (ops)
+		return ops;
+
+	err = iort_iommu_configure_id(dev, id_in);
+	if (err && err != -EPROBE_DEFER)
+		err = viot_iommu_configure(dev);
+
+	/*
+	 * If we have reason to believe the IOMMU driver missed the initial
+	 * iommu_probe_device() call for dev, replay it to get things in order.
+	 */
+	if (!err && dev->bus && !device_iommu_mapped(dev))
+		err = iommu_probe_device(dev);
+
+	/* Ignore all other errors apart from EPROBE_DEFER */
+	if (err == -EPROBE_DEFER) {
+		return ERR_PTR(err);
+	} else if (err) {
+		dev_dbg(dev, "Adding to IOMMU failed: %d\n", err);
+		return NULL;
+	}
+	return acpi_iommu_fwspec_ops(dev);
+}
+
+#else /* !CONFIG_IOMMU_API */
+
+int acpi_iommu_fwspec_init(struct device *dev, u32 id,
+			   struct fwnode_handle *fwnode,
+			   const struct iommu_ops *ops)
+{
+	return -ENODEV;
+}
+
+static const struct iommu_ops *acpi_iommu_configure_id(struct device *dev,
+						       const u32 *id_in)
+{
+	return NULL;
+}
+
+#endif /* !CONFIG_IOMMU_API */
+
 /**
  * acpi_dma_configure_id - Set-up DMA configuration for the device.
  * @dev: The pointer to the device
@@ -1503,9 +1597,9 @@ int acpi_dma_configure_id(struct device *dev, enum dev_dma_attr attr,
 		return 0;
 	}
 
-	iort_dma_setup(dev, &dma_addr, &size);
+	acpi_arch_dma_setup(dev, &dma_addr, &size);
 
-	iommu = iort_iommu_configure_id(dev, input_id);
+	iommu = acpi_iommu_configure_id(dev, input_id);
 	if (PTR_ERR(iommu) == -EPROBE_DEFER)
 		return -EPROBE_DEFER;
 
@@ -1577,6 +1671,7 @@ static bool acpi_device_enumeration_by_parent(struct acpi_device *device)
 {
 	struct list_head resource_list;
 	bool is_serial_bus_slave = false;
+	static const struct acpi_device_id ignore_serial_bus_ids[] = {
 	/*
 	 * These devices have multiple I2cSerialBus resources and an i2c-client
 	 * must be instantiated for each, each with its own i2c_device_id.
@@ -1585,11 +1680,18 @@ static bool acpi_device_enumeration_by_parent(struct acpi_device *device)
 	 * drivers/platform/x86/i2c-multi-instantiate.c driver, which knows
 	 * which i2c_device_id to use for each resource.
 	 */
-	static const struct acpi_device_id i2c_multi_instantiate_ids[] = {
 		{"BSG1160", },
 		{"BSG2150", },
 		{"INT33FE", },
 		{"INT3515", },
+	/*
+	 * HIDs of device with an UartSerialBusV2 resource for which userspace
+	 * expects a regular tty cdev to be created (instead of the in kernel
+	 * serdev) and which have a kernel driver which expects a platform_dev
+	 * such as the rfkill-gpio driver.
+	 */
+		{"BCM4752", },
+		{"LNV4752", },
 		{}
 	};
 
@@ -1603,8 +1705,7 @@ static bool acpi_device_enumeration_by_parent(struct acpi_device *device)
 	     fwnode_property_present(&device->fwnode, "baud")))
 		return true;
 
-	/* Instantiate a pdev for the i2c-multi-instantiate drv to bind to */
-	if (!acpi_match_device_ids(device, i2c_multi_instantiate_ids))
+	if (!acpi_match_device_ids(device, ignore_serial_bus_ids))
 		return false;
 
 	INIT_LIST_HEAD(&resource_list);

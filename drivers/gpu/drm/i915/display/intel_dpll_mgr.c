@@ -26,6 +26,7 @@
 #include "intel_dpio_phy.h"
 #include "intel_dpll.h"
 #include "intel_dpll_mgr.h"
+#include "intel_tc.h"
 
 /**
  * DOC: Display PLLs
@@ -2667,15 +2668,15 @@ static bool cnl_ddi_hdmi_pll_dividers(struct intel_crtc_state *crtc_state)
 }
 
 /*
- * Display WA #22010492432: ehl, tgl
+ * Display WA #22010492432: ehl, tgl, adl-p
  * Program half of the nominal DCO divider fraction value.
  */
 static bool
 ehl_combo_pll_div_frac_wa_needed(struct drm_i915_private *i915)
 {
 	return ((IS_PLATFORM(i915, INTEL_ELKHARTLAKE) &&
-		 IS_JSL_EHL_REVID(i915, EHL_REVID_B0, REVID_FOREVER)) ||
-		 IS_TIGERLAKE(i915)) &&
+		 IS_JSL_EHL_DISPLAY_STEP(i915, STEP_B0, STEP_FOREVER)) ||
+		 IS_TIGERLAKE(i915) || IS_ALDERLAKE_P(i915)) &&
 		 i915->dpll.ref_clks.nssc == 38400;
 }
 
@@ -3532,8 +3533,8 @@ static void icl_update_active_dpll(struct intel_atomic_state *state,
 		enc_to_dig_port(encoder);
 
 	if (primary_port &&
-	    (primary_port->tc_mode == TC_PORT_DP_ALT ||
-	     primary_port->tc_mode == TC_PORT_LEGACY))
+	    (intel_tc_port_in_dp_alt_mode(primary_port) ||
+	     intel_tc_port_in_legacy_mode(primary_port)))
 		port_dpll_id = ICL_PORT_DPLL_MG_PHY;
 
 	icl_set_active_port_dpll(crtc_state, port_dpll_id);

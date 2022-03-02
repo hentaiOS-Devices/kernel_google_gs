@@ -2610,6 +2610,31 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 	if (ieee80211_is_beacon(hdr->frame_control))
 		ath10k_mac_handle_beacon(ar, skb);
 
+	if (ieee80211_is_beacon(hdr->frame_control) ||
+	    ieee80211_is_probe_resp(hdr->frame_control)) {
+		struct ieee80211_mgmt *mgmt = (void *)skb->data;
+		u8 *ies;
+		int ies_ch;
+
+		status->boottime_ns = ktime_get_boottime_ns();
+
+		if (!ar->scan_channel)
+			goto drop;
+
+		ies = mgmt->u.beacon.variable;
+
+		ies_ch = cfg80211_get_ies_channel_number(mgmt->u.beacon.variable,
+							 skb_tail_pointer(skb) - ies,
+							 sband->band);
+
+		if (ies_ch > 0 && ies_ch != channel) {
+			ath10k_dbg(ar, ATH10K_DBG_MGMT,
+				   "channel mismatched ds channel %d scan channel %d\n",
+				   ies_ch, channel);
+			goto drop;
+		}
+	}
+
 	ath10k_dbg(ar, ATH10K_DBG_MGMT,
 		   "event mgmt rx skb %pK len %d ftype %02x stype %02x\n",
 		   skb, skb->len,
@@ -2622,6 +2647,10 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 
 	ieee80211_rx_ni(ar->hw, skb);
 
+	return 0;
+
+drop:
+	dev_kfree_skb(skb);
 	return 0;
 }
 
@@ -2867,7 +2896,7 @@ void ath10k_wmi_pull_pdev_stats_tx(const struct wmi_pdev_stats_tx *src,
 	dst->hw_reaped = __le32_to_cpu(src->hw_reaped);
 	dst->underrun = __le32_to_cpu(src->underrun);
 	dst->tx_abort = __le32_to_cpu(src->tx_abort);
-	dst->mpdus_requed = __le32_to_cpu(src->mpdus_requed);
+	dst->mpdus_requeued = __le32_to_cpu(src->mpdus_requeued);
 	dst->tx_ko = __le32_to_cpu(src->tx_ko);
 	dst->data_rc = __le32_to_cpu(src->data_rc);
 	dst->self_triggers = __le32_to_cpu(src->self_triggers);
@@ -2895,7 +2924,7 @@ ath10k_wmi_10_4_pull_pdev_stats_tx(const struct wmi_10_4_pdev_stats_tx *src,
 	dst->hw_reaped = __le32_to_cpu(src->hw_reaped);
 	dst->underrun = __le32_to_cpu(src->underrun);
 	dst->tx_abort = __le32_to_cpu(src->tx_abort);
-	dst->mpdus_requed = __le32_to_cpu(src->mpdus_requed);
+	dst->mpdus_requeued = __le32_to_cpu(src->mpdus_requeued);
 	dst->tx_ko = __le32_to_cpu(src->tx_ko);
 	dst->data_rc = __le32_to_cpu(src->data_rc);
 	dst->self_triggers = __le32_to_cpu(src->self_triggers);
@@ -8270,7 +8299,7 @@ ath10k_wmi_fw_pdev_tx_stats_fill(const struct ath10k_fw_stats_pdev *pdev,
 	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
 			 "PPDUs cleaned", pdev->tx_abort);
 	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
-			 "MPDUs requed", pdev->mpdus_requed);
+			 "MPDUs requeued", pdev->mpdus_requeued);
 	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
 			 "Excessive retries", pdev->tx_ko);
 	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",

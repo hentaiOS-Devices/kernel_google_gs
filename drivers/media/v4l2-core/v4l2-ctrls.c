@@ -870,6 +870,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_DECODER_SLICE_INTERFACE:	return "Decoder Slice Interface";
 	case V4L2_CID_MPEG_VIDEO_DECODER_MPEG4_DEBLOCK_FILTER:	return "MPEG4 Loop Filter Enable";
 	case V4L2_CID_MPEG_VIDEO_CYCLIC_INTRA_REFRESH_MB:	return "Number of Intra Refresh MBs";
+	case V4L2_CID_MPEG_VIDEO_INTRA_REFRESH_PERIOD:		return "Intra Refresh Period";
 	case V4L2_CID_MPEG_VIDEO_FRAME_RC_ENABLE:		return "Frame Level Rate Control Enable";
 	case V4L2_CID_MPEG_VIDEO_MB_RC_ENABLE:			return "H264 MB Level Rate Control";
 	case V4L2_CID_MPEG_VIDEO_HEADER_MODE:			return "Sequence Header Mode";
@@ -1298,6 +1299,7 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_MPEG_VIDEO_MV_H_SEARCH_RANGE:
 	case V4L2_CID_MPEG_VIDEO_MV_V_SEARCH_RANGE:
 	case V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY:
+	case V4L2_CID_MPEG_VIDEO_INTRA_REFRESH_PERIOD:
 		*type = V4L2_CTRL_TYPE_INTEGER;
 		break;
 	case V4L2_CID_MPEG_VIDEO_LTR_COUNT:
@@ -1700,6 +1702,7 @@ static void std_init_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 {
 	struct v4l2_ctrl_mpeg2_slice_params *p_mpeg2_slice_params;
 	struct v4l2_ctrl_vp8_frame *p_vp8_frame;
+	struct v4l2_ctrl_vp9_frame_decode_params *p_vp9_frame_dec_params;
 	struct v4l2_ctrl_fwht_params *p_fwht_params;
 	void *p = ptr.p + idx * ctrl->elem_size;
 
@@ -1726,6 +1729,14 @@ static void std_init_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 	case V4L2_CTRL_TYPE_VP8_FRAME:
 		p_vp8_frame = p;
 		p_vp8_frame->num_dct_parts = 1;
+		break;
+	case V4L2_CTRL_TYPE_VP9_FRAME_DECODE_PARAMS:
+		p_vp9_frame_dec_params = p;
+		p_vp9_frame_dec_params->profile = 0;
+		p_vp9_frame_dec_params->bit_depth = 8;
+		p_vp9_frame_dec_params->flags |=
+			(V4L2_VP9_FRAME_FLAG_X_SUBSAMPLING |
+			V4L2_VP9_FRAME_FLAG_Y_SUBSAMPLING);
 		break;
 	case V4L2_CTRL_TYPE_FWHT_PARAMS:
 		p_fwht_params = p;
@@ -1957,22 +1968,6 @@ validate_vp9_seg_params(struct v4l2_vp9_segmentation *seg)
 	    !(seg->flags & V4L2_VP9_SEGMENTATION_FLAG_ENABLED))
 		return -EINVAL;
 
-	/*
-	 * V4L2_VP9_SEGMENTATION_FLAG_TEMPORAL_UPDATE implies
-	 * V4L2_VP9_SEGMENTATION_FLAG_UPDATE_MAP.
-	 */
-	if (seg->flags & V4L2_VP9_SEGMENTATION_FLAG_TEMPORAL_UPDATE &&
-	    !(seg->flags & V4L2_VP9_SEGMENTATION_FLAG_UPDATE_MAP))
-		return -EINVAL;
-
-	/*
-	 * V4L2_VP9_SEGMENTATION_FLAG_ABS_OR_DELTA_UPDATE implies
-	 * V4L2_VP9_SEGMENTATION_FLAG_UPDATE_DATA.
-	 */
-	if (seg->flags & V4L2_VP9_SEGMENTATION_FLAG_ABS_OR_DELTA_UPDATE &&
-	    !(seg->flags & V4L2_VP9_SEGMENTATION_FLAG_UPDATE_DATA))
-		return -EINVAL;
-
 	for (i = 0; i < ARRAY_SIZE(seg->feature_enabled); i++) {
 		if (seg->feature_enabled[i] &
 		    ~(V4L2_VP9_SEGMENT_FEATURE_QP_DELTA |
@@ -2017,12 +2012,17 @@ validate_vp9_frame_decode_params(struct v4l2_ctrl_vp9_frame_decode_params *dec_p
 
 	/*
 	 * The refresh context and error resilient flags are mutually exclusive.
-	 * Same goes for parallel decoding and error resilient modes.
 	 */
 	if (dec_params->flags & V4L2_VP9_FRAME_FLAG_ERROR_RESILIENT &&
-	    dec_params->flags &
-	    (V4L2_VP9_FRAME_FLAG_REFRESH_FRAME_CTX |
-	     V4L2_VP9_FRAME_FLAG_PARALLEL_DEC_MODE))
+	    dec_params->flags & V4L2_VP9_FRAME_FLAG_REFRESH_FRAME_CTX)
+		return -EINVAL;
+
+	/*
+	 * error resilient mode and parallel decoding mode
+	 * are not mutually exclusive.
+	 */
+	if (dec_params->flags & V4L2_VP9_FRAME_FLAG_ERROR_RESILIENT &&
+	    !(dec_params->flags & V4L2_VP9_FRAME_FLAG_PARALLEL_DEC_MODE))
 		return -EINVAL;
 
 	if (dec_params->profile > V4L2_VP9_PROFILE_MAX)
@@ -2537,6 +2537,10 @@ static int std_validate(const struct v4l2_ctrl *ctrl, u32 idx,
 			return -ERANGE;
 		if ((len - (u32)ctrl->minimum) % (u32)ctrl->step)
 			return -ERANGE;
+		return 0;
+
+	/* FIXME:just return 0 for now */
+	case V4L2_CTRL_TYPE_PRIVATE:
 		return 0;
 
 	default:

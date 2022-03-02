@@ -306,6 +306,8 @@ static umode_t nvmem_bin_attr_is_visible(struct kobject *kobj,
 	struct device *dev = kobj_to_dev(kobj);
 	struct nvmem_device *nvmem = to_nvmem_device(dev);
 
+	attr->size = nvmem->size;
+
 	return nvmem_bin_attr_get_umode(nvmem);
 }
 
@@ -818,8 +820,11 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
 
 	if (nvmem->nkeepout) {
 		rval = nvmem_validate_keepouts(nvmem);
-		if (rval)
-			goto err_put_device;
+		if (rval) {
+			ida_free(&nvmem_ida, nvmem->id);
+			kfree(nvmem);
+			return ERR_PTR(rval);
+		}
 	}
 
 	dev_dbg(&nvmem->dev, "Registering nvmem device %s\n", config->name);
@@ -1374,7 +1379,8 @@ static void nvmem_shift_read_buffer_in_place(struct nvmem_cell *cell, void *buf)
 		*p-- = 0;
 
 	/* clear msb bits if any leftover in the last byte */
-	*p &= GENMASK((cell->nbits%BITS_PER_BYTE) - 1, 0);
+	if (cell->nbits % BITS_PER_BYTE)
+		*p &= GENMASK((cell->nbits % BITS_PER_BYTE) - 1, 0);
 }
 
 static int __nvmem_cell_read(struct nvmem_device *nvmem,
@@ -1608,6 +1614,101 @@ int nvmem_cell_read_u64(struct device *dev, const char *cell_id, u64 *val)
 	return nvmem_cell_read_common(dev, cell_id, val, sizeof(*val));
 }
 EXPORT_SYMBOL_GPL(nvmem_cell_read_u64);
+
+static void *nvmem_cell_read_variable_common(struct device *dev,
+					     const char *cell_id,
+					     size_t max_len, size_t *len)
+{
+	struct nvmem_cell *cell;
+	int nbits;
+	void *buf;
+
+	cell = nvmem_cell_get(dev, cell_id);
+	if (IS_ERR(cell))
+		return cell;
+
+	nbits = cell->nbits;
+	buf = nvmem_cell_read(cell, len);
+	nvmem_cell_put(cell);
+	if (IS_ERR(buf))
+		return buf;
+
+	/*
+	 * If nbits is set then nvmem_cell_read() can significantly exaggerate
+	 * the length of the real data. Throw away the extra junk.
+	 */
+	if (nbits)
+		*len = DIV_ROUND_UP(nbits, 8);
+
+	if (*len > max_len) {
+		kfree(buf);
+		return ERR_PTR(-ERANGE);
+	}
+
+	return buf;
+}
+
+/**
+ * nvmem_cell_read_variable_le_u32() - Read up to 32-bits of data as a little endian number.
+ *
+ * @dev: Device that requests the nvmem cell.
+ * @cell_id: Name of nvmem cell to read.
+ * @val: pointer to output value.
+ *
+ * Return: 0 on success or negative errno.
+ */
+int nvmem_cell_read_variable_le_u32(struct device *dev, const char *cell_id,
+				    u32 *val)
+{
+	size_t len;
+	u8 *buf;
+	int i;
+
+	buf = nvmem_cell_read_variable_common(dev, cell_id, sizeof(*val), &len);
+	if (IS_ERR(buf))
+		return PTR_ERR(buf);
+
+	/* Copy w/ implicit endian conversion */
+	*val = 0;
+	for (i = 0; i < len; i++)
+		*val |= buf[i] << (8 * i);
+
+	kfree(buf);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(nvmem_cell_read_variable_le_u32);
+
+/**
+ * nvmem_cell_read_variable_le_u64() - Read up to 64-bits of data as a little endian number.
+ *
+ * @dev: Device that requests the nvmem cell.
+ * @cell_id: Name of nvmem cell to read.
+ * @val: pointer to output value.
+ *
+ * Return: 0 on success or negative errno.
+ */
+int nvmem_cell_read_variable_le_u64(struct device *dev, const char *cell_id,
+				    u64 *val)
+{
+	size_t len;
+	u8 *buf;
+	int i;
+
+	buf = nvmem_cell_read_variable_common(dev, cell_id, sizeof(*val), &len);
+	if (IS_ERR(buf))
+		return PTR_ERR(buf);
+
+	/* Copy w/ implicit endian conversion */
+	*val = 0;
+	for (i = 0; i < len; i++)
+		*val |= (uint64_t)buf[i] << (8 * i);
+
+	kfree(buf);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(nvmem_cell_read_variable_le_u64);
 
 /**
  * nvmem_device_cell_read() - Read a given nvmem device and cell

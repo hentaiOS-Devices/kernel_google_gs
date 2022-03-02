@@ -1643,7 +1643,7 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 {
 	struct mmc_command cmd = {};
 	unsigned int qty = 0, busy_timeout = 0;
-	bool use_r1b_resp = false;
+	bool use_r1b_resp;
 	int err;
 
 	mmc_retune_hold(card->host);
@@ -1711,23 +1711,7 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 	cmd.opcode = MMC_ERASE;
 	cmd.arg = arg;
 	busy_timeout = mmc_erase_timeout(card, arg, qty);
-	/*
-	 * If the host controller supports busy signalling and the timeout for
-	 * the erase operation does not exceed the max_busy_timeout, we should
-	 * use R1B response. Or we need to prevent the host from doing hw busy
-	 * detection, which is done by converting to a R1 response instead.
-	 * Note, some hosts requires R1B, which also means they are on their own
-	 * when it comes to deal with the busy timeout.
-	 */
-	if (!(card->host->caps & MMC_CAP_NEED_RSP_BUSY) &&
-	    card->host->max_busy_timeout &&
-	    busy_timeout > card->host->max_busy_timeout) {
-		cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_AC;
-	} else {
-		cmd.flags = MMC_RSP_SPI_R1B | MMC_RSP_R1B | MMC_CMD_AC;
-		cmd.busy_timeout = busy_timeout;
-		use_r1b_resp = true;
-	}
+	use_r1b_resp = mmc_prepare_busy_cmd(card->host, &cmd, busy_timeout);
 
 	err = mmc_wait_for_cmd(card->host, &cmd, 0);
 	if (err) {
@@ -1748,7 +1732,7 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 		goto out;
 
 	/* Let's poll to find out when the erase operation completes. */
-	err = mmc_poll_for_busy(card, busy_timeout, MMC_BUSY_ERASE);
+	err = mmc_poll_for_busy(card, busy_timeout, false, MMC_BUSY_ERASE);
 
 out:
 	mmc_retune_release(card->host);
@@ -2150,8 +2134,12 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 
 	mmc_go_idle(host);
 
-	if (!(host->caps2 & MMC_CAP2_NO_SD))
-		mmc_send_if_cond(host, host->ocr_avail);
+	if (!(host->caps2 & MMC_CAP2_NO_SD)) {
+		if (mmc_send_if_cond_pcie(host, host->ocr_avail))
+			goto out;
+		if (mmc_card_sd_express(host))
+			return 0;
+	}
 
 	/* Order's important: probe SDIO, then SD, then MMC */
 	if (!(host->caps2 & MMC_CAP2_NO_SDIO))
@@ -2166,6 +2154,7 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 		if (!mmc_attach_mmc(host))
 			return 0;
 
+out:
 	mmc_power_off(host);
 	return -EIO;
 }
@@ -2293,6 +2282,12 @@ void mmc_rescan(struct work_struct *work)
 		goto out;
 	}
 
+	/* If an SD express card is present, then leave it as is. */
+	if (mmc_card_sd_express(host)) {
+		mmc_release_host(host);
+		goto out;
+	}
+
 	for (i = 0; i < ARRAY_SIZE(freqs); i++) {
 		unsigned int freq = freqs[i];
 		if (freq > host->f_max) {
@@ -2327,7 +2322,7 @@ void mmc_start_host(struct mmc_host *host)
 	_mmc_detect_change(host, 0, false);
 }
 
-void mmc_stop_host(struct mmc_host *host)
+void __mmc_stop_host(struct mmc_host *host)
 {
 	if (host->slot.cd_irq >= 0) {
 		mmc_gpio_set_cd_wake(host, false);
@@ -2336,6 +2331,11 @@ void mmc_stop_host(struct mmc_host *host)
 
 	host->rescan_disable = 1;
 	cancel_delayed_work_sync(&host->detect);
+}
+
+void mmc_stop_host(struct mmc_host *host)
+{
+	__mmc_stop_host(host);
 
 	/* clear pm flags now and let card drivers set them as needed */
 	host->pm_flags = 0;

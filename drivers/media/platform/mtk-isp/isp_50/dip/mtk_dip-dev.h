@@ -188,6 +188,7 @@ struct mtk_dip_video_device_desc {
 	const struct vb2_ops *vb2_ops;
 	u32 flags;
 	int default_fmt_idx;
+	u8 cached_mmap;
 };
 
 /**

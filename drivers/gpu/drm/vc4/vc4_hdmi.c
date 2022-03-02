@@ -93,6 +93,7 @@
 # define VC4_HD_M_SW_RST			BIT(2)
 # define VC4_HD_M_ENABLE			BIT(0)
 
+#define HSM_MIN_CLOCK_FREQ	120000000
 #define CEC_CLOCK_FREQ 40000
 
 #define HDMI_14_MAX_TMDS_CLK   (340 * 1000 * 1000)
@@ -160,6 +161,8 @@ static void vc4_hdmi_cec_update_clk_div(struct vc4_hdmi *vc4_hdmi)
 static void vc4_hdmi_cec_update_clk_div(struct vc4_hdmi *vc4_hdmi) {}
 #endif
 
+static void vc4_hdmi_enable_scrambling(struct drm_encoder *encoder);
+
 static enum drm_connector_status
 vc4_hdmi_connector_detect(struct drm_connector *connector, bool force)
 {
@@ -188,6 +191,7 @@ vc4_hdmi_connector_detect(struct drm_connector *connector, bool force)
 			}
 		}
 
+		vc4_hdmi_enable_scrambling(&vc4_hdmi->encoder.base.base);
 		pm_runtime_put(&vc4_hdmi->pdev->dev);
 		return connector_status_connected;
 	}
@@ -1081,6 +1085,7 @@ static int vc4_hdmi_encoder_atomic_check(struct drm_encoder *encoder,
 	unsigned long long tmds_rate;
 
 	if (vc4_hdmi->variant->unsupported_odd_h_timings &&
+	    !(mode->flags & DRM_MODE_FLAG_DBLCLK) &&
 	    ((mode->hdisplay % 2) || (mode->hsync_start % 2) ||
 	     (mode->hsync_end % 2) || (mode->htotal % 2)))
 		return -EINVAL;
@@ -1128,6 +1133,7 @@ vc4_hdmi_encoder_mode_valid(struct drm_encoder *encoder,
 	struct vc4_hdmi *vc4_hdmi = encoder_to_vc4_hdmi(encoder);
 
 	if (vc4_hdmi->variant->unsupported_odd_h_timings &&
+	    !(mode->flags & DRM_MODE_FLAG_DBLCLK) &&
 	    ((mode->hdisplay % 2) || (mode->hsync_start % 2) ||
 	     (mode->hsync_end % 2) || (mode->htotal % 2)))
 		return MODE_H_ILLEGAL;
@@ -1372,7 +1378,9 @@ static int vc4_hdmi_audio_trigger(struct snd_pcm_substream *substream, int cmd,
 		HDMI_WRITE(HDMI_MAI_CTL,
 			   VC4_SET_FIELD(vc4_hdmi->audio.channels,
 					 VC4_HD_MAI_CTL_CHNUM) |
-			   VC4_HD_MAI_CTL_ENABLE);
+					 VC4_HD_MAI_CTL_WHOLSMP |
+					 VC4_HD_MAI_CTL_CHALIGN |
+					 VC4_HD_MAI_CTL_ENABLE);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 		HDMI_WRITE(HDMI_MAI_CTL,
@@ -1857,37 +1865,45 @@ static int vc4_hdmi_cec_init(struct vc4_hdmi *vc4_hdmi)
 	vc4_hdmi_cec_update_clk_div(vc4_hdmi);
 
 	if (vc4_hdmi->variant->external_irq_controller) {
-		ret = devm_request_threaded_irq(&pdev->dev,
-						platform_get_irq_byname(pdev, "cec-rx"),
-						vc4_cec_irq_handler_rx_bare,
-						vc4_cec_irq_handler_rx_thread, 0,
-						"vc4 hdmi cec rx", vc4_hdmi);
+		ret = request_threaded_irq(platform_get_irq_byname(pdev, "cec-rx"),
+					   vc4_cec_irq_handler_rx_bare,
+					   vc4_cec_irq_handler_rx_thread, 0,
+					   "vc4 hdmi cec rx", vc4_hdmi);
 		if (ret)
 			goto err_delete_cec_adap;
 
-		ret = devm_request_threaded_irq(&pdev->dev,
-						platform_get_irq_byname(pdev, "cec-tx"),
-						vc4_cec_irq_handler_tx_bare,
-						vc4_cec_irq_handler_tx_thread, 0,
-						"vc4 hdmi cec tx", vc4_hdmi);
+		ret = request_threaded_irq(platform_get_irq_byname(pdev, "cec-tx"),
+					   vc4_cec_irq_handler_tx_bare,
+					   vc4_cec_irq_handler_tx_thread, 0,
+					   "vc4 hdmi cec tx", vc4_hdmi);
 		if (ret)
-			goto err_delete_cec_adap;
+			goto err_remove_cec_rx_handler;
 	} else {
 		HDMI_WRITE(HDMI_CEC_CPU_MASK_SET, 0xffffffff);
 
-		ret = devm_request_threaded_irq(&pdev->dev, platform_get_irq(pdev, 0),
-						vc4_cec_irq_handler,
-						vc4_cec_irq_handler_thread, 0,
-						"vc4 hdmi cec", vc4_hdmi);
+		ret = request_threaded_irq(platform_get_irq(pdev, 0),
+					   vc4_cec_irq_handler,
+					   vc4_cec_irq_handler_thread, 0,
+					   "vc4 hdmi cec", vc4_hdmi);
 		if (ret)
 			goto err_delete_cec_adap;
 	}
 
 	ret = cec_register_adapter(vc4_hdmi->cec_adap, &pdev->dev);
 	if (ret < 0)
-		goto err_delete_cec_adap;
+		goto err_remove_handlers;
 
 	return 0;
+
+err_remove_handlers:
+	if (vc4_hdmi->variant->external_irq_controller)
+		free_irq(platform_get_irq_byname(pdev, "cec-tx"), vc4_hdmi);
+	else
+		free_irq(platform_get_irq(pdev, 0), vc4_hdmi);
+
+err_remove_cec_rx_handler:
+	if (vc4_hdmi->variant->external_irq_controller)
+		free_irq(platform_get_irq_byname(pdev, "cec-rx"), vc4_hdmi);
 
 err_delete_cec_adap:
 	cec_delete_adapter(vc4_hdmi->cec_adap);
@@ -1897,6 +1913,15 @@ err_delete_cec_adap:
 
 static void vc4_hdmi_cec_exit(struct vc4_hdmi *vc4_hdmi)
 {
+	struct platform_device *pdev = vc4_hdmi->pdev;
+
+	if (vc4_hdmi->variant->external_irq_controller) {
+		free_irq(platform_get_irq_byname(pdev, "cec-rx"), vc4_hdmi);
+		free_irq(platform_get_irq_byname(pdev, "cec-tx"), vc4_hdmi);
+	} else {
+		free_irq(platform_get_irq(pdev, 0), vc4_hdmi);
+	}
+
 	cec_unregister_adapter(vc4_hdmi->cec_adap);
 }
 #else
@@ -2175,6 +2200,19 @@ static int vc4_hdmi_bind(struct device *dev, struct device *master, void *data)
 		if (max_rate < 550000000)
 			vc4_hdmi->disable_4kp60 = true;
 	}
+
+	/*
+	 * If we boot without any cable connected to the HDMI connector,
+	 * the firmware will skip the HSM initialization and leave it
+	 * with a rate of 0, resulting in a bus lockup when we're
+	 * accessing the registers even if it's enabled.
+	 *
+	 * Let's put a sensible default at runtime_resume so that we
+	 * don't end up in this situation.
+	 */
+	ret = clk_set_min_rate(vc4_hdmi->hsm_clock, HSM_MIN_CLOCK_FREQ);
+	if (ret)
+		goto err_put_ddc;
 
 	if (vc4_hdmi->variant->reset)
 		vc4_hdmi->variant->reset(vc4_hdmi);

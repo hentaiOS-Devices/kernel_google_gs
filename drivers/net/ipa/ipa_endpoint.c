@@ -75,8 +75,6 @@ struct ipa_status {
 #define IPA_STATUS_FLAGS1_RT_RULE_ID_FMASK	GENMASK(31, 22)
 #define IPA_STATUS_FLAGS2_TAG_FMASK		GENMASK_ULL(63, 16)
 
-#ifdef IPA_VALIDATE
-
 static bool ipa_endpoint_data_valid_one(struct ipa *ipa, u32 count,
 			    const struct ipa_gsi_endpoint_data *all_data,
 			    const struct ipa_gsi_endpoint_data *data)
@@ -224,16 +222,6 @@ static bool ipa_endpoint_data_valid(struct ipa *ipa, u32 count,
 
 	return true;
 }
-
-#else /* !IPA_VALIDATE */
-
-static bool ipa_endpoint_data_valid(struct ipa *ipa, u32 count,
-				    const struct ipa_gsi_endpoint_data *data)
-{
-	return true;
-}
-
-#endif /* !IPA_VALIDATE */
 
 /* Allocate a transaction to use on a non-command endpoint */
 static struct gsi_trans *ipa_endpoint_trans_alloc(struct ipa_endpoint *endpoint,
@@ -862,6 +850,7 @@ static void ipa_endpoint_init_hol_block_timer(struct ipa_endpoint *endpoint,
 	u32 offset;
 	u32 val;
 
+	/* This should only be changed when HOL_BLOCK_EN is disabled */
 	offset = IPA_REG_ENDP_INIT_HOL_BLOCK_TIMER_N_OFFSET(endpoint_id);
 	val = hol_block_timer_val(ipa, microseconds);
 	iowrite32(val, ipa->reg_virt + offset);
@@ -889,6 +878,7 @@ void ipa_endpoint_modem_hol_block_clear_all(struct ipa *ipa)
 		if (endpoint->toward_ipa || endpoint->ee_id != GSI_EE_MODEM)
 			continue;
 
+		ipa_endpoint_init_hol_block_enable(endpoint, false);
 		ipa_endpoint_init_hol_block_timer(endpoint, 0);
 		ipa_endpoint_init_hol_block_enable(endpoint, true);
 	}
@@ -1071,27 +1061,38 @@ static void ipa_endpoint_replenish(struct ipa_endpoint *endpoint, bool add_one)
 {
 	struct gsi *gsi;
 	u32 backlog;
+	int delta;
 
-	if (!endpoint->replenish_enabled) {
+	if (!test_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags)) {
 		if (add_one)
 			atomic_inc(&endpoint->replenish_saved);
+		return;
+	}
+
+	/* If already active, just update the backlog */
+	if (test_and_set_bit(IPA_REPLENISH_ACTIVE, endpoint->replenish_flags)) {
+		if (add_one)
+			atomic_inc(&endpoint->replenish_backlog);
 		return;
 	}
 
 	while (atomic_dec_not_zero(&endpoint->replenish_backlog))
 		if (ipa_endpoint_replenish_one(endpoint))
 			goto try_again_later;
+
+	clear_bit(IPA_REPLENISH_ACTIVE, endpoint->replenish_flags);
+
 	if (add_one)
 		atomic_inc(&endpoint->replenish_backlog);
 
 	return;
 
 try_again_later:
-	/* The last one didn't succeed, so fix the backlog */
-	backlog = atomic_inc_return(&endpoint->replenish_backlog);
+	clear_bit(IPA_REPLENISH_ACTIVE, endpoint->replenish_flags);
 
-	if (add_one)
-		atomic_inc(&endpoint->replenish_backlog);
+	/* The last one didn't succeed, so fix the backlog */
+	delta = add_one ? 2 : 1;
+	backlog = atomic_add_return(delta, &endpoint->replenish_backlog);
 
 	/* Whenever a receive buffer transaction completes we'll try to
 	 * replenish again.  It's unlikely, but if we fail to supply even
@@ -1111,7 +1112,7 @@ static void ipa_endpoint_replenish_enable(struct ipa_endpoint *endpoint)
 	u32 max_backlog;
 	u32 saved;
 
-	endpoint->replenish_enabled = true;
+	set_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags);
 	while ((saved = atomic_xchg(&endpoint->replenish_saved, 0)))
 		atomic_add(saved, &endpoint->replenish_backlog);
 
@@ -1125,7 +1126,7 @@ static void ipa_endpoint_replenish_disable(struct ipa_endpoint *endpoint)
 {
 	u32 backlog;
 
-	endpoint->replenish_enabled = false;
+	clear_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags);
 	while ((backlog = atomic_xchg(&endpoint->replenish_backlog, 0)))
 		atomic_add(backlog, &endpoint->replenish_saved);
 }
@@ -1681,7 +1682,8 @@ static void ipa_endpoint_setup_one(struct ipa_endpoint *endpoint)
 		/* RX transactions require a single TRE, so the maximum
 		 * backlog is the same as the maximum outstanding TREs.
 		 */
-		endpoint->replenish_enabled = false;
+		clear_bit(IPA_REPLENISH_ENABLED, endpoint->replenish_flags);
+		clear_bit(IPA_REPLENISH_ACTIVE, endpoint->replenish_flags);
 		atomic_set(&endpoint->replenish_saved,
 			   gsi_channel_tre_max(gsi, endpoint->channel_id));
 		atomic_set(&endpoint->replenish_backlog, 0);
@@ -1742,6 +1744,21 @@ int ipa_endpoint_config(struct ipa *ipa)
 	int ret = 0;
 	u32 max;
 	u32 val;
+
+	/* Prior to IPAv3.5, the FLAVOR_0 register was not supported.
+	 * Furthermore, the endpoints were not grouped such that TX
+	 * endpoint numbers started with 0 and RX endpoints had numbers
+	 * higher than all TX endpoints, so we can't do the simple
+	 * direction check used for newer hardware below.
+	 *
+	 * For hardware that doesn't support the FLAVOR_0 register,
+	 * just set the available mask to support any endpoint, and
+	 * assume the configuration is valid.
+	 */
+	if (ipa->version < IPA_VERSION_3_5) {
+		ipa->available = ~0;
+		return 0;
+	}
 
 	/* Find out about the endpoints supplied by the hardware, and ensure
 	 * the highest one doesn't exceed the number we support.
