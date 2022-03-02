@@ -30,6 +30,9 @@ static int renoir_dai_probe(struct snd_soc_dai *dai)
 	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(dai->component);
 	unsigned int val;
 
+	/* Set pin config to I2S_MODE */
+	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_I2S_PIN_CONFIG, I2S_MODE);
+
 	val = snd_sof_dsp_read(sdev, ACP_DSP_BAR, ACP_I2S_PIN_CONFIG);
 	if (val != I2S_MODE) {
 		dev_err(sdev->dev, "I2S Mode is not supported (I2S_PIN_CONFIG: %#x)\n", val);

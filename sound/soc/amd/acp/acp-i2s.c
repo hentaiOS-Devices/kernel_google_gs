@@ -326,6 +326,9 @@ int asoc_acp_i2s_probe(struct snd_soc_dai *dai)
 		return -EINVAL;
 	}
 
+	/* Set PIN_CONFIG to I2S_MODE */
+	writel(I2S_MODE, adata->acp_base + ACP_I2S_PIN_CONFIG);
+
 	val = readl(adata->acp_base + ACP_I2S_PIN_CONFIG);
 	if (val != I2S_MODE) {
 		dev_err(dev, "I2S Mode not supported val %x\n", val);
