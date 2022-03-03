@@ -42,6 +42,7 @@
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
 #include "t7xx_pci_rescan.h"
+#include "t7xx_port_devlink.h"
 
 #define T7XX_PCI_IREG_BASE		0
 #define T7XX_PCI_EREG_BASE		2
@@ -791,6 +792,8 @@ static int t7xx_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (!t7xx_dev->hp_enable)
 		pci_ignore_hotplug(pdev);
 
+	t7xx_devlink_flash_debugfs_create();
+
 	return 0;
 }
 
@@ -811,6 +814,7 @@ static void t7xx_pci_remove(struct pci_dev *pdev)
 
 	kobject_put(pcie_drv_info_kobj);
 	pci_free_irq_vectors(t7xx_dev->pdev);
+	t7xx_devlink_flash_debugfs_remove();
 }
 
 static const struct pci_device_id t7xx_pci_table[] = {
