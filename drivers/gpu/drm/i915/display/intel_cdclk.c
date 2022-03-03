@@ -70,7 +70,6 @@ struct intel_cdclk_funcs {
 	void (*set_cdclk)(struct drm_i915_private *i915,
 			  const struct intel_cdclk_config *cdclk_config,
 			  enum pipe pipe);
-	int (*bw_calc_min_cdclk)(struct intel_atomic_state *state);
 	int (*modeset_calc_cdclk)(struct intel_cdclk_state *state);
 	u8 (*calc_voltage_level)(int cdclk);
 };
@@ -79,12 +78,6 @@ void intel_cdclk_get_cdclk(struct drm_i915_private *dev_priv,
 			   struct intel_cdclk_config *cdclk_config)
 {
 	dev_priv->cdclk_funcs->get_cdclk(dev_priv, cdclk_config);
-}
-
-static int intel_cdclk_bw_calc_min_cdclk(struct intel_atomic_state *state)
-{
-	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
-	return dev_priv->cdclk_funcs->bw_calc_min_cdclk(state);
 }
 
 static void intel_cdclk_set_cdclk(struct drm_i915_private *dev_priv,
@@ -2682,7 +2675,7 @@ int intel_cdclk_atomic_check(struct intel_atomic_state *state,
 	    old_cdclk_state->force_min_cdclk != new_cdclk_state->force_min_cdclk)
 		*need_cdclk_calc = true;
 
-	ret = intel_cdclk_bw_calc_min_cdclk(state);
+	ret = intel_bw_calc_min_cdclk(state);
 	if (ret)
 		return ret;
 
@@ -3071,7 +3064,6 @@ u32 intel_read_rawclk(struct drm_i915_private *dev_priv)
 static struct intel_cdclk_funcs tgl_cdclk_funcs = {
 	.get_cdclk = bxt_get_cdclk,
 	.set_cdclk = bxt_set_cdclk,
-	.bw_calc_min_cdclk = skl_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
 	.calc_voltage_level = tgl_calc_voltage_level,
 };
@@ -3079,7 +3071,6 @@ static struct intel_cdclk_funcs tgl_cdclk_funcs = {
 static struct intel_cdclk_funcs ehl_cdclk_funcs = {
 	.get_cdclk = bxt_get_cdclk,
 	.set_cdclk = bxt_set_cdclk,
-	.bw_calc_min_cdclk = skl_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
 	.calc_voltage_level = ehl_calc_voltage_level,
 };
@@ -3087,7 +3078,6 @@ static struct intel_cdclk_funcs ehl_cdclk_funcs = {
 static struct intel_cdclk_funcs icl_cdclk_funcs = {
 	.get_cdclk = bxt_get_cdclk,
 	.set_cdclk = bxt_set_cdclk,
-	.bw_calc_min_cdclk = skl_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
 	.calc_voltage_level = icl_calc_voltage_level,
 };
@@ -3095,7 +3085,6 @@ static struct intel_cdclk_funcs icl_cdclk_funcs = {
 static struct intel_cdclk_funcs bxt_cdclk_funcs = {
 	.get_cdclk = bxt_get_cdclk,
 	.set_cdclk = bxt_set_cdclk,
-	.bw_calc_min_cdclk = skl_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
 	.calc_voltage_level = bxt_calc_voltage_level,
 };
@@ -3103,53 +3092,45 @@ static struct intel_cdclk_funcs bxt_cdclk_funcs = {
 static struct intel_cdclk_funcs skl_cdclk_funcs = {
 	.get_cdclk = skl_get_cdclk,
 	.set_cdclk = skl_set_cdclk,
-	.bw_calc_min_cdclk = skl_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = skl_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs bdw_cdclk_funcs = {
 	.get_cdclk = bdw_get_cdclk,
 	.set_cdclk = bdw_set_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = bdw_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs chv_cdclk_funcs = {
 	.get_cdclk = vlv_get_cdclk,
 	.set_cdclk = chv_set_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = vlv_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs vlv_cdclk_funcs = {
 	.get_cdclk = vlv_get_cdclk,
 	.set_cdclk = vlv_set_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = vlv_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs hsw_cdclk_funcs = {
 	.get_cdclk = hsw_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 /* SNB, IVB, 965G, 945G */
 static struct intel_cdclk_funcs fixed_400mhz_cdclk_funcs = {
 	.get_cdclk = fixed_400mhz_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs ilk_cdclk_funcs = {
 	.get_cdclk = fixed_450mhz_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs gm45_cdclk_funcs = {
 	.get_cdclk = gm45_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
@@ -3157,7 +3138,6 @@ static struct intel_cdclk_funcs gm45_cdclk_funcs = {
 
 static struct intel_cdclk_funcs i965gm_cdclk_funcs = {
 	.get_cdclk = i965gm_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
@@ -3165,19 +3145,16 @@ static struct intel_cdclk_funcs i965gm_cdclk_funcs = {
 
 static struct intel_cdclk_funcs pnv_cdclk_funcs = {
 	.get_cdclk = pnv_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs g33_cdclk_funcs = {
 	.get_cdclk = g33_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs i945gm_cdclk_funcs = {
 	.get_cdclk = i945gm_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
@@ -3185,37 +3162,31 @@ static struct intel_cdclk_funcs i945gm_cdclk_funcs = {
 
 static struct intel_cdclk_funcs i915gm_cdclk_funcs = {
 	.get_cdclk = i915gm_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs i915g_cdclk_funcs = {
 	.get_cdclk = fixed_333mhz_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs i865g_cdclk_funcs = {
 	.get_cdclk = fixed_266mhz_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs i85x_cdclk_funcs = {
 	.get_cdclk = i85x_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs i845g_cdclk_funcs = {
 	.get_cdclk = fixed_200mhz_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
 static struct intel_cdclk_funcs i830_cdclk_funcs = {
 	.get_cdclk = fixed_133mhz_get_cdclk,
-	.bw_calc_min_cdclk = intel_bw_calc_min_cdclk,
 	.modeset_calc_cdclk = fixed_modeset_calc_cdclk,
 };
 
