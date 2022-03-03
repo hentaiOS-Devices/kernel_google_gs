@@ -263,6 +263,23 @@ struct ath11k_reg_tpc_power_info {
 	struct chan_power_info chan_power_info[IEEE80211_MAX_NUM_PWR_LEVEL];
 };
 
+#define ATH11K_IPV6_UC_TYPE     0
+#define ATH11K_IPV6_AC_TYPE     1
+
+#define ATH11K_IPV6_MAX_COUNT   16
+#define ATH11K_IPV4_MAX_COUNT   2
+
+struct ath11k_arp_ns_offload {
+	u8  ipv4_addr[ATH11K_IPV4_MAX_COUNT][4];
+	u32 ipv4_count;
+	u32 ipv6_count;
+	u8  ipv6_addr[ATH11K_IPV6_MAX_COUNT][16];
+	u8  self_ipv6_addr[ATH11K_IPV6_MAX_COUNT][16];
+	u8  ipv6_type[ATH11K_IPV6_MAX_COUNT];
+	bool ipv6_valid[ATH11K_IPV6_MAX_COUNT];
+	u8  mac_addr[ETH_ALEN];
+};
+
 struct ath11k_vif {
 	u32 vdev_id;
 	enum wmi_vdev_type vdev_type;
@@ -313,6 +330,7 @@ struct ath11k_vif {
 	bool wpaie_present;
 	struct ieee80211_chanctx_conf chanctx;
 	struct ath11k_reg_tpc_power_info reg_tpc_info;
+	struct ath11k_arp_ns_offload arp_ns_offload;
 };
 
 struct ath11k_vif_iter {
