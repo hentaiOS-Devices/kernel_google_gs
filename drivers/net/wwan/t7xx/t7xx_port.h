@@ -159,7 +159,11 @@ struct t7xx_port {
 	struct task_struct	*thread;
 	unsigned int		flags;
 	struct cdev		*cdev;
-	struct port_proxy  *port_proxy;
+#ifdef CONFIG_WWAN_DEBUGFS
+	struct t7xx_trace	*trace;
+	struct dentry		*debugfs_dir;
+#endif
+	struct port_proxy	*port_proxy;
 };
 
 int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb);
