@@ -65,7 +65,6 @@ struct t7xx_modem {
 	struct cldma_ctrl		*md_ctrl[CLDMA_NUM];
 	struct t7xx_pci_dev		*t7xx_dev;
 	struct t7xx_sys_info		core_md;
-	struct t7xx_sys_info		core_sap;
 	bool				md_init_finish;
 	bool				rgu_irq_asserted;
 	struct workqueue_struct		*handshake_wq;
@@ -74,8 +73,6 @@ struct t7xx_modem {
 	struct port_proxy		*port_prox;
 	unsigned int			exp_id;
 	spinlock_t			exp_lock; /* Protects exception events */
-	struct workqueue_struct	*sap_handshake_wq;
-	struct work_struct	sap_handshake_work;
 };
 
 void t7xx_md_exception_handshake(struct t7xx_modem *md);

@@ -38,18 +38,6 @@ enum cldma_id {
 	ID_CLDMA1,
 };
 
-enum cldma_queue_type {
-	CLDMA_SHARED_Q,
-	CLDMA_DEDICATED_Q,
-};
-
-enum hif_cfg_type {
-	HIF_CFG_DEF = 0,
-	HIF_CFG1,
-	HIF_CFG2,
-	HIF_CFG_MAX,
-};
-
 struct cldma_request {
 	void *gpd;		/* Virtual address for CPU */
 	dma_addr_t gpd_addr;	/* Physical address for DMA */
@@ -70,14 +58,12 @@ struct cldma_ring {
 struct cldma_queue {
 	struct t7xx_modem *md;
 	struct cldma_ctrl *md_ctrl;
-	enum cldma_id hif_id;
 	enum mtk_txrx dir;
 	unsigned char index;
 	struct cldma_ring *tr_ring;
 	struct cldma_request *tr_done;
 	struct cldma_request *rx_refill;
 	struct cldma_request *tx_xmit;
-	enum cldma_queue_type q_type;
 	int budget;			/* Same as ring buffer size by default */
 	spinlock_t ring_lock;
 	wait_queue_head_t req_wq;	/* Only for TX */
@@ -142,15 +128,12 @@ void t7xx_cldma_hif_hw_init(struct cldma_ctrl *md_ctrl);
 int t7xx_cldma_init(struct t7xx_modem *md, struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_exception(struct cldma_ctrl *md_ctrl, enum hif_ex_stage stage);
 void t7xx_cldma_exit(struct cldma_ctrl *md_ctrl);
-void t7xx_cldma_switch_cfg(struct cldma_ctrl *md_ctrl, unsigned int cfg_id);
+void t7xx_cldma_switch_cfg(struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_start(struct cldma_ctrl *md_ctrl);
 int t7xx_cldma_stop(struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_reset(struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_set_recv_skb(struct cldma_ctrl *md_ctrl,
 			     int (*recv_skb)(struct cldma_queue *queue, struct sk_buff *skb));
 int t7xx_cldma_send_skb(struct cldma_ctrl *md_ctrl, int qno, struct sk_buff *skb, bool blocking);
-int cldma_txq_mtu(unsigned char qno);
-int t7xx_cldma_write_room(struct cldma_ctrl *md_ctrl, unsigned char qno);
-extern bool da_down_stage_flag;
 
 #endif /* __T7XX_HIF_CLDMA_H__ */

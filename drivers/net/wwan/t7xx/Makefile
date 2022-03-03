@@ -10,11 +10,8 @@ mtk_t7xx-y:=	t7xx_pci.o \
 		t7xx_modem_ops.o \
 		t7xx_cldma.o \
 		t7xx_hif_cldma.o  \
-		t7xx_port_char.o  \
 		t7xx_port_proxy.o  \
 		t7xx_port_ctrl_msg.o \
-		t7xx_port_tty.o \
-		t7xx_tty_ops.o \
 		t7xx_port_wwan.o \
 		t7xx_hif_dpmaif.o  \
 		t7xx_hif_dpmaif_tx.o \

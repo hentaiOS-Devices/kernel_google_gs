@@ -40,7 +40,6 @@ enum mtk_txrx {
 
 #define MTK_SKB_64K		64528		/* 63kB + CCCI header */
 #define MTK_SKB_4K		3584		/* 3.5kB */
-#define MTK_SKB_2K		2048
 #define NET_RX_BUF		MTK_SKB_4K
 
 #define HDR_FLD_AST		((u32)BIT(31))
