@@ -38,7 +38,6 @@
 #include "t7xx_modem_ops.h"
 #include "t7xx_pci.h"
 #include "t7xx_pcie_mac.h"
-#include "t7xx_port_proxy.h"
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
 
@@ -97,9 +96,6 @@ void t7xx_fsm_broadcast_state(struct t7xx_fsm_ctl *ctl, enum md_state state)
 		return;
 
 	ctl->md_state = state;
-
-	/* Update to port first, otherwise sending message on HS2 may fail */
-	t7xx_port_proxy_md_status_notify(ctl->md->port_prox, state);
 
 	fsm_state_notify(ctl->md, state);
 }
