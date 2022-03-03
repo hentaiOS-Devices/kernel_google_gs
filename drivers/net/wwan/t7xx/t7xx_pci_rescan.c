@@ -95,7 +95,7 @@ fail_unlock:
 
 int mtk_rescan_init(void)
 {
-	pr_info("%s: Enter\n", __func__);
+	pr_debug("Enter\n");
 	spin_lock_init(&g_mtk_rescan_context.dev_lock);
 	g_mtk_rescan_context.rescan_done = 1;
 	g_mtk_rescan_context.dev = NULL;

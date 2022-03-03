@@ -335,7 +335,7 @@ int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb)
 			t7xx_port_adjust_skb(port, skb);
 
 		channel = FIELD_GET(HDR_FLD_CHN, le32_to_cpu(ccci_h->status));
-		if (!(port->flags & PORT_F_RAW_DATA) && (channel == PORT_CH_STATUS_RX)) {
+		if (channel == PORT_CH_STATUS_RX) {
 			port->skb_handler(port, skb);
 		} else {
 			if (port->wwan_port)
@@ -1027,6 +1027,7 @@ int t7xx_port_proxy_node_control(struct t7xx_modem *md, struct port_msg *port_ms
 int port_ee_disable_wwan(void)
 {
 	struct t7xx_port *port;
+	struct t7xx_port_static *port_static;
 	int i;
 
 	if (!port_prox) {
@@ -1036,6 +1037,7 @@ int port_ee_disable_wwan(void)
 
 	/* port uninit */
 	for_each_proxy_port(i, port, port_prox) {
+		port_static = port->port_static;
 		if (port->wwan_port)
 			wwan_port_txoff(port->wwan_port);
 	}
