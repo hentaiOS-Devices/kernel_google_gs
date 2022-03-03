@@ -110,6 +110,8 @@ struct snd_soc_tplg_ops {
 	/* external kcontrol init - used for any driver specific init */
 	int (*control_load)(struct snd_soc_component *, int index,
 		struct snd_kcontrol_new *, struct snd_soc_tplg_ctl_hdr *);
+	int (*control_ready)(struct snd_soc_component *, int index,
+		struct snd_kcontrol *, struct snd_soc_tplg_ctl_hdr *);
 	int (*control_unload)(struct snd_soc_component *,
 		struct snd_soc_dobj *);
 
