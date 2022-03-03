@@ -130,6 +130,15 @@ static int t7xx_port_wwan_init(struct t7xx_port *port)
 	if (port_static->rx_ch == PORT_CH_UART2_RX)
 		port->flags |= PORT_F_RX_CH_TRAFFIC;
 
+	if (port_static->port_type != WWAN_PORT_UNKNOWN) {
+		port->wwan_port = wwan_create_port(port->dev, port_static->port_type,
+						   &wwan_ops, port);
+		if (IS_ERR(port->wwan_port))
+			return PTR_ERR(port->wwan_port);
+	} else {
+		port->wwan_port = NULL;
+	}
+
 	return 0;
 }
 
@@ -162,19 +171,8 @@ static int t7xx_port_wwan_recv_skb(struct t7xx_port *port, struct sk_buff *skb)
 	return t7xx_port_recv_skb(port, skb);
 }
 
-static int port_status_update(struct t7xx_port *port)
+static void port_status_update(struct t7xx_port *port)
 {
-	struct t7xx_port_static *port_static = port->port_static;
-
-	if (port_static->port_type != WWAN_PORT_UNKNOWN) {
-		port->wwan_port = wwan_create_port(port->dev, port_static->port_type,
-						   &wwan_ops, port);
-		if (IS_ERR(port->wwan_port))
-			return PTR_ERR(port->wwan_port);
-	} else {
-		port->wwan_port = NULL;
-	}
-
 	if (port->flags & PORT_F_RX_CHAR_NODE) {
 		if (port->chan_enable) {
 			port->flags &= ~PORT_F_RX_ALLOW_DROP;
@@ -185,7 +183,6 @@ static int port_status_update(struct t7xx_port *port)
 			spin_unlock(&port->port_update_lock);
 		}
 	}
-	return 0;
 }
 
 static int t7xx_port_wwan_enable_chl(struct t7xx_port *port)

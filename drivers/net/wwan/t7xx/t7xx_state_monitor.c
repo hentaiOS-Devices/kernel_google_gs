@@ -41,8 +41,6 @@
 #include "t7xx_port_proxy.h"
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
-#include "t7xx_pci_rescan.h"
-#include "t7xx_netdev.h"
 
 #define FSM_DRM_DISABLE_DELAY_MS		200
 #define FSM_EVENT_POLL_INTERVAL_MS		20
@@ -207,7 +205,6 @@ static void fsm_routine_exception(struct t7xx_fsm_ctl *ctl, struct t7xx_fsm_comm
 		break;
 
 	case EXCEPTION_EVENT:
-		port_ee_disable_wwan();
 		t7xx_fsm_broadcast_state(ctl, MD_STATE_EXCEPTION);
 		t7xx_pci_pm_exp_detected(ctl->md->t7xx_dev);
 		t7xx_md_exception_handshake(ctl->md);
@@ -241,7 +238,7 @@ static void brom_event_monitor(struct timer_list *timer)
 	dummy_reg = ioread32(IREG_BASE(md->t7xx_dev) + PCIE_MISC_DEV_STATUS);
 	dummy_reg &= MISC_DEV_STATUS_MASK;
 	if (dummy_reg != fsm_ctl->prev_status)
-		t7xx_fsm_append_cmd(fsm_ctl, FSM_CMD_START, FSM_CMD_FLAG_IN_INTERRUPT);
+		t7xx_fsm_append_cmd(fsm_ctl, FSM_CMD_START, 0);
 	mod_timer(timer, jiffies + HZ / 20);
 }
 
@@ -302,7 +299,6 @@ static inline void brom_stage_event_handling(struct t7xx_fsm_ctl *ctl, unsigned 
 			dl_port_static->ops->disable_chl(dl_port);
 		} else
 			dev_err(dev, "can't found DL port\n");
-		start_brom_event_start_timer(ctl);
 		break;
 	case BROM_EVENT_JUMP_DA:
 		dev_info(dev, "jump DA and wait reset signal\n");
@@ -332,8 +328,6 @@ static inline void brom_stage_event_handling(struct t7xx_fsm_ctl *ctl, unsigned 
 		start_brom_event_start_timer(ctl);
 		break;
 	case BROM_EVENT_RESET:
-		host_event_notify(ctl->md, 1);
-		mtk_queue_rescan_work(ctl->md->t7xx_dev->pdev);
 		break;
 	default:
 		dev_err(dev, "Brom Event region content error\n");
@@ -408,7 +402,6 @@ static void fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 {
 	struct t7xx_modem *md = ctl->md;
 	struct device *dev;
-	int ret;
 
 	ctl->curr_state = FSM_STATE_STARTING;
 
@@ -416,10 +409,8 @@ static void fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 	t7xx_fsm_broadcast_state(ctl, MD_STATE_WAITING_FOR_HS1);
 	t7xx_md_event_notify(md, FSM_START);
 
-	wait_event_interruptible_timeout(ctl->async_hk_wq, 
-					(md->core_md.ready && md->core_sap.ready) ||
-					ctl->exp_flg, HZ * 60);
-
+	wait_event_interruptible_timeout(ctl->async_hk_wq, md->core_md.ready || ctl->exp_flg,
+					 HZ * 60);
 	dev = &md->t7xx_dev->pdev->dev;
 
 	if (ctl->exp_flg)
@@ -433,9 +424,6 @@ static void fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 		fsm_routine_exception(ctl, NULL, EXCEPTION_HS_TIMEOUT);
 	} else {
 		t7xx_pci_pm_init_late(md->t7xx_dev);
-		ret = t7xx_ccmni_late_init(md->t7xx_dev);
-		if (ret)
-			dev_err(dev, "ccmni late init failed.. \n");
 		fsm_routine_ready(ctl);
 	}
 }

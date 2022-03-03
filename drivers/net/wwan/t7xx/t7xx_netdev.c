@@ -390,7 +390,7 @@ int t7xx_ccmni_init(struct t7xx_pci_dev *t7xx_dev)
 {
 	struct device *dev = &t7xx_dev->pdev->dev;
 	struct t7xx_ccmni_ctrl *ctlb;
-	/*int ret;*/
+	int ret;
 
 	ctlb = devm_kzalloc(dev, sizeof(*ctlb), GFP_KERNEL);
 	if (!ctlb)
@@ -409,37 +409,16 @@ int t7xx_ccmni_init(struct t7xx_pci_dev *t7xx_dev)
 		return -ENOMEM;
 
 	/* WWAN core will create a netdev for the default IP MUX channel */
-	/*ret = wwan_register_ops(dev, &ccmni_wwan_ops, ctlb, IP_MUX_SESSION_DEFAULT);
+	ret = wwan_register_ops(dev, &ccmni_wwan_ops, ctlb, IP_MUX_SESSION_DEFAULT);
 	if (ret)
 		goto err_unregister_ops;
-	*/
 
 	init_md_status_notifier(t7xx_dev);
 
 	return 0;
 
-/*
 err_unregister_ops:
 	wwan_unregister_ops(dev);
-
-	return ret;*/
-}
-
-int t7xx_ccmni_late_init(struct t7xx_pci_dev *t7xx_dev)
-{
-	int ret;
-	struct t7xx_ccmni_ctrl *ctlb = t7xx_dev->ccmni_ctlb;
-
-	if (ctlb->wwan_reg_status)
-		return 0;
-
-	/* WWAN core will create a netdev for the default IP MUX channel */
-	ret = wwan_register_ops(&ctlb->t7xx_dev->pdev->dev, &ccmni_wwan_ops, ctlb,
-				IP_MUX_SESSION_DEFAULT);
-	if (ret)
-		dev_err(&ctlb->t7xx_dev->pdev->dev, "WWAN register ops failed..\n");
-	else
-		ctlb->wwan_reg_status = true;
 
 	return ret;
 }
@@ -449,11 +428,6 @@ void t7xx_ccmni_exit(struct t7xx_pci_dev *t7xx_dev)
 	struct t7xx_ccmni_ctrl *ctlb = t7xx_dev->ccmni_ctlb;
 
 	t7xx_fsm_notifier_unregister(t7xx_dev->md, &ctlb->md_status_notify);
-
-	if (ctlb->wwan_reg_status) {
-		wwan_unregister_ops(&t7xx_dev->pdev->dev);
-		ctlb->wwan_reg_status = 0;
-	}
-
+	wwan_unregister_ops(&t7xx_dev->pdev->dev);
 	t7xx_dpmaif_hif_exit(ctlb->hif_ctrl);
 }
