@@ -820,6 +820,16 @@ static const struct sof_topology_token afe_tokens[] = {
 		offsetof(struct sof_ipc_dai_mtk_afe_params, format), 0},
 };
 
+/* ACPDMIC */
+static const struct sof_topology_token acpdmic_tokens[] = {
+	{SOF_TKN_AMD_ACPDMIC_RATE,
+		SND_SOC_TPLG_TUPLE_TYPE_WORD, get_token_u32,
+		offsetof(struct sof_ipc_dai_acpdmic_params, pdm_rate), 0},
+	{SOF_TKN_AMD_ACPDMIC_CH,
+		SND_SOC_TPLG_TUPLE_TYPE_WORD, get_token_u32,
+		offsetof(struct sof_ipc_dai_acpdmic_params, pdm_ch), 0},
+};
+
 static int sof_parse_uuid_tokens(struct snd_soc_component *scomp,
 				 void *object,
 				 const struct sof_topology_token *tokens,
@@ -3002,6 +3012,7 @@ static int sof_link_acp_dmic_load(struct snd_soc_component *scomp, int index,
 				  struct sof_ipc_dai_config *config)
 {
 	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(scomp);
+	struct snd_soc_tplg_private *private = &cfg->priv;
 	u32 size = sizeof(*config);
 	int ret;
 
@@ -3010,14 +3021,22 @@ static int sof_link_acp_dmic_load(struct snd_soc_component *scomp, int index,
 
 	/* init IPC */
 	memset(&config->acpdmic, 0, sizeof(struct sof_ipc_dai_acp_params));
+
+	/* get any bespoke DAI tokens */
+        ret = sof_parse_tokens(scomp, &config->acpdmic, acpdmic_tokens,
+                               ARRAY_SIZE(acpdmic_tokens), private->array,
+                               le32_to_cpu(private->size));
+        if (ret != 0) {
+                dev_err(scomp->dev, "parse acp dmic tokens failed %d\n",
+                        le32_to_cpu(private->size));
+                return ret;
+        }
+
 	config->hdr.size = size;
 
-	config->acpdmic.fsync_rate = le32_to_cpu(hw_config->fsync_rate);
-	config->acpdmic.tdm_slots = le32_to_cpu(hw_config->tdm_slots);
-
 	dev_info(scomp->dev, "ACP_DMIC config ACP%d channel %d rate %d\n",
-		 config->dai_index, config->acpdmic.tdm_slots,
-		 config->acpdmic.fsync_rate);
+		 config->dai_index, config->acpdmic.pdm_ch,
+		 config->acpdmic.pdm_rate);
 
 	/* set config for all DAI's with name matching the link name */
 	ret = sof_set_dai_config(sdev, size, link, config);

@@ -858,10 +858,10 @@ int sof_pcm_dai_link_fixup(struct snd_soc_pcm_runtime *rtd, struct snd_pcm_hw_pa
 			channels->min, channels->max);
 		break;
 	case SOF_DAI_AMD_DMIC:
-		rate->min = dai->dai_config->acpdmic.fsync_rate;
-		rate->max = dai->dai_config->acpdmic.fsync_rate;
-		channels->min = dai->dai_config->acpdmic.tdm_slots;
-		channels->max = dai->dai_config->acpdmic.tdm_slots;
+		rate->min = dai->dai_config->acpdmic.pdm_rate;
+		rate->max = dai->dai_config->acpdmic.pdm_rate;
+		channels->min = dai->dai_config->acpdmic.pdm_ch;
+		channels->max = dai->dai_config->acpdmic.pdm_ch;
 
 		dev_dbg(component->dev,
 			"AMD_DMIC rate_min: %d rate_max: %d\n", rate->min, rate->max);
