@@ -24,12 +24,16 @@
 };
 
 &sound {
-	compatible = "mediatek,mt8195_mt6359_rt1019_rt5682";
-	model = "m8195_r1019_5682s";
+	compatible = "mediatek,mt8195_mt6359_max98390_rt5682";
+	model = "m8195_m98390_5682s";
 	mediatek,dptx-codec = <&dp_tx>;
 };
 
-&rt1019p {
+&max98390_l {
+	status = "okay";
+};
+
+&max98390_r {
 	status = "okay";
 };
 

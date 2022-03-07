@@ -33,6 +33,21 @@
 	status = "okay";
 };
 
+&i2c2 {
+	max98390_r: max98390@38 {
+		compatible = "maxim,max98390";
+		reg = <0x38>;
+		maxim,reset-gpios = <&pio 100 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+	};
+
+	max98390_l: max98390@39 {
+		compatible = "maxim,max98390";
+		reg = <0x39>;
+		status = "disabled";
+	};
+};
+
 &keyboard_controller {
 	function-row-physmap = <
 		MATRIX_KEY(0x00, 0x02, 0)	/* T1 */
