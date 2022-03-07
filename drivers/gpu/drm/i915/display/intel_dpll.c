@@ -424,8 +424,7 @@ i9xx_select_p2_div(const struct intel_limit *limit,
 
 /*
  * Returns a set of divisors for the desired target clock with the given
- * refclk, or FALSE.  The returned values represent the clock equation:
- * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
+ * refclk, or FALSE.
  *
  * Target and reference clocks are specified in kHz.
  *
@@ -483,8 +482,7 @@ i9xx_find_best_dpll(const struct intel_limit *limit,
 
 /*
  * Returns a set of divisors for the desired target clock with the given
- * refclk, or FALSE.  The returned values represent the clock equation:
- * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
+ * refclk, or FALSE.
  *
  * Target and reference clocks are specified in kHz.
  *
@@ -540,8 +538,7 @@ pnv_find_best_dpll(const struct intel_limit *limit,
 
 /*
  * Returns a set of divisors for the desired target clock with the given
- * refclk, or FALSE.  The returned values represent the clock equation:
- * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
+ * refclk, or FALSE.
  *
  * Target and reference clocks are specified in kHz.
  *
@@ -640,8 +637,7 @@ static bool vlv_PLL_is_optimal(struct drm_device *dev, int target_freq,
 
 /*
  * Returns a set of divisors for the desired target clock with the given
- * refclk, or FALSE.  The returned values represent the clock equation:
- * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
+ * refclk, or FALSE.
  */
 static bool
 vlv_find_best_dpll(const struct intel_limit *limit,
@@ -699,8 +695,7 @@ vlv_find_best_dpll(const struct intel_limit *limit,
 
 /*
  * Returns a set of divisors for the desired target clock with the given
- * refclk, or FALSE.  The returned values represent the clock equation:
- * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
+ * refclk, or FALSE.
  */
 static bool
 chv_find_best_dpll(const struct intel_limit *limit,
