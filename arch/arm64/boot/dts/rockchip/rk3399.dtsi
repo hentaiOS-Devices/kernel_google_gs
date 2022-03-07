@@ -831,6 +831,7 @@
 		gpu_thermal: gpu {
 			polling-delay-passive = <100>;
 			polling-delay = <1000>;
+			sustainable-power = <1300>;
 
 			thermal-sensors = <&tsadc 1>;
 
