@@ -18,7 +18,6 @@
 #include <linux/of_platform.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/module.h>
-#include <linux/reset.h>
 
 #include <sound/sof.h>
 #include <sound/sof/xtensa.h>
@@ -36,10 +35,6 @@
 static struct snd_soc_acpi_mach sof_mt8195_mach = {
 	.drv_name = "mt8195_mt6359_rt1019_rt5682",
 	.sof_tplg_filename = "sof-mt8195-mt6359-rt1019-rt5682.tplg",
-};
-
-struct mt8195_private_data{
-	struct reset_control *rstc;
 };
 
 static int mt8195_get_mailbox_offset(struct snd_sof_dev *sdev)
@@ -314,31 +309,10 @@ static int mt8195_run(struct snd_sof_dev *sdev)
 	return 0;
 }
 
-static int mt8195_reset(struct snd_sof_dev *sdev)
-{
-	struct adsp_priv *priv = sdev->pdata->hw_pdata;
-	struct mt8195_private_data *mt8195_private = priv->private_data;
-	int ret;
-
-	/* reset adspsys : audio local bus, adsp ao domain,and config registers
-	   except altvectsel, reset_sw */
-	reset_control_assert(mt8195_private->rstc);
-	udelay(2);
-	reset_control_deassert(mt8195_private->rstc);
-
-	/* power on adsp sram again due to sw reset*/
-	ret = adsp_sram_power_on(sdev->dev, true);
-	if (ret)
-		dev_err(sdev->dev, "reset : dsp_sram_power_on fail!\n");
-
-	return ret;
-}
-
 static int mt8195_dsp_probe(struct snd_sof_dev *sdev)
 {
 	struct platform_device *pdev = container_of(sdev->dev, struct platform_device, dev);
 	struct adsp_priv *priv;
-	struct mt8195_private_data *mt8195_private;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -378,18 +352,6 @@ static int mt8195_dsp_probe(struct snd_sof_dev *sdev)
 	ret = adsp_memory_remap_init(&pdev->dev, priv->adsp);
 	if (ret) {
 		dev_err(sdev->dev, "adsp_memory_remap_init fail!\n");
-		goto err_adsp_sram_power_off;
-	}
-
-	priv->private_data = devm_kzalloc(&pdev->dev, sizeof(struct mt8195_private_data), GFP_KERNEL);
-	if (!priv->private_data)
-		goto err_adsp_sram_power_off;
-
-	mt8195_private = priv->private_data;
-	mt8195_private->rstc = devm_reset_control_get_exclusive(&pdev->dev, "adspsys");
-	if (IS_ERR(mt8195_private->rstc)) {
-		ret = PTR_ERR(mt8195_private->rstc);
-		dev_err(sdev->dev, "could not get adspsys reset:%d\n", ret);
 		goto err_adsp_sram_power_off;
 	}
 
@@ -670,7 +632,6 @@ const struct snd_sof_dsp_ops sof_mt8195_ops = {
 
 	/* DSP core boot */
 	.run		= mt8195_run,
-	.reset 		= mt8195_reset,
 
 	/* Block IO */
 	.block_read	= sof_block_read,
