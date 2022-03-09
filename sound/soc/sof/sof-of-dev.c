@@ -132,11 +132,6 @@ static int sof_of_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static void sof_of_shutdown(struct platform_device *pdev)
-{
-	snd_sof_device_shutdown(&pdev->dev);
-}
-
 static const struct of_device_id sof_of_ids[] = {
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_IMX8)
 	{ .compatible = "fsl,imx8qxp-dsp", .data = &sof_of_imx8qxp_desc},
@@ -156,7 +151,6 @@ MODULE_DEVICE_TABLE(of, sof_of_ids);
 static struct platform_driver snd_sof_of_driver = {
 	.probe = sof_of_probe,
 	.remove = sof_of_remove,
-	.shutdown = sof_of_shutdown,
 	.driver = {
 		.name = "sof-audio-of",
 		.pm = &sof_of_pm,
