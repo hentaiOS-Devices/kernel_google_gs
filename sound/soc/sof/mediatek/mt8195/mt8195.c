@@ -32,11 +32,6 @@
 
 #define CONTINUOUS_UPDATE_POSITION 1
 
-static struct snd_soc_acpi_mach sof_mt8195_mach = {
-	.drv_name = "mt8195_mt6359_rt1019_rt5682",
-	.sof_tplg_filename = "sof-mt8195-mt6359-rt1019-rt5682.tplg",
-};
-
 static int mt8195_get_mailbox_offset(struct snd_sof_dev *sdev)
 {
 	return MBOX_OFFSET;
@@ -502,18 +497,24 @@ static int mt8195_get_bar_index(struct snd_sof_dev *sdev, u32 type)
 static struct snd_soc_acpi_mach *mt8195_machine_select(struct snd_sof_dev *sdev)
 {
 	struct snd_sof_pdata *sof_pdata = sdev->pdata;
+	const struct sof_dev_desc *desc = sof_pdata->desc;
 	struct snd_soc_acpi_mach *mach;
 
-	mach = &sof_mt8195_mach;
+	for (mach = desc->machines; mach->board; mach++) {
+		if (of_machine_is_compatible(mach->board)) {
+			sof_pdata->tplg_filename = mach->sof_tplg_filename;
+			sof_pdata->machine = mach;
 
-	sof_pdata->tplg_filename = mach->sof_tplg_filename;
-	sof_pdata->machine = mach;
+			dev_dbg(sdev->dev, "%s, tplg: %s\n", __func__, mach->sof_tplg_filename);
 
-	mach->pdata = sdev->dev->of_node;
-	if (!mach->pdata)
-		dev_warn(sdev->dev, "get of node failed\n");
+			mach->pdata = sdev->dev->of_node;
+			if (!mach->pdata)
+				dev_warn(sdev->dev, "get of_node failed\n");
 
-	return mach;
+			return mach;
+		}
+	}
+	return NULL;
 }
 
 static int mt8195_dsp_pcm_hw_params(struct snd_sof_dev *sdev,
@@ -691,7 +692,27 @@ static const struct snd_sof_dsp_ops sof_mt8195_ops = {
 			SNDRV_PCM_INFO_NO_PERIOD_WAKEUP,
 };
 
+static struct snd_soc_acpi_mach sof_mt8195_machs[] = {
+	{
+		.board = "google,cherry",
+		.drv_name = "mt8195_mt6359",
+		.sof_tplg_filename = "sof-mt8195-mt6359-rt1019-rt5682.tplg",
+	},
+	{
+		.board = "google,tomato",
+		.drv_name = "mt8195_mt6359",
+		.sof_tplg_filename = "sof-mt8195-mt6359-rt1019-rt5682.tplg",
+	},
+	{
+		.board = "google,dojo",
+		.drv_name = "mt8195_mt6359",
+		.sof_tplg_filename = "sof-mt8195-mt6359-max98390-rt5682.tplg",
+	},
+	{},
+};
+
 static const struct sof_dev_desc sof_of_mt8195_desc = {
+	.machines = sof_mt8195_machs,
 	.default_fw_path = "mediatek/sof",
 	.default_tplg_path = "mediatek/sof-tplg",
 	.default_fw_filename = "sof-mt8195.ri",
