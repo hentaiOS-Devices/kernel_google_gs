@@ -258,6 +258,28 @@ static int amd_pmc_idlemask_read(struct amd_pmc_dev *pdev, struct device *dev,
 	return 0;
 }
 
+static int get_metrics_table(struct amd_pmc_dev *pdev, struct smu_metrics *table)
+{
+	if (pdev->cpu_id == AMD_CPU_ID_PCO)
+		return -ENODEV;
+	memcpy_fromio(table, pdev->smu_virt_addr, sizeof(struct smu_metrics));
+	return 0;
+}
+
+static void amd_pmc_validate_deepest(struct amd_pmc_dev *pdev)
+{
+	struct smu_metrics table;
+
+	if (get_metrics_table(pdev, &table))
+		return;
+
+	if (!table.s0i3_last_entry_status)
+		dev_warn(pdev->dev, "Last suspend didn't reach deepest state\n");
+	else
+		dev_dbg(pdev->dev, "Last suspend in deepest state for %lluus\n",
+			 table.timein_s0i3_lastcapture);
+}
+
 #ifdef CONFIG_DEBUG_FS
 static int smu_fw_info_show(struct seq_file *s, void *unused)
 {
@@ -265,10 +287,8 @@ static int smu_fw_info_show(struct seq_file *s, void *unused)
 	struct smu_metrics table;
 	int idx;
 
-	if (dev->cpu_id == AMD_CPU_ID_PCO)
+	if (get_metrics_table(dev, &table))
 		return -EINVAL;
-
-	memcpy_fromio(&table, dev->smu_virt_addr, sizeof(struct smu_metrics));
 
 	seq_puts(s, "\n=== SMU Statistics ===\n");
 	seq_printf(s, "Table Version: %d\n", table.table_version);
@@ -580,6 +600,9 @@ static int __maybe_unused amd_pmc_resume(struct device *dev)
 		dev_err(pdev->dev, "error writing to STB\n");
 		return rc;
 	}
+
+	/* Notify on failed entry */
+	amd_pmc_validate_deepest(pdev);
 
 	return 0;
 }
