@@ -1171,7 +1171,7 @@ static void drrs_status_per_crtc(struct seq_file *m,
 		seq_printf(m, "%s:\n", connector->name);
 
 		if (connector->connector_type == DRM_MODE_CONNECTOR_eDP &&
-		    drrs->type == SEAMLESS_DRRS_SUPPORT)
+		    drrs->type == DRRS_TYPE_SEAMLESS)
 			supported = true;
 
 		seq_printf(m, "\tDRRS Supported: %s\n", yesno(supported));
