@@ -142,7 +142,7 @@
 
 		snd_dma_mem_reserved: snd_dma_mem_region {
 			compatible = "shared-dma-pool";
-			reg = <0 0x60D80000 0 0x0100000>;
+			reg = <0 0x60000000 0 0x1100000>;
 			no-map;
 		};
 	};
@@ -1300,14 +1300,6 @@
 &sound {
 	pinctrl-names = "default";
 	pinctrl-0 = <&aud_pins_default>;
-	mediatek,adsp = <&adsp>;
-	mediatek,dai-link = "DL10_FE", "DPTX_BE", "ETDM1_IN_BE", "ETDM2_IN_BE",
-			"ETDM1_OUT_BE", "ETDM2_OUT_BE","UL_SRC1_BE",
-			"AFE_SOF_DL2", "AFE_SOF_DL3", "AFE_SOF_UL4", "AFE_SOF_UL5";
-	status = "okay";
-};
-
-&adsp {
 	status = "okay";
 };
 
