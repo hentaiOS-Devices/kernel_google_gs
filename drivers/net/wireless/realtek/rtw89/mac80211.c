@@ -658,7 +658,7 @@ static int rtw89_ops_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct rtw89_dev *rtwdev = hw->priv;
 	int ret = 0;
 
-	if (!rtwdev->fw.scan_offload)
+	if (!RTW89_CHK_FW_FEATURE(SCAN_OFFLOAD, &rtwdev->fw))
 		return 1;
 
 	if (rtwdev->scanning)
@@ -681,7 +681,7 @@ static void rtw89_ops_cancel_hw_scan(struct ieee80211_hw *hw,
 {
 	struct rtw89_dev *rtwdev = hw->priv;
 
-	if (!rtwdev->fw.scan_offload)
+	if (!RTW89_CHK_FW_FEATURE(SCAN_OFFLOAD, &rtwdev->fw))
 		return;
 
 	if (!rtwdev->scanning)
