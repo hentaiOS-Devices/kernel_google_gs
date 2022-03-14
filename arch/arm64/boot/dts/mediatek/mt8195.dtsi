@@ -1579,13 +1579,13 @@
 		};
 
 		pciephy: phy@11e80000 {
-			compatible = "mediatek,mt8195-pcie-phy";
+			compatible = "mediatek,mt8195-pcie-phy",
+				     "mediatek,pcie-phy";
 			#address-cells = <2>;
 			#size-cells = <2>;
 			#phy-cells = <0>;
-			reg = <0 0x11e80000 0 0x10000>,
-			      <0 0x11e90000 0 0x10000>;
-			reg-names = "phy-sif", "phy-ckm";
+			reg = <0 0x11e80000 0 0x10000>;
+			reg-names = "sif";
 
 			power-domains = <&spm MT8195_POWER_DOMAIN_PCIE_PHY>;
 			status = "disabled";
