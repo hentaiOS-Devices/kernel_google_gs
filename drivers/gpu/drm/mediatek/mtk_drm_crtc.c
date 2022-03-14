@@ -95,8 +95,10 @@ static void mtk_drm_crtc_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 	if (!crtc->dev)
 		DRM_WARN("crtc 0x%px already free=== %s %d\n", crtc, __func__, __LINE__);
 
-	if (!mtk_crtc->event)
+	if (!mtk_crtc->event) {
 		DRM_WARN("crtc event 0x%px already free=== %s %d\n", mtk_crtc->event, __func__, __LINE__);
+		return;
+	}
 
 	drm_crtc_send_vblank_event(crtc, mtk_crtc->event);
 	drm_crtc_vblank_put(crtc);
