@@ -1167,6 +1167,9 @@ static int i915_drrs_status(struct seq_file *m, void *unused)
 	seq_puts(m, "\n");
 
 	for_each_intel_crtc(&dev_priv->drm, crtc) {
+		const struct intel_crtc_state *crtc_state =
+			to_intel_crtc_state(crtc->base.state);
+
 		seq_printf(m, "[CRTC:%d:%s]:\n",
 			   crtc->base.base.id, crtc->base.name);
 
@@ -1174,7 +1177,10 @@ static int i915_drrs_status(struct seq_file *m, void *unused)
 
 		/* DRRS Supported */
 		seq_printf(m, "\tDRRS Enabled: %s\n",
-			   str_yes_no(intel_drrs_is_enabled(crtc)));
+			   yesno(crtc_state->has_drrs));
+
+		seq_printf(m, "\tDRRS Active: %s\n",
+			   yesno(intel_drrs_is_active(crtc)));
 
 		seq_printf(m, "\tBusy_frontbuffer_bits: 0x%X\n",
 			   crtc->drrs.busy_frontbuffer_bits);
@@ -1872,13 +1878,12 @@ static int i915_drrs_ctl_set(void *data, u64 val)
 		}
 
 		drm_dbg(&dev_priv->drm,
-			"Manually %sabling DRRS. %llu\n",
-			val ? "en" : "dis", val);
+			"Manually %sactivating DRRS\n", val ? "" : "de");
 
 		if (val)
-			intel_drrs_enable(crtc_state);
+			intel_drrs_activate(crtc_state);
 		else
-			intel_drrs_disable(crtc_state);
+			intel_drrs_deactivate(crtc_state);
 
 out:
 		drm_modeset_unlock(&crtc->base.mutex);
