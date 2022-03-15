@@ -29,6 +29,7 @@
 #include <dt-bindings/power/rk3366-power.h>
 #include <dt-bindings/power/rk3368-power.h>
 #include <dt-bindings/power/rk3399-power.h>
+#include <soc/rockchip/rk3399_dmc.h>
 
 struct rockchip_domain_info {
 	const char *name;
