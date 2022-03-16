@@ -7727,7 +7727,7 @@ static int ath11k_mac_op_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
 	return -EOPNOTSUPP;
 }
 
-int ath11k_mac_flush_tx_complete(struct ath11k *ar)
+static int ath11k_mac_flush_tx_complete(struct ath11k *ar)
 {
 	long time_left;
 	int ret = 0;
