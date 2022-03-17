@@ -111,7 +111,7 @@ static int acpi_gpiochip_find(struct gpio_chip *gc, void *data)
  * controller does not have GPIO chip registered at the moment. This is to
  * support probe deferral.
  */
-static struct gpio_desc *acpi_get_gpiod(char *path, int pin)
+static struct gpio_desc *acpi_get_gpiod(char *path, unsigned int pin)
 {
 	struct gpio_chip *chip;
 	acpi_handle handle;
@@ -139,7 +139,7 @@ static struct gpio_desc *acpi_get_gpiod(char *path, int pin)
  * as it is intended for use outside of the GPIO layer (in a similar fashion to
  * gpiod_get_index() for example) it also holds a reference to the GPIO device.
  */
-struct gpio_desc *acpi_get_and_request_gpiod(char *path, int pin, char *label)
+struct gpio_desc *acpi_get_and_request_gpiod(char *path, unsigned int pin, char *label)
 {
 	struct gpio_desc *gpio;
 	int ret;
@@ -317,11 +317,12 @@ static struct gpio_desc *acpi_request_own_gpiod(struct gpio_chip *chip,
 	return ret ? ERR_PTR(ret) : desc;
 }
 
-static bool acpi_gpio_in_ignore_list(const char *controller_in, int pin_in)
+static bool acpi_gpio_in_ignore_list(const char *controller_in, unsigned int pin_in)
 {
 	const char *controller, *pin_str;
-	int len, pin;
+	unsigned int pin;
 	char *endp;
+	int len;
 
 	controller = ignore_wake;
 	while (controller) {
@@ -355,13 +356,13 @@ err:
 static bool acpi_gpio_irq_is_wake(struct device *parent,
 				  struct acpi_resource_gpio *agpio)
 {
-	int pin = agpio->pin_table[0];
+	unsigned int pin = agpio->pin_table[0];
 
 	if (agpio->wake_capable != ACPI_WAKE_CAPABLE)
 		return false;
 
 	if (acpi_gpio_in_ignore_list(dev_name(parent), pin)) {
-		dev_info(parent, "Ignoring wakeup on pin %d\n", pin);
+		dev_info(parent, "Ignoring wakeup on pin %u\n", pin);
 		return false;
 	}
 
@@ -379,7 +380,8 @@ static acpi_status acpi_gpiochip_alloc_event(struct acpi_resource *ares,
 	struct acpi_gpio_event *event;
 	irq_handler_t handler = NULL;
 	struct gpio_desc *desc;
-	int ret, pin, irq;
+	unsigned int pin;
+	int ret, irq;
 
 	if (!acpi_gpio_get_irq_resource(ares, &agpio))
 		return AE_OK;
@@ -1110,7 +1112,7 @@ acpi_gpio_adr_space_handler(u32 function, acpi_physical_address address,
 
 	length = min(agpio->pin_table_length, (u16)(pin_index + bits));
 	for (i = pin_index; i < length; ++i) {
-		int pin = agpio->pin_table[i];
+		unsigned int pin = agpio->pin_table[i];
 		struct acpi_gpio_connection *conn;
 		struct gpio_desc *desc;
 		bool found;
