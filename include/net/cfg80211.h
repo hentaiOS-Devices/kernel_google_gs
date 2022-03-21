@@ -4734,6 +4734,7 @@ struct wiphy_iftype_akm_suites {
 
 /**
  * struct wiphy - wireless hardware description
+ * @mtx: mutex for the data (structures) of this device
  * @reg_notifier: the driver's regulatory notification callback,
  *	note that if your driver uses wiphy_apply_custom_regulatory()
  *	the reg_notifier's request can be passed as NULL
@@ -4927,6 +4928,8 @@ struct wiphy_iftype_akm_suites {
  * @sar_capa: SAR control capabilities
  */
 struct wiphy {
+	struct mutex mtx;
+
 	/* assign these fields before you register the wiphy */
 
 	u8 perm_addr[ETH_ALEN];
