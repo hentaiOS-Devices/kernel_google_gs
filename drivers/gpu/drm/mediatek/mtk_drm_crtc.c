@@ -167,6 +167,7 @@ static void mtk_drm_cmdq_pkt_destroy(struct cmdq_pkt *pkt)
 static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	int i;
 
 	DRM_INFO("crtc destroy\n");
 
@@ -180,6 +181,14 @@ static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
 		mtk_crtc->cmdq_client.chan = NULL;
 	}
 #endif
+
+	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
+		struct mtk_ddp_comp *comp;
+
+		comp = mtk_crtc->ddp_comp[i];
+		mtk_ddp_comp_unregister_vblank_cb(comp);
+	}
+
 	drm_crtc_cleanup(crtc);
 }
 
@@ -653,7 +662,7 @@ static int mtk_drm_crtc_enable_vblank(struct drm_crtc *crtc)
 
 	DRM_INFO("%s crtc %d enable vblank\n", __func__, drm_crtc_index(crtc));
 
-	mtk_ddp_comp_enable_vblank(comp, mtk_crtc_ddp_irq, &mtk_crtc->base);
+	mtk_ddp_comp_enable_vblank(comp);
 
 	return 0;
 }
@@ -970,6 +979,9 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 			if (comp->funcs->ctm_set)
 				has_ctm = true;
 		}
+
+		mtk_ddp_comp_register_vblank_cb(comp, mtk_crtc_ddp_irq,
+						&mtk_crtc->base);
 	}
 
 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++)

@@ -97,14 +97,28 @@ static const char * const ethdr_clk_str[] = {
 	"vdo_be_async",
 };
 
-void mtk_ethdr_enable_vblank(struct device *dev,
-			     void (*vblank_cb)(void *),
-			     void *vblank_cb_data)
+void mtk_ethdr_register_vblank_cb(struct device *dev,
+				void (*vblank_cb)(void *),
+				void *vblank_cb_data)
 {
 	struct mtk_ethdr *priv = dev_get_drvdata(dev);
 
 	priv->vblank_cb = vblank_cb;
 	priv->vblank_cb_data = vblank_cb_data;
+}
+
+void mtk_ethdr_unregister_vblank_cb(struct device *dev)
+{
+	struct mtk_ethdr *priv = dev_get_drvdata(dev);
+
+	priv->vblank_cb = NULL;
+	priv->vblank_cb_data = NULL;
+}
+
+void mtk_ethdr_enable_vblank(struct device *dev)
+{
+	struct mtk_ethdr *priv = dev_get_drvdata(dev);
+
 	writel(MIX_FME_CPL_INTEN, priv->ethdr_comp[ETHDR_MIXER].regs + MIX_INTEN);
 }
 
@@ -112,8 +126,6 @@ void mtk_ethdr_disable_vblank(struct device *dev)
 {
 	struct mtk_ethdr *priv = dev_get_drvdata(dev);
 
-	priv->vblank_cb = NULL;
-	priv->vblank_cb_data = NULL;
 	writel(0x0, priv->ethdr_comp[ETHDR_MIXER].regs + MIX_INTEN);
 }
 
