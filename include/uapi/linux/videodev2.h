@@ -711,6 +711,7 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_FWHT     v4l2_fourcc('F', 'W', 'H', 'T') /* Fast Walsh Hadamard Transform (vicodec) */
 #define V4L2_PIX_FMT_FWHT_STATELESS     v4l2_fourcc('S', 'F', 'W', 'H') /* Stateless FWHT (vicodec) */
 #define V4L2_PIX_FMT_H264_SLICE v4l2_fourcc('S', '2', '6', '4') /* H264 parsed slices */
+#define V4L2_PIX_FMT_AV1_FRAME	v4l2_fourcc('A', 'V', '1', 'F') /* AV1 parsed frame */
 
 /*  Vendor-specific formats   */
 #define V4L2_PIX_FMT_CPIA1    v4l2_fourcc('C', 'P', 'I', 'A') /* cpia1 YUV */
@@ -1800,6 +1801,11 @@ struct v4l2_ext_control {
 		struct v4l2_ctrl_vp8_frame __user *p_vp8_frame;
 		struct v4l2_ctrl_vp9_compressed_hdr __user *p_vp9_compressed_hdr_probs;
 		struct v4l2_ctrl_vp9_frame __user *p_vp9_frame;
+		struct v4l2_ctrl_av1_sequence __user *p_av1_sequence;
+		struct v4l2_ctrl_av1_tile_group __user *p_av1_tile_group;
+		struct v4l2_ctrl_av1_tile_group_entry __user *p_av1_tile_group_entry;
+		struct v4l2_ctrl_av1_frame_header __user *p_av1_frame_header;
+		struct v4l2_ctrl_av1_film_grain __user *p_av1_film_grain;
 		void __user *ptr;
 	};
 } __attribute__ ((packed));
@@ -1863,6 +1869,12 @@ enum v4l2_ctrl_type {
 
 	V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR	= 0x0260,
 	V4L2_CTRL_TYPE_VP9_FRAME		= 0x0261,
+
+	V4L2_CTRL_TYPE_AV1_SEQUENCE	    = 0x280,
+	V4L2_CTRL_TYPE_AV1_TILE_GROUP	    = 0x281,
+	V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY = 0x282,
+	V4L2_CTRL_TYPE_AV1_FRAME_HEADER	    = 0x283,
+	V4L2_CTRL_TYPE_AV1_FILM_GRAIN	    = 0x284,
 
 	V4L2_CTRL_TYPE_PRIVATE       = 0xffff,
 };
