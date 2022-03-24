@@ -193,7 +193,7 @@ int mtk_ovl_adaptor_clk_enable(struct device *dev)
 	for (i = 0; i < OVL_ADAPTOR_MERGE0; i++) {
 		comp = ovl_adaptor->ovl_adaptor_comp[i];
 		ret = pm_runtime_get_sync(comp);
-		if (ret) {
+		if (ret < 0) {
 			dev_err(dev, "Failed to enable power domain %d, err %d\n", i, ret);
 			goto pwr_err;
 		}
