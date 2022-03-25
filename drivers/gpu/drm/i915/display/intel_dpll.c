@@ -1080,9 +1080,6 @@ static int ilk_crtc_compute_clock(struct intel_atomic_state *state,
 	int refclk = 120000;
 	int ret;
 
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
-
 	/* CPU eDP is the only output that doesn't need a PCH PLL of its own. */
 	if (!crtc_state->has_pch_encoder)
 		return 0;
@@ -1176,9 +1173,6 @@ static int chv_crtc_compute_clock(struct intel_atomic_state *state,
 	const struct intel_limit *limit = &intel_limits_chv;
 	int refclk = 100000;
 
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
-
 	if (!crtc_state->clock_set &&
 	    !chv_find_best_dpll(limit, crtc_state, crtc_state->port_clock,
 				refclk, NULL, &crtc_state->dpll)) {
@@ -1200,9 +1194,6 @@ static int vlv_crtc_compute_clock(struct intel_atomic_state *state,
 	const struct intel_limit *limit = &intel_limits_vlv;
 	int refclk = 100000;
 
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
-
 	if (!crtc_state->clock_set &&
 	    !vlv_find_best_dpll(limit, crtc_state, crtc_state->port_clock,
 				refclk, NULL, &crtc_state->dpll)) {
@@ -1223,9 +1214,6 @@ static int g4x_crtc_compute_clock(struct intel_atomic_state *state,
 		intel_atomic_get_new_crtc_state(state, crtc);
 	const struct intel_limit *limit;
 	int refclk = 96000;
-
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
 
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_LVDS)) {
 		if (intel_panel_use_ssc(dev_priv)) {
@@ -1272,9 +1260,6 @@ static int pnv_crtc_compute_clock(struct intel_atomic_state *state,
 	const struct intel_limit *limit;
 	int refclk = 96000;
 
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
-
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_LVDS)) {
 		if (intel_panel_use_ssc(dev_priv)) {
 			refclk = dev_priv->vbt.lvds_ssc_freq;
@@ -1311,9 +1296,6 @@ static int i9xx_crtc_compute_clock(struct intel_atomic_state *state,
 	const struct intel_limit *limit;
 	int refclk = 96000;
 
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
-
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_LVDS)) {
 		if (intel_panel_use_ssc(dev_priv)) {
 			refclk = dev_priv->vbt.lvds_ssc_freq;
@@ -1349,9 +1331,6 @@ static int i8xx_crtc_compute_clock(struct intel_atomic_state *state,
 		intel_atomic_get_new_crtc_state(state, crtc);
 	const struct intel_limit *limit;
 	int refclk = 48000;
-
-	memset(&crtc_state->dpll_hw_state, 0,
-	       sizeof(crtc_state->dpll_hw_state));
 
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_LVDS)) {
 		if (intel_panel_use_ssc(dev_priv)) {
@@ -1428,6 +1407,9 @@ int intel_dpll_crtc_compute_clock(struct intel_atomic_state *state,
 
 	if (!crtc_state->hw.enable)
 		return 0;
+
+	memset(&crtc_state->dpll_hw_state, 0,
+	       sizeof(crtc_state->dpll_hw_state));
 
 	return i915->dpll_funcs->crtc_compute_clock(state, crtc);
 }
