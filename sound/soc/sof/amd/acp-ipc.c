@@ -15,8 +15,6 @@
 #include "acp.h"
 #include "acp-dsp-offset.h"
 
-#define STREAM_BOX_SIZE 1024
-
 void acp_mailbox_write(struct snd_sof_dev *sdev, u32 offset, void *message, size_t bytes)
 {
 	memcpy_to_scratch(sdev, offset, message, bytes);
@@ -178,18 +176,7 @@ int acp_sof_ipc_msg_data(struct snd_sof_dev *sdev, struct snd_pcm_substream *sub
 			 void *p, size_t sz)
 {
 	unsigned int offset = offsetof(struct scratch_ipc_conf, sof_out_box);
-	unsigned int sbox_offset = offsetof(struct scratch_ipc_conf, sof_stream_box);
 
-	if (substream)
-	{
-		struct acp_dsp_stream *stream;
-		stream = substream->runtime->private_data;
-		if (!stream)
-			return -ESTRPIPE;
-
-		acp_mailbox_read(sdev, sbox_offset + stream->posn_offset, p, sz);
-                return 0;
-        }
 	if (!substream || !sdev->stream_box.size)
 		acp_mailbox_read(sdev, offset, p, sz);
 
@@ -200,18 +187,7 @@ EXPORT_SYMBOL_NS(acp_sof_ipc_msg_data, SND_SOC_SOF_AMD_COMMON);
 int acp_sof_ipc_pcm_params(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream,
 			   const struct sof_ipc_pcm_params_reply *reply)
 {
-	struct acp_dsp_stream *stream = substream->runtime->private_data;
-	size_t posn_offset = reply->posn_offset;
-
-        /* check for unaligned offset or overflow */
-	sdev->stream_box.size = STREAM_BOX_SIZE;
-	if (posn_offset > sdev->stream_box.size ||
-		posn_offset % sizeof(struct sof_ipc_stream_posn) != 0)
-		return -EINVAL;
-
-	stream->posn_offset = sdev->stream_box.offset + posn_offset;
-	dev_dbg(sdev->dev, "pcm: stream dir %d, posn mailbox offset is 0x%zx",
-		substream->stream, stream->posn_offset);
+	/* TODO: Implement stream hw params to validate stream offset */
 	return 0;
 }
 EXPORT_SYMBOL_NS(acp_sof_ipc_pcm_params, SND_SOC_SOF_AMD_COMMON);

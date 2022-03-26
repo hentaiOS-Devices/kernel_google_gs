@@ -15,9 +15,6 @@
 #include "../ops.h"
 #include "acp.h"
 #include "acp-dsp-offset.h"
-#include "../sof-audio.h"
-
-#define CONT_UPDATE_POSN 1
 
 int acp_pcm_hw_params(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream,
 		      struct snd_pcm_hw_params *params, struct sof_ipc_stream_params *ipc_params)
@@ -39,7 +36,7 @@ int acp_pcm_hw_params(struct snd_sof_dev *sdev, struct snd_pcm_substream *substr
 
 	ipc_params->buffer.phy_addr = stream->reg_offset;
 	ipc_params->stream_tag = stream->stream_tag;
-	ipc_params->cont_update_posn = CONT_UPDATE_POSN;
+
 	/* write buffer size of stream in scratch memory */
 
 	buf_offset = offsetof(struct scratch_reg_conf, buf_size);
@@ -83,35 +80,3 @@ int acp_pcm_close(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream)
 	return acp_dsp_stream_put(sdev, stream);
 }
 EXPORT_SYMBOL_NS(acp_pcm_close, SND_SOC_SOF_AMD_COMMON);
-
-snd_pcm_uframes_t acp_pcm_pointer(struct snd_sof_dev *sdev,
-                                       struct snd_pcm_substream *substream)
-{
-	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
-	struct snd_soc_component *scomp = sdev->component;
-	struct snd_sof_pcm *spcm;
-	struct sof_ipc_stream_posn posn;
-	struct snd_sof_pcm_stream *stream;
-	snd_pcm_uframes_t pos;
-	int ret;
-
-	spcm = snd_sof_find_spcm_dai(scomp, rtd);
-        if (!spcm) {
-                dev_warn_ratelimited(sdev->dev, "warn: can't find PCM with DAI ID %d\n",
-                                     rtd->dai_link->id);
-                return 0;
-        }
-
-	stream = &spcm->stream[substream->stream];
-	ret = snd_sof_ipc_msg_data(sdev, substream, &posn, sizeof(posn));
-        if (ret < 0) {
-                dev_warn(sdev->dev, "failed to read stream position: %d\n", ret);
-                return 0;
-        }
-	memcpy(&stream->posn, &posn, sizeof(posn));
-	pos = spcm->stream[substream->stream].posn.host_posn;
-	pos = bytes_to_frames(substream->runtime, pos);
-
-	return pos;
-}
-EXPORT_SYMBOL_NS(acp_pcm_pointer, SND_SOC_SOF_AMD_COMMON);
