@@ -1360,10 +1360,8 @@ void hci_req_prepare_suspend(struct hci_dev *hdev, enum suspended_state next)
 		}
 
 		/* Disable LE passive scan if enabled */
-		if (hci_dev_test_flag(hdev, HCI_LE_SCAN)) {
-			cancel_interleave_scan(hdev);
+		if (hci_dev_test_flag(hdev, HCI_LE_SCAN))
 			hci_req_add_le_scan_disable(&req, false);
-		}
 
 		/* Disable advertisement filters */
 		hci_req_prepare_adv_monitor_suspend(&req, true);
