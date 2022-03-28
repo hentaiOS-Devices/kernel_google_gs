@@ -77,8 +77,7 @@ enum qca_flags {
 	QCA_MEMDUMP_COLLECTION,
 	QCA_HW_ERROR_EVENT,
 	QCA_SSR_TRIGGERED,
-	QCA_BT_OFF,
-	QCA_ROM_FW
+	QCA_BT_OFF
 };
 
 enum qca_capabilities {
@@ -1691,7 +1690,6 @@ static int qca_setup(struct hci_uart *hu)
 	if (ret)
 		return ret;
 
-	clear_bit(QCA_ROM_FW, &qca->flags);
 	/* Patch downloading has to be done without IBS mode */
 	set_bit(QCA_IBS_DISABLED, &qca->flags);
 
@@ -1753,14 +1751,12 @@ retry:
 		hu->hdev->cmd_timeout = qca_cmd_timeout;
 	} else if (ret == -ENOENT) {
 		/* No patch/nvm-config found, run with original fw/config */
-		set_bit(QCA_ROM_FW, &qca->flags);
 		ret = 0;
 	} else if (ret == -EAGAIN) {
 		/*
 		 * Userspace firmware loader will return -EAGAIN in case no
 		 * patch/nvm-config is found, so run with original fw/config.
 		 */
-		set_bit(QCA_ROM_FW, &qca->flags);
 		ret = 0;
 	}
 
@@ -2181,12 +2177,6 @@ static int __maybe_unused qca_suspend(struct device *dev)
 	u32 wait_timeout = 0;
 
 	set_bit(QCA_SUSPENDING, &qca->flags);
-
-	/* if BT SoC is running with default firmware then it does not
-	 * support in-band sleep
-	 */
-	if (test_bit(QCA_ROM_FW, &qca->flags))
-		return 0;
 
 	/* During SSR after memory dump collection, controller will be
 	 * powered off and then powered on.If controller is powered off
