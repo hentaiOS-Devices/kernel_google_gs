@@ -67,10 +67,6 @@ struct mtk_drm_crtc {
 	/* lock for display hardware access */
 	struct mutex			hw_lock;
 	bool				config_updating;
-
-	u32				atomic_cnt;
-	u32				event_cnt;
-	u32				irq_cnt;
 };
 
 struct mtk_crtc_state {
@@ -96,19 +92,11 @@ static void mtk_drm_crtc_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 {
 	struct drm_crtc *crtc = &mtk_crtc->base;
 
-	mtk_crtc->irq_cnt++;
-
 	if (!crtc->dev)
 		DRM_WARN("crtc 0x%px already free=== %s %d\n", crtc, __func__, __LINE__);
 
-	if (!mtk_crtc->event) {
-		DRM_WARN("crtc event 0x%px already free %s %d atomic %u %u %u\n",
-			 mtk_crtc->event, __func__, __LINE__,
-			 mtk_crtc->atomic_cnt,
-			 mtk_crtc->event_cnt,
-			 mtk_crtc->irq_cnt);
-		return;
-	}
+	if (!mtk_crtc->event)
+		DRM_WARN("crtc event 0x%px already free=== %s %d\n", mtk_crtc->event, __func__, __LINE__);
 
 	drm_crtc_send_vblank_event(crtc, mtk_crtc->event);
 	drm_crtc_vblank_put(crtc);
@@ -479,10 +467,6 @@ static void mtk_crtc_ddp_hw_fini(struct mtk_drm_crtc *mtk_crtc)
 		crtc->state->event = NULL;
 		spin_unlock_irq(&crtc->dev->event_lock);
 	}
-
-	mtk_crtc->atomic_cnt = 0;
-	mtk_crtc->event_cnt = 0;
-	mtk_crtc->irq_cnt = 0;
 }
 
 static void mtk_crtc_ddp_config(struct drm_crtc *crtc,
@@ -783,14 +767,11 @@ static void mtk_drm_crtc_atomic_begin(struct drm_crtc *crtc,
 	if (mtk_crtc->event && mtk_crtc_state->base.event)
 		DRM_ERROR("new event while there is still a pending event\n");
 
-	mtk_crtc->atomic_cnt++;
-
 	if (mtk_crtc_state->base.event) {
 		mtk_crtc_state->base.event->pipe = drm_crtc_index(crtc);
 		WARN_ON(drm_crtc_vblank_get(crtc) != 0);
 		mtk_crtc->event = mtk_crtc_state->base.event;
 		mtk_crtc_state->base.event = NULL;
-		mtk_crtc->event_cnt++;
 	}
 }
 
