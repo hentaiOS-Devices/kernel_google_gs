@@ -479,7 +479,7 @@ void amdgpu_dm_initialize_dp_connector(struct amdgpu_display_manager *dm,
 			drm_connector_attach_privacy_screen_provider(&aconnector->base,
 								     privacy_screen);
 		} else if (PTR_ERR(privacy_screen) != -ENODEV) {
-			drm_err(dev, "Error getting privacy screen, ret=%d\n",
+			drm_err(dev, "Error getting privacy screen, ret=%ld\n",
 				PTR_ERR(privacy_screen));
 		}
 		return;
