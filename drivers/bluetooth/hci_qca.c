@@ -2196,8 +2196,7 @@ static int __maybe_unused qca_suspend(struct device *dev)
 	    !test_bit(QCA_SSR_TRIGGERED, &qca->flags))
 		return 0;
 
-	if (test_bit(QCA_IBS_DISABLED, &qca->flags) ||
-	    test_bit(QCA_SSR_TRIGGERED, &qca->flags)) {
+	if (test_bit(QCA_IBS_DISABLED, &qca->flags)) {
 		wait_timeout = test_bit(QCA_SSR_TRIGGERED, &qca->flags) ?
 					IBS_DISABLE_SSR_TIMEOUT_MS :
 					FW_DOWNLOAD_TIMEOUT_MS;
