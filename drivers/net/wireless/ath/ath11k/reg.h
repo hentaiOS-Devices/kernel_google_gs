@@ -36,5 +36,5 @@ ath11k_reg_build_regd(struct ath11k_base *ab,
 enum wmi_reg_6g_ap_type
 ath11k_ieee80211_ap_pwr_type_convert(enum ieee80211_ap_reg_power power_type);
 int ath11k_regd_update(struct ath11k *ar);
-int ath11k_reg_update_chan_list(struct ath11k *ar);
+int ath11k_reg_update_chan_list(struct ath11k *ar, bool wait);
 #endif
