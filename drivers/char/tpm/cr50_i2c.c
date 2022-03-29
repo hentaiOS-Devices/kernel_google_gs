@@ -35,6 +35,7 @@
 #define CR50_TIMEOUT_SHORT_MS	2	/* Short timeout during transactions */
 #define CR50_TIMEOUT_NOIRQ_MS	20	/* Timeout for TPM ready without IRQ */
 #define CR50_I2C_DID_VID	0x00281ae0L
+#define TI50_I2C_DID_VID	0x504a6666L
 #define CR50_I2C_MAX_RETRIES	3	/* Max retries due to I2C errors */
 #define CR50_I2C_RETRY_DELAY_LO	55	/* Min usecs between retries on I2C */
 #define CR50_I2C_RETRY_DELAY_HI	65	/* Max usecs between retries on I2C */
@@ -624,13 +625,14 @@ static int cr50_i2c_init(struct i2c_client *client)
 	}
 
 	vendor = le32_to_cpup((__le32 *)buf);
-	if (vendor != CR50_I2C_DID_VID) {
+	if (vendor != CR50_I2C_DID_VID && vendor != TI50_I2C_DID_VID) {
 		dev_err(dev, "Vendor ID did not match! ID was %08x\n", vendor);
 		release_locality(chip, 1);
 		return -ENODEV;
 	}
 
-	dev_info(dev, "cr50 TPM 2.0 (i2c 0x%02x irq %d id 0x%x)\n",
+	dev_info(dev, "%s TPM 2.0 (i2c 0x%02x irq %d id 0x%x)\n",
+		 vendor == TI50_I2C_DID_VID ? "ti50" : "cr50",
 		 client->addr, client->irq, vendor >> 16);
 
 	return tpm_chip_register(chip);
