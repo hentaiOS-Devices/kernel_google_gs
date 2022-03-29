@@ -34,6 +34,8 @@
 #include <drm/bridge/analogix_dp.h>
 #endif
 
+#include <soc/rockchip/rk3399_dmc.h>
+
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_gem.h"
 #include "rockchip_drm_fb.h"
@@ -147,7 +149,9 @@ struct vop {
 	struct drm_flip_work fb_unref_work;
 	unsigned long pending;
 
+	ktime_t line_flag_timestamp;
 	struct completion line_flag_completion;
+	struct notifier_block dmc_nb;
 
 	const struct vop_data *data;
 
@@ -696,6 +700,7 @@ static void rockchip_drm_set_win_enabled(struct drm_crtc *crtc, bool enabled)
 static void vop_crtc_atomic_disable(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
+	struct rockchip_drm_private *priv = crtc->dev->dev_private;
 	struct vop *vop = to_vop(crtc);
 
 	WARN_ON(vop->event);
@@ -709,6 +714,10 @@ static void vop_crtc_atomic_disable(struct drm_crtc *crtc,
 
 	if (crtc->state->self_refresh_active)
 		goto out;
+
+	if (priv->devfreq)
+		rockchip_dmcfreq_unregister_clk_sync_nb(priv->devfreq,
+							&vop->dmc_nb);
 
 	/*
 	 * Vop standby will take effect at end of current frame,
@@ -726,7 +735,9 @@ static void vop_crtc_atomic_disable(struct drm_crtc *crtc,
 
 	spin_unlock(&vop->reg_lock);
 
-	wait_for_completion(&vop->dsp_hold_completion);
+	if (!wait_for_completion_timeout(&vop->dsp_hold_completion,
+					 msecs_to_jiffies(200)))
+		WARN(1, "%s: timed out waiting for DSP hold", crtc->name);
 
 	vop_dsp_hold_valid_irq_disable(vop);
 
@@ -1286,6 +1297,7 @@ static void vop_crtc_atomic_enable(struct drm_crtc *crtc,
 	const struct vop_data *vop_data = vop->data;
 	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc->state);
 	struct drm_display_mode *adjusted_mode = &crtc->state->adjusted_mode;
+	struct rockchip_drm_private *priv = crtc->dev->dev_private;
 	u16 hsync_len = adjusted_mode->hsync_end - adjusted_mode->hsync_start;
 	u16 hdisplay = adjusted_mode->hdisplay;
 	u16 htotal = adjusted_mode->htotal;
@@ -1404,6 +1416,34 @@ static void vop_crtc_atomic_enable(struct drm_crtc *crtc,
 
 	VOP_REG_SET(vop, common, standby, 0);
 	mutex_unlock(&vop->vop_lock);
+	if (priv->devfreq)
+		rockchip_dmcfreq_register_clk_sync_nb(priv->devfreq,
+						      &vop->dmc_nb);
+}
+
+static int dmc_notify(struct notifier_block *nb,
+		      unsigned long action,
+		      void *data)
+{
+	struct vop *vop = container_of(nb, struct vop, dmc_nb);
+	struct drm_crtc *crtc = &vop->crtc;
+	ktime_t *timeout = data;
+	int ret;
+
+	if (WARN_ON(!vop->is_enabled))
+		return NOTIFY_BAD;
+
+	ret = rockchip_drm_wait_vact_end(crtc, 100);
+	*timeout = ktime_add_ns(vop->line_flag_timestamp,
+				rockchip_drm_get_vblank_ns(&crtc->mode));
+	if (ret) {
+		dev_err(vop->dev,
+			"%s: Line flag interrupt did not arrive: %d\n",
+			__func__, ret);
+		return NOTIFY_BAD;
+	}
+
+	return NOTIFY_STOP;
 }
 
 static bool vop_fs_irq_is_pending(struct vop *vop)
@@ -1442,6 +1482,7 @@ static int vop_crtc_atomic_check(struct drm_crtc *crtc,
 	struct drm_plane_state *plane_state;
 	struct rockchip_crtc_state *s;
 	int afbc_planes = 0;
+	uint32_t vblank_ns;
 
 	if (vop->lut_regs && crtc_state->color_mgmt_changed &&
 	    crtc_state->gamma_lut) {
@@ -1475,6 +1516,10 @@ static int vop_crtc_atomic_check(struct drm_crtc *crtc,
 
 	s = to_rockchip_crtc_state(crtc_state);
 	s->enable_afbc = afbc_planes > 0;
+
+	vblank_ns = rockchip_drm_get_vblank_ns(&crtc_state->adjusted_mode);
+	if (crtc_state->active && vblank_ns < DMC_MIN_VBLANK_NS)
+		s->needs_dmcfreq_block = true;
 
 	return 0;
 }
@@ -1728,6 +1773,7 @@ static irqreturn_t vop_isr(int irq, void *data)
 	}
 
 	if (active_irqs & LINE_FLAG_INTR) {
+		vop->line_flag_timestamp = ktime_get();
 		complete(&vop->line_flag_completion);
 		active_irqs &= ~LINE_FLAG_INTR;
 		ret = IRQ_HANDLED;
@@ -2149,6 +2195,7 @@ static int vop_bind(struct device *dev, struct device *master, void *data)
 	spin_lock_init(&vop->reg_lock);
 	spin_lock_init(&vop->irq_lock);
 	mutex_init(&vop->vop_lock);
+	vop->dmc_nb.notifier_call = dmc_notify;
 
 	ret = vop_create_crtc(vop);
 	if (ret)

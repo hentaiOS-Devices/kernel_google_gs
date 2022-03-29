@@ -71,6 +71,7 @@
  *	until pending frames are delivered
  * @WLAN_STA_USES_ENCRYPTION: This station was configured for encryption,
  *	so drop all packets without a key later.
+ * @WLAN_STA_DECAP_OFFLOAD: This station uses rx decap offload
  *
  * @NUM_WLAN_STA_FLAGS: number of defined flags
  */
@@ -102,6 +103,7 @@ enum ieee80211_sta_info_flags {
 	WLAN_STA_MPSP_RECIPIENT,
 	WLAN_STA_PS_DELIVER,
 	WLAN_STA_USES_ENCRYPTION,
+	WLAN_STA_DECAP_OFFLOAD,
 
 	NUM_WLAN_STA_FLAGS,
 };
@@ -190,6 +192,7 @@ struct tid_ampdu_tx {
 	u8 stop_initiator;
 	bool tx_stop;
 	u16 buf_size;
+	u16 ssn;
 
 	u16 failed_bar_ssn;
 	bool bar_pending;

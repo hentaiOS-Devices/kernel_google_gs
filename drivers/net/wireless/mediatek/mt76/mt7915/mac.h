@@ -102,6 +102,7 @@ enum rx_pkt_type {
 #define MT_PRXV_TX_DCM			BIT(4)
 #define MT_PRXV_TX_ER_SU_106T		BIT(5)
 #define MT_PRXV_NSTS			GENMASK(9, 7)
+#define MT_PRXV_TXBF			BIT(10)
 #define MT_PRXV_HT_AD_CODE		BIT(11)
 #define MT_PRXV_HE_RU_ALLOC_L		GENMASK(31, 28)
 #define MT_PRXV_HE_RU_ALLOC_H		GENMASK(3, 0)
@@ -118,7 +119,14 @@ enum rx_pkt_type {
 #define MT_CRXV_HE_LTF_SIZE		GENMASK(18, 17)
 #define MT_CRXV_HE_LDPC_EXT_SYM		BIT(20)
 #define MT_CRXV_HE_PE_DISAMBIG		BIT(23)
+#define MT_CRXV_HE_NUM_USER		GENMASK(30, 24)
 #define MT_CRXV_HE_UPLINK		BIT(31)
+#define MT_CRXV_HE_RU0			GENMASK(7, 0)
+#define MT_CRXV_HE_RU1			GENMASK(15, 8)
+#define MT_CRXV_HE_RU2			GENMASK(23, 16)
+#define MT_CRXV_HE_RU3			GENMASK(31, 24)
+
+#define MT_CRXV_HE_MU_AID		GENMASK(30, 20)
 
 #define MT_CRXV_HE_SR_MASK		GENMASK(11, 8)
 #define MT_CRXV_HE_SR1_MASK		GENMASK(16, 12)
@@ -130,10 +138,10 @@ enum rx_pkt_type {
 #define MT_CRXV_HE_BEAM_CHNG		BIT(13)
 #define MT_CRXV_HE_DOPPLER		BIT(16)
 
-#define MT_CRXV_SNR		GENMASK(18, 13)
-#define MT_CRXV_FOE_LO		GENMASK(31, 19)
-#define MT_CRXV_FOE_HI		GENMASK(6, 0)
-#define MT_CRXV_FOE_SHIFT	13
+#define MT_CRXV_SNR			GENMASK(18, 13)
+#define MT_CRXV_FOE_LO			GENMASK(31, 19)
+#define MT_CRXV_FOE_HI			GENMASK(6, 0)
+#define MT_CRXV_FOE_SHIFT		13
 
 enum tx_header_format {
 	MT_HDR_FORMAT_802_3,
@@ -257,7 +265,8 @@ enum tx_mcu_port_q_idx {
 #define MT_TX_RATE_MODE			GENMASK(9, 6)
 #define MT_TX_RATE_SU_EXT_TONE		BIT(5)
 #define MT_TX_RATE_DCM			BIT(4)
-#define MT_TX_RATE_IDX			GENMASK(3, 0)
+/* VHT/HE only use bits 0-3 */
+#define MT_TX_RATE_IDX			GENMASK(5, 0)
 
 #define MT_TXP_MAX_BUF_NUM		6
 
@@ -378,18 +387,5 @@ struct mt7915_dfs_radar_spec {
 	struct mt7915_dfs_pulse pulse_th;
 	struct mt7915_dfs_pattern radar_pattern[16];
 };
-
-static inline struct mt7915_txp *
-mt7915_txwi_to_txp(struct mt76_dev *dev, struct mt76_txwi_cache *t)
-{
-	u8 *txwi;
-
-	if (!t)
-		return NULL;
-
-	txwi = mt76_get_txwi_ptr(dev, t);
-
-	return (struct mt7915_txp *)(txwi + MT_TXD_SIZE);
-}
 
 #endif

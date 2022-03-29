@@ -845,7 +845,8 @@ static bool dc_link_detect_helper(struct dc_link *link,
 		(!link->dc->config.allow_edp_hotplug_detection)) &&
 		link->local_sink) {
 		// need to re-write OUI and brightness in resume case
-		if (link->connector_signal == SIGNAL_TYPE_EDP) {
+		if (link->connector_signal == SIGNAL_TYPE_EDP &&
+			(link->dpcd_sink_ext_caps.bits.oled == 1)) {
 			dpcd_set_source_specific_data(link);
 			msleep(post_oui_delay);
 			dc_link_set_default_brightness_aux(link);
@@ -1705,6 +1706,8 @@ static void enable_stream_features(struct pipe_ctx *pipe_ctx)
 		struct dc_link *link = stream->link;
 		union down_spread_ctrl old_downspread;
 		union down_spread_ctrl new_downspread;
+
+		memset(&old_downspread, 0, sizeof(old_downspread));
 
 		core_link_read_dpcd(link, DP_DOWNSPREAD_CTRL,
 				&old_downspread.raw, sizeof(old_downspread));
@@ -2596,13 +2599,21 @@ static struct abm *get_abm_from_stream_res(const struct dc_link *link)
 
 int dc_link_get_backlight_level(const struct dc_link *link)
 {
-
 	struct abm *abm = get_abm_from_stream_res(link);
+	struct panel_cntl *panel_cntl = link->panel_cntl;
+	struct dc  *dc = link->ctx->dc;
+	struct dmcu *dmcu = dc->res_pool->dmcu;
+	bool fw_set_brightness = true;
 
-	if (abm == NULL || abm->funcs->get_current_backlight == NULL)
+	if (dmcu)
+		fw_set_brightness = dmcu->funcs->is_dmcu_initialized(dmcu);
+
+	if (!fw_set_brightness && panel_cntl->funcs->get_current_backlight)
+		return panel_cntl->funcs->get_current_backlight(panel_cntl);
+	else if (abm != NULL && abm->funcs->get_current_backlight != NULL)
+		return (int) abm->funcs->get_current_backlight(abm);
+	else
 		return DC_ERROR_UNEXPECTED;
-
-	return (int) abm->funcs->get_current_backlight(abm);
 }
 
 int dc_link_get_target_backlight_pwm(const struct dc_link *link)
@@ -2679,7 +2690,7 @@ bool dc_link_set_psr_allow_active(struct dc_link *link, bool allow_active,
 		return false;
 
 	link->psr_settings.psr_allow_active = allow_active;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
+#if defined(CONFIG_DRM_AMD_DC_DCN)
 	if (!allow_active)
 		dc_z10_restore(dc);
 #endif
@@ -2860,7 +2871,7 @@ bool dc_link_setup_psr(struct dc_link *link,
 	psr_context->psr_level.u32all = 0;
 
 	/*skip power down the single pipe since it blocks the cstate*/
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
+#if defined(CONFIG_DRM_AMD_DC_DCN)
 	if (link->ctx->asic_id.chip_family >= FAMILY_RV) {
 		psr_context->psr_level.bits.SKIP_CRTC_DISABLE = true;
 		if (link->ctx->asic_id.chip_family == FAMILY_YELLOW_CARP && !dc->debug.disable_z10)
@@ -3209,7 +3220,7 @@ static void update_psp_stream_config(struct pipe_ctx *pipe_ctx, bool dpms_off)
 		/*stream_enc_inst*/
 		config.dig_fe = (uint8_t) pipe_ctx->stream_res.stream_enc->stream_enc_inst;
 		config.dig_be = pipe_ctx->stream->link->link_enc_hw_inst;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
+#if defined(CONFIG_DRM_AMD_DC_DCN)
 		config.stream_enc_idx = pipe_ctx->stream_res.stream_enc->id - ENGINE_ID_DIGA;
 		config.link_enc_idx = pipe_ctx->stream->link->link_enc->transmitter - TRANSMITTER_UNIPHY_A;
 		config.phy_idx = pipe_ctx->stream->link->link_enc->transmitter - TRANSMITTER_UNIPHY_A;

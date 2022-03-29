@@ -31,6 +31,7 @@
 #include "ipa_uc.h"
 #include "ipa_interrupt.h"
 #include "gsi_trans.h"
+#include "ipa_sysfs.h"
 
 /**
  * DOC: The IP Accelerator
@@ -67,7 +68,7 @@
  */
 
 /* The name of the GSI firmware file relative to /lib/firmware */
-#define IPA_FWS_PATH		"ipa_fws.mdt"
+#define IPA_FW_PATH_DEFAULT	"ipa_fws.mdt"
 #define IPA_PAS_ID		15
 
 /* Shift of 19.2 MHz timestamp to achieve lower resolution timestamps */
@@ -399,16 +400,20 @@ static void ipa_hardware_config(struct ipa *ipa, const struct ipa_data *data)
 
 	/* Implement some hardware workarounds */
 	if (version >= IPA_VERSION_4_0 && version < IPA_VERSION_4_5) {
-		/* Enable open global clocks (not needed for IPA v4.5) */
-		val = GLOBAL_FMASK;
-		val |= GLOBAL_2X_CLK_FMASK;
-		iowrite32(val, ipa->reg_virt + IPA_REG_CLKON_CFG_OFFSET);
-
 		/* Disable PA mask to allow HOLB drop */
 		val = ioread32(ipa->reg_virt + IPA_REG_TX_CFG_OFFSET);
 		val &= ~PA_MASK_EN_FMASK;
 		iowrite32(val, ipa->reg_virt + IPA_REG_TX_CFG_OFFSET);
+
+		/* Enable open global clocks in the CLKON configuration */
+		val = GLOBAL_FMASK | GLOBAL_2X_CLK_FMASK;
+	} else if (version == IPA_VERSION_3_1) {
+		val = MISC_FMASK;	/* Disable MISC clock gating */
+	} else {
+		val = 0;		/* No CLKON configuration needed */
 	}
+	if (val)
+		iowrite32(val, ipa->reg_virt + IPA_REG_CLKON_CFG_OFFSET);
 
 	ipa_hardware_config_comp(ipa);
 
@@ -517,6 +522,7 @@ static int ipa_firmware_load(struct device *dev)
 	struct device_node *node;
 	struct resource res;
 	phys_addr_t phys;
+	const char *path;
 	ssize_t size;
 	void *virt;
 	int ret;
@@ -535,9 +541,17 @@ static int ipa_firmware_load(struct device *dev)
 		return ret;
 	}
 
-	ret = request_firmware(&fw, IPA_FWS_PATH, dev);
+	/* Use name from DTB if specified; use default for *any* error */
+	ret = of_property_read_string(dev->of_node, "firmware-name", &path);
 	if (ret) {
-		dev_err(dev, "error %d requesting \"%s\"\n", ret, IPA_FWS_PATH);
+		dev_dbg(dev, "error %d getting \"firmware-name\" resource\n",
+			ret);
+		path = IPA_FW_PATH_DEFAULT;
+	}
+
+	ret = request_firmware(&fw, path, dev);
+	if (ret) {
+		dev_err(dev, "error %d requesting \"%s\"\n", ret, path);
 		return ret;
 	}
 
@@ -550,13 +564,11 @@ static int ipa_firmware_load(struct device *dev)
 		goto out_release_firmware;
 	}
 
-	ret = qcom_mdt_load(dev, fw, IPA_FWS_PATH, IPA_PAS_ID,
-			    virt, phys, size, NULL);
+	ret = qcom_mdt_load(dev, fw, path, IPA_PAS_ID, virt, phys, size, NULL);
 	if (ret)
-		dev_err(dev, "error %d loading \"%s\"\n", ret, IPA_FWS_PATH);
+		dev_err(dev, "error %d loading \"%s\"\n", ret, path);
 	else if ((ret = qcom_scm_pas_auth_and_reset(IPA_PAS_ID)))
-		dev_err(dev, "error %d authenticating \"%s\"\n", ret,
-			IPA_FWS_PATH);
+		dev_err(dev, "error %d authenticating \"%s\"\n", ret, path);
 
 	memunmap(virt);
 out_release_firmware:
@@ -566,6 +578,10 @@ out_release_firmware:
 }
 
 static const struct of_device_id ipa_match[] = {
+	{
+		.compatible	= "qcom,msm8998-ipa",
+		.data		= &ipa_data_v3_1,
+	},
 	{
 		.compatible	= "qcom,sdm845-ipa",
 		.data		= &ipa_data_v3_5_1,
@@ -633,6 +649,27 @@ static void ipa_validate_build(void)
 #endif /* IPA_VALIDATE */
 }
 
+static bool ipa_version_valid(enum ipa_version version)
+{
+	switch (version) {
+	case IPA_VERSION_3_0:
+	case IPA_VERSION_3_1:
+	case IPA_VERSION_3_5:
+	case IPA_VERSION_3_5_1:
+	case IPA_VERSION_4_0:
+	case IPA_VERSION_4_1:
+	case IPA_VERSION_4_2:
+	case IPA_VERSION_4_5:
+	case IPA_VERSION_4_7:
+	case IPA_VERSION_4_9:
+	case IPA_VERSION_4_11:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 /**
  * ipa_probe() - IPA platform driver probe function
  * @pdev:	Platform device pointer
@@ -670,9 +707,13 @@ static int ipa_probe(struct platform_device *pdev)
 	/* Get configuration data early; needed for clock initialization */
 	data = of_device_get_match_data(dev);
 	if (!data) {
-		/* This is really IPA_VALIDATE (should never happen) */
 		dev_err(dev, "matched hardware not supported\n");
 		return -ENODEV;
+	}
+
+	if (!ipa_version_valid(data->version)) {
+		dev_err(dev, "invalid IPA version\n");
+		return -EINVAL;
 	}
 
 	/* If we need Trust Zone, make sure it's available */
@@ -875,6 +916,13 @@ static const struct dev_pm_ops ipa_pm_ops = {
 	.resume		= ipa_resume,
 };
 
+static const struct attribute_group *ipa_attribute_groups[] = {
+	&ipa_attribute_group,
+	&ipa_feature_attribute_group,
+	&ipa_modem_attribute_group,
+	NULL,
+};
+
 static struct platform_driver ipa_driver = {
 	.probe		= ipa_probe,
 	.remove		= ipa_remove,
@@ -883,6 +931,7 @@ static struct platform_driver ipa_driver = {
 		.name		= "ipa",
 		.pm		= &ipa_pm_ops,
 		.of_match_table	= ipa_match,
+		.dev_groups	= ipa_attribute_groups,
 	},
 };
 

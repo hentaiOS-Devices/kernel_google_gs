@@ -43,7 +43,7 @@ config SND_SOC_SOF_OF
 	select SND_SOC_SOF
 	help
 	  This adds support for Device Tree enumeration. This option is
-	  required to enable i.MX8 devices.
+	  required to enable i.MX8 or Mediatek devices.
 	  Say Y if you need this option. If unsure select "N".
 
 config SND_SOC_SOF_DEBUG_PROBES
@@ -219,8 +219,10 @@ config SND_SOC_SOF_PROBE_WORK_QUEUE
 	  When selected, the probe is handled in two steps, for example to
 	  avoid lockdeps if request_module is used in the probe.
 
+source "sound/soc/sof/amd/Kconfig"
 source "sound/soc/sof/imx/Kconfig"
 source "sound/soc/sof/intel/Kconfig"
+source "sound/soc/sof/mediatek/Kconfig"
 source "sound/soc/sof/xtensa/Kconfig"
 
 endif

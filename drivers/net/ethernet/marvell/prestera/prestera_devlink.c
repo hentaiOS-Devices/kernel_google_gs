@@ -47,16 +47,11 @@ void prestera_devlink_free(struct prestera_switch *sw)
 	devlink_free(dl);
 }
 
-int prestera_devlink_register(struct prestera_switch *sw)
+void prestera_devlink_register(struct prestera_switch *sw)
 {
 	struct devlink *dl = priv_to_devlink(sw);
-	int err;
 
-	err = devlink_register(dl, sw->dev->dev);
-	if (err)
-		dev_err(prestera_dev(sw), "devlink_register failed: %d\n", err);
-
-	return err;
+	devlink_register(dl, sw->dev->dev);
 }
 
 void prestera_devlink_unregister(struct prestera_switch *sw)

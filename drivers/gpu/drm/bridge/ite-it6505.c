@@ -544,7 +544,7 @@ static void it6505_debug_print(struct it6505 *it6505, unsigned int reg,
 	struct device *dev = &it6505->client->dev;
 	int val;
 
-	if (likely(!(__drm_debug & DRM_UT_DRIVER)))
+	if (likely(!drm_debug_enabled(DRM_UT_DRIVER)))
 		return;
 
 	val = it6505_read(it6505, reg);
@@ -2930,6 +2930,18 @@ static int it6505_bridge_attach(struct drm_bridge *bridge,
 		}
 	}
 
+	/* Register aux channel */
+	it6505->aux.name = "DP-AUX";
+	it6505->aux.dev = dev;
+	it6505->aux.drm_dev = it6505->bridge.dev;
+	it6505->aux.transfer = it6505_aux_transfer;
+
+	ret = drm_dp_aux_register(&it6505->aux);
+	if (ret < 0) {
+		DRM_DEV_ERROR(dev, "Failed to register aux: %d", ret);
+		return ret;
+	}
+
 	return 0;
 }
 
@@ -3294,17 +3306,6 @@ static int it6505_i2c_probe(struct i2c_client *client,
 		return err;
 	}
 
-	/* Register aux channel */
-	it6505->aux.name = "DP-AUX";
-	it6505->aux.dev = dev;
-	it6505->aux.transfer = it6505_aux_transfer;
-
-	err = drm_dp_aux_register(&it6505->aux);
-	if (err < 0) {
-		DRM_DEV_ERROR(dev, "Failed to register aux: %d", err);
-		return err;
-	}
-
 	INIT_WORK(&it6505->link_works, it6505_link_training_work);
 	INIT_WORK(&it6505->hdcp_wait_ksv_list, it6505_hdcp_wait_ksv_list);
 	INIT_DELAYED_WORK(&it6505->hdcp_work, it6505_hdcp_work);
@@ -3318,7 +3319,6 @@ static int it6505_i2c_probe(struct i2c_client *client,
 
 	err = sysfs_create_files(&client->dev.kobj, it6505_attrs);
 	if (err) {
-		drm_dp_aux_unregister(&it6505->aux);
 		return err;
 	}
 

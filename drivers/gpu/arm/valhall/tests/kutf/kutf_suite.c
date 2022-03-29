@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2014, 2017-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014, 2017-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,12 +17,11 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 /* Kernel UTF suite, test and fixture management including user to kernel
- * interaction */
+ * interaction
+ */
 
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -598,7 +598,7 @@ static int create_fixture_variant(struct kutf_test_function *test_func,
 		goto fail_file;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0)
+#if KERNEL_VERSION(4, 7, 0) <= LINUX_VERSION_CODE
 	tmp = debugfs_create_file_unsafe(
 #else
 	tmp = debugfs_create_file(
@@ -634,6 +634,7 @@ static void kutf_remove_test_variant(struct kutf_test_fixture *test_fix)
 	kfree(test_fix);
 }
 
+#if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE
 /* Adapting to the upstream debugfs_create_x32() change */
 static int ktufp_u32_get(void *data, u64 *val)
 {
@@ -642,6 +643,7 @@ static int ktufp_u32_get(void *data, u64 *val)
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(kutfp_fops_x32_ro, ktufp_u32_get, NULL, "0x%08llx\n");
+#endif
 
 void kutf_add_test_with_filters_and_data(
 		struct kutf_suite *suite,
@@ -677,20 +679,30 @@ void kutf_add_test_with_filters_and_data(
 	}
 
 	test_func->filters = filters;
+#if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE
 	tmp = debugfs_create_file_unsafe("filters", S_IROTH, test_func->dir,
 					 &test_func->filters, &kutfp_fops_x32_ro);
+#else
+	tmp = debugfs_create_x32("filters", S_IROTH, test_func->dir,
+				 &test_func->filters);
+#endif
 	if (!tmp) {
 		pr_err("Failed to create debugfs file \"filters\" when adding test %s\n", name);
 		goto fail_file;
 	}
 
 	test_func->test_id = id;
-	tmp = debugfs_create_file_unsafe("test_id", S_IROTH, test_func->dir,
-					 &test_func->test_id, &kutfp_fops_x32_ro);
+#if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE
+	debugfs_create_u32("test_id", S_IROTH, test_func->dir,
+                       &test_func->test_id);
+#else
+	tmp = debugfs_create_u32("test_id", S_IROTH, test_func->dir,
+				 &test_func->test_id);
 	if (!tmp) {
 		pr_err("Failed to create debugfs file \"test_id\" when adding test %s\n", name);
 		goto fail_file;
 	}
+#endif
 
 	for (i = 0; i < suite->fixture_variants; i++) {
 		if (create_fixture_variant(test_func, i)) {
@@ -1146,7 +1158,7 @@ void kutf_test_abort(struct kutf_context *context)
 }
 EXPORT_SYMBOL(kutf_test_abort);
 
-#ifdef CONFIG_DEBUG_FS
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 
 /**
  * init_kutf_core() - Module entry point.

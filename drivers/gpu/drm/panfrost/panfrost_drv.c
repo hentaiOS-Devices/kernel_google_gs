@@ -417,7 +417,7 @@ static int panfrost_ioctl_madvise(struct drm_device *dev, void *data,
 		 * anyway, so let's not bother.
 		 */
 		if (!list_is_singular(&bo->mappings.list) ||
-		    WARN_ON_ONCE(first->mmu != &priv->mmu)) {
+		    WARN_ON_ONCE(first->mmu != priv->mmu)) {
 			ret = -EINVAL;
 			goto out_unlock_mappings;
 		}
@@ -449,32 +449,6 @@ int panfrost_unstable_ioctl_check(void)
 	return 0;
 }
 
-#define PFN_4G		(SZ_4G >> PAGE_SHIFT)
-#define PFN_4G_MASK	(PFN_4G - 1)
-#define PFN_16M		(SZ_16M >> PAGE_SHIFT)
-
-static void panfrost_drm_mm_color_adjust(const struct drm_mm_node *node,
-					 unsigned long color,
-					 u64 *start, u64 *end)
-{
-	/* Executable buffers can't start or end on a 4GB boundary */
-	if (!(color & PANFROST_BO_NOEXEC)) {
-		u64 next_seg;
-
-		if ((*start & PFN_4G_MASK) == 0)
-			(*start)++;
-
-		if ((*end & PFN_4G_MASK) == 0)
-			(*end)--;
-
-		next_seg = ALIGN(*start, PFN_4G);
-		if (next_seg - *start <= PFN_16M)
-			*start = next_seg + 1;
-
-		*end = min(*end, ALIGN(*start, PFN_4G) - 1);
-	}
-}
-
 static int
 panfrost_open(struct drm_device *dev, struct drm_file *file)
 {
@@ -489,15 +463,11 @@ panfrost_open(struct drm_device *dev, struct drm_file *file)
 	panfrost_priv->pfdev = pfdev;
 	file->driver_priv = panfrost_priv;
 
-	spin_lock_init(&panfrost_priv->mm_lock);
-
-	/* 4G enough for now. can be 48-bit */
-	drm_mm_init(&panfrost_priv->mm, SZ_32M >> PAGE_SHIFT, (SZ_4G - SZ_32M) >> PAGE_SHIFT);
-	panfrost_priv->mm.color_adjust = panfrost_drm_mm_color_adjust;
-
-	ret = panfrost_mmu_pgtable_alloc(panfrost_priv);
-	if (ret)
-		goto err_pgtable;
+	panfrost_priv->mmu = panfrost_mmu_ctx_create(pfdev);
+	if (IS_ERR(panfrost_priv->mmu)) {
+		ret = PTR_ERR(panfrost_priv->mmu);
+		goto err_free;
+	}
 
 	ret = panfrost_job_open(panfrost_priv);
 	if (ret)
@@ -506,9 +476,8 @@ panfrost_open(struct drm_device *dev, struct drm_file *file)
 	return 0;
 
 err_job:
-	panfrost_mmu_pgtable_free(panfrost_priv);
-err_pgtable:
-	drm_mm_takedown(&panfrost_priv->mm);
+	panfrost_mmu_ctx_put(panfrost_priv->mmu);
+err_free:
 	kfree(panfrost_priv);
 	return ret;
 }
@@ -521,8 +490,7 @@ panfrost_postclose(struct drm_device *dev, struct drm_file *file)
 	panfrost_perfcnt_close(file);
 	panfrost_job_close(panfrost_priv);
 
-	panfrost_mmu_pgtable_free(panfrost_priv);
-	drm_mm_takedown(&panfrost_priv->mm);
+	panfrost_mmu_ctx_put(panfrost_priv->mmu);
 	kfree(panfrost_priv);
 }
 
@@ -677,21 +645,21 @@ static const struct panfrost_compatible mediatek_mt8183_data = {
 
 static const struct of_device_id dt_match[] = {
 	/* Set first to probe before the generic compatibles */
-	{ .compatible = "amlogic,meson-gxm-mali",
+	{ .compatible = "amlogic,meson-gxm-mali-CHROMIUM",
 	  .data = &amlogic_data, },
-	{ .compatible = "amlogic,meson-g12a-mali",
+	{ .compatible = "amlogic,meson-g12a-mali-CHROMIUM",
 	  .data = &amlogic_data, },
-	{ .compatible = "arm,mali-t604", .data = &default_data, },
-	{ .compatible = "arm,mali-t624", .data = &default_data, },
-	{ .compatible = "arm,mali-t628", .data = &default_data, },
-	{ .compatible = "arm,mali-t720", .data = &default_data, },
-	{ .compatible = "arm,mali-t760", .data = &default_data, },
-	{ .compatible = "arm,mali-t820", .data = &default_data, },
-	{ .compatible = "arm,mali-t830", .data = &default_data, },
-	{ .compatible = "arm,mali-t860", .data = &default_data, },
-	{ .compatible = "arm,mali-t880", .data = &default_data, },
-	{ .compatible = "arm,mali-bifrost", .data = &default_data, },
-	{ .compatible = "mediatek,mt8183-mali", .data = &mediatek_mt8183_data },
+	{ .compatible = "arm,mali-t604-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t624-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t628-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t720-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t760-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t820-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t830-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t860-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t880-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-bifrost-CHROMIUM", .data = &default_data, },
+	{ .compatible = "mediatek,mt8183-mali-CHROMIUM", .data = &mediatek_mt8183_data },
 	{}
 };
 MODULE_DEVICE_TABLE(of, dt_match);

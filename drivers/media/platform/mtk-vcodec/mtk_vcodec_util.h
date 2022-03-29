@@ -28,6 +28,7 @@ struct mtk_vcodec_dev;
 extern int mtk_v4l2_dbg_level;
 extern bool mtk_vcodec_dbg;
 
+#define DEBUG	1
 
 #define mtk_v4l2_err(fmt, args...)                \
 	pr_err("[MTK_V4L2][ERROR] %s:%d: " fmt "\n", __func__, __LINE__, \
@@ -79,8 +80,10 @@ int mtk_vcodec_mem_alloc(struct mtk_vcodec_ctx *data,
 				struct mtk_vcodec_mem *mem);
 void mtk_vcodec_mem_free(struct mtk_vcodec_ctx *data,
 				struct mtk_vcodec_mem *mem);
-void mtk_vcodec_set_curr_ctx(struct mtk_vcodec_dev *dev,
-	struct mtk_vcodec_ctx *ctx);
-struct mtk_vcodec_ctx *mtk_vcodec_get_curr_ctx(struct mtk_vcodec_dev *dev);
+void mtk_vcodec_set_curr_ctx(struct mtk_vcodec_dev *vdec_dev,
+				struct mtk_vcodec_ctx *ctx, int comp_idx);
+struct mtk_vcodec_ctx * mtk_vcodec_get_curr_ctx(struct mtk_vcodec_dev *vdec_dev,
+	unsigned int comp_idx);
+void *mtk_vcodec_get_hw_dev(struct mtk_vcodec_dev *dev, int comp_idx);
 
 #endif /* _MTK_VCODEC_UTIL_H_ */

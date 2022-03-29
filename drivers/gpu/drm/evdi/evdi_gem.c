@@ -14,11 +14,14 @@
 #include <drm/drmP.h>
 #endif
 #include "evdi_drm_drv.h"
+#include "evdi_params.h"
 #include <linux/shmem_fs.h>
 #include <linux/dma-buf.h>
 #include <linux/vmalloc.h>
 #include <drm/drm_cache.h>
 
+static int evdi_prime_pin(struct drm_gem_object *obj);
+static void evdi_prime_unpin(struct drm_gem_object *obj);
 
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
 static const struct vm_operations_struct evdi_gem_vm_ops = {
@@ -29,6 +32,8 @@ static const struct vm_operations_struct evdi_gem_vm_ops = {
 
 static struct drm_gem_object_funcs gem_obj_funcs = {
 	.free = evdi_gem_free_object,
+	.pin = evdi_prime_pin,
+	.unpin = evdi_prime_unpin,
 	.vm_ops = &evdi_gem_vm_ops,
 	.export = drm_gem_prime_export,
 	.get_sg_table = evdi_prime_get_sg_table,
@@ -79,6 +84,8 @@ struct evdi_gem_object *evdi_gem_alloc_object(struct drm_device *dev,
 	obj->base.funcs = &gem_obj_funcs;
 #endif
 
+	mutex_init(&obj->pages_lock);
+
 	return obj;
 }
 
@@ -102,7 +109,7 @@ evdi_gem_create(struct drm_file *file,
 		kfree(obj);
 		return ret;
 	}
-#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE || defined(EL8)
 	drm_gem_object_put(&obj->base);
 #else
 	drm_gem_object_put_unlocked(&obj->base);
@@ -225,6 +232,29 @@ static void evdi_gem_put_pages(struct evdi_gem_object *obj)
 	obj->pages = NULL;
 }
 
+static int evdi_pin_pages(struct evdi_gem_object *obj)
+{
+	int ret = 0;
+
+	mutex_lock(&obj->pages_lock);
+	if (obj->pages_pin_count++ == 0) {
+		ret = evdi_gem_get_pages(obj, GFP_KERNEL);
+		if (ret)
+			obj->pages_pin_count--;
+	}
+	mutex_unlock(&obj->pages_lock);
+
+	return ret;
+}
+
+static void evdi_unpin_pages(struct evdi_gem_object *obj)
+{
+	mutex_lock(&obj->pages_lock);
+	if (--obj->pages_pin_count == 0)
+		evdi_gem_put_pages(obj);
+	mutex_unlock(&obj->pages_lock);
+}
+
 int evdi_gem_vmap(struct evdi_gem_object *obj)
 {
 	int page_count = obj->base.size / PAGE_SIZE;
@@ -246,7 +276,7 @@ int evdi_gem_vmap(struct evdi_gem_object *obj)
 		return 0;
 	}
 
-	ret = evdi_gem_get_pages(obj, GFP_KERNEL);
+	ret = evdi_pin_pages(obj);
 	if (ret)
 		return ret;
 
@@ -275,7 +305,7 @@ void evdi_gem_vunmap(struct evdi_gem_object *obj)
 		obj->vmapping = NULL;
 	}
 
-	evdi_gem_put_pages(obj);
+	evdi_unpin_pages(obj);
 }
 
 void evdi_gem_free_object(struct drm_gem_object *gem_obj)
@@ -299,6 +329,7 @@ void evdi_gem_free_object(struct drm_gem_object *gem_obj)
 	reservation_object_fini(&obj->_resv);
 #endif
 	obj->resv = NULL;
+	mutex_destroy(&obj->pages_lock);
 }
 
 /*
@@ -320,7 +351,7 @@ int evdi_gem_mmap(struct drm_file *file,
 	}
 	gobj = to_evdi_bo(obj);
 
-	ret = evdi_gem_get_pages(gobj, GFP_KERNEL);
+	ret = evdi_pin_pages(gobj);
 	if (ret)
 		goto out;
 
@@ -345,6 +376,9 @@ evdi_prime_import_sg_table(struct drm_device *dev,
 	struct evdi_gem_object *obj;
 	int npages;
 
+	if (evdi_disable_texture_import)
+		return ERR_PTR(-ENOMEM);
+
 	obj = evdi_gem_alloc_object(dev, attach->dmabuf->size);
 	if (IS_ERR(obj))
 		return ERR_CAST(obj);
@@ -366,13 +400,26 @@ evdi_prime_import_sg_table(struct drm_device *dev,
 	return &obj->base;
 }
 
+static int evdi_prime_pin(struct drm_gem_object *obj)
+{
+	struct evdi_gem_object *bo = to_evdi_bo(obj);
+
+	return evdi_pin_pages(bo);
+}
+
+static void evdi_prime_unpin(struct drm_gem_object *obj)
+{
+	struct evdi_gem_object *bo = to_evdi_bo(obj);
+
+	evdi_unpin_pages(bo);
+}
+
 struct sg_table *evdi_prime_get_sg_table(struct drm_gem_object *obj)
 {
 	struct evdi_gem_object *bo = to_evdi_bo(obj);
-	#if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
+	#if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE || defined(EL8)
 		return drm_prime_pages_to_sg(obj->dev, bo->pages, bo->base.size >> PAGE_SHIFT);
 	#else
 		return drm_prime_pages_to_sg(bo->pages, bo->base.size >> PAGE_SHIFT);
 	#endif
 }
-

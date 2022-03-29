@@ -1877,6 +1877,9 @@ void intel_rps_init(struct intel_rps *rps)
 
 	if (GRAPHICS_VER(i915) >= 8 && GRAPHICS_VER(i915) < 11)
 		rps->pm_intrmsk_mbz |= GEN8_PMINTR_DISABLE_REDIRECT_TO_GUC;
+
+	if (intel_uc_uses_guc(&i915->gt.uc))
+		rps->pm_intrmsk_mbz |= ARAT_EXPIRED_INTRMSK;
 }
 
 void intel_rps_sanitize(struct intel_rps *rps)
@@ -1987,7 +1990,7 @@ static struct drm_i915_private *mchdev_get(void)
 
 	rcu_read_lock();
 	i915 = rcu_dereference(ips_mchdev);
-	if (!kref_get_unless_zero(&i915->drm.ref))
+	if (i915 && !kref_get_unless_zero(&i915->drm.ref))
 		i915 = NULL;
 	rcu_read_unlock();
 

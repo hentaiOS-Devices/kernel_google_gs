@@ -55,7 +55,7 @@ static int qcom_cpufreq_set_bw(struct cpufreq_policy *policy,
 	if (IS_ERR(opp))
 		return PTR_ERR(opp);
 
-	ret = dev_pm_opp_set_bw(dev, opp);
+	ret = dev_pm_opp_set_opp(dev, opp);
 	dev_pm_opp_put(opp);
 	return ret;
 }
@@ -348,6 +348,7 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 	}
 
 	policy->driver_data = data;
+	policy->dvfs_possible_from_any_cpu = true;
 
 	ret = qcom_cpufreq_hw_read_lut(cpu_dev, policy);
 	if (ret) {
@@ -363,6 +364,12 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 	}
 
 	dev_pm_opp_of_register_em(cpu_dev, policy->cpus);
+
+	if (policy_has_boost_freq(policy)) {
+		ret = cpufreq_enable_boost_support();
+		if (ret)
+			dev_warn(cpu_dev, "failed to enable boost: %d\n", ret);
+	}
 
 	return 0;
 error:

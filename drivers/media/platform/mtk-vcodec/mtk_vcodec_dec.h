@@ -8,9 +8,13 @@
 #ifndef _MTK_VCODEC_DEC_H_
 #define _MTK_VCODEC_DEC_H_
 
+#include "mtk_vcodec_util.h"
+
 #include <media/videobuf2-core.h>
+#include <media/v4l2-ctrls.h>
 #include <media/v4l2-mem2mem.h>
 
+#define VCODEC_DEC_ALIGNED_64 64
 #define VCODEC_CAPABILITY_4K_DISABLED	0x10
 #define VCODEC_DEC_4K_CODED_WIDTH	4096U
 #define VCODEC_DEC_4K_CODED_HEIGHT	2304U
@@ -67,6 +71,7 @@ extern const struct v4l2_ioctl_ops mtk_vdec_ioctl_ops;
 extern const struct v4l2_m2m_ops mtk_vdec_m2m_ops;
 extern const struct media_device_ops mtk_vcodec_media_ops;
 
+extern struct platform_driver mtk_vdec_comp_driver;
 
 /*
  * mtk_vdec_lock/mtk_vdec_unlock are for ctx instance to

@@ -81,10 +81,10 @@ static void virtio_gpu_get_capsets(struct virtio_gpu_device *vgdev,
 					 vgdev->capsets[i].id > 0, 5 * HZ);
 		/*
 		 * Capability ids are defined in the virtio-gpu spec and are
-		 * between 1 to 31, inclusive.
+		 * between 1 to 63, inclusive.
 		 */
 		if (!vgdev->capsets[i].id ||
-		     vgdev->capsets[i].id > MAX_CAPSET_ID)
+		    vgdev->capsets[i].id > MAX_CAPSET_ID)
 			invalid_capset_id = true;
 
 		if (ret == 0)
@@ -195,11 +195,13 @@ int virtio_gpu_init(struct drm_device *dev)
 		vgdev->has_context_init = true;
 	}
 
-	DRM_INFO("features: %cvirgl %cedid %cresource_blob %chost_visible %ccontext_init\n",
+	DRM_INFO("features: %cvirgl %cedid %cresource_blob %chost_visible",
 		 vgdev->has_virgl_3d    ? '+' : '-',
 		 vgdev->has_edid        ? '+' : '-',
 		 vgdev->has_resource_blob ? '+' : '-',
-		 vgdev->has_host_visible ? '+' : '-',
+		 vgdev->has_host_visible ? '+' : '-');
+
+	DRM_INFO("features: %ccontext_init\n",
 		 vgdev->has_context_init ? '+' : '-');
 
 	ret = virtio_find_vqs(vgdev->vdev, 2, vqs, callbacks, names, NULL);
