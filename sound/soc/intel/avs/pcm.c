@@ -693,6 +693,7 @@ static int avs_dai_fe_trigger(struct snd_pcm_substream *substream,
 	struct hdac_ext_stream *stream;
 	struct hdac_stream *hstream;
 	struct hdac_bus *bus;
+	struct snd_soc_dapm_widget *w;
 	unsigned long flags;
 	int ret = 0;
 
@@ -703,6 +704,7 @@ static int avs_dai_fe_trigger(struct snd_pcm_substream *substream,
 	if (!hstream->prepared)
 		return -EPIPE;
 
+	w = snd_soc_dai_get_widget(dai, substream->stream);
 	bus = hstream->bus;
 
 	switch (cmd) {
