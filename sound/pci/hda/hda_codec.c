@@ -950,7 +950,7 @@ int snd_hda_codec_new(struct hda_bus *bus, struct snd_card *card,
 		return PTR_ERR(codec);
 	*codecp = codec;
 
-	return snd_hda_codec_device_new(bus, card, codec_addr, *codecp, true);
+	return snd_hda_codec_device_new(bus, card, codec_addr, *codecp, false);
 }
 EXPORT_SYMBOL_GPL(snd_hda_codec_new);
 
