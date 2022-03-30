@@ -204,13 +204,14 @@ exit:
 
 void avs_module_id_free(struct avs_dev *adev, u16 module_id, u8 instance_id)
 {
-	int idx;
+	int ret, idx;
 
 	mutex_lock(&adev->modres_mutex);
 
 	idx = avs_module_id_entry_index(adev, module_id);
 	if (idx == -ENOENT) {
 		WARN(1, "invalid module id: %d", module_id);
+		ret = -EINVAL;
 		goto exit;
 	}
 
