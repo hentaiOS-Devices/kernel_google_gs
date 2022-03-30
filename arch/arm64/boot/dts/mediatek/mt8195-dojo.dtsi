@@ -37,7 +37,7 @@
 	max98390_r: max98390@38 {
 		compatible = "maxim,max98390";
 		reg = <0x38>;
-		maxim,reset-gpios = <&pio 100 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&pio 100 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 
