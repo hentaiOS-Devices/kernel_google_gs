@@ -403,12 +403,12 @@ static const struct config_entry *snd_intel_dsp_find_config
 
 static int snd_intel_dsp_check_dmic(struct pci_dev *pci)
 {
-	struct acpi_table_nhlt *nhlt;
+	struct nhlt_acpi_table *nhlt;
 	int ret = 0;
 
 	nhlt = intel_nhlt_init(&pci->dev);
 	if (nhlt) {
-		if (intel_nhlt_has_endpoint_type(nhlt, NHLT_LINK_DMIC))
+		if (intel_nhlt_get_dmic_geo(&pci->dev, nhlt))
 			ret = 1;
 		intel_nhlt_free(nhlt);
 	}

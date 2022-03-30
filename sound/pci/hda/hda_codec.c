@@ -760,10 +760,6 @@ static void codec_release_pcms(struct hda_codec *codec)
 	}
 }
 
-/**
- * snd_hda_codec_cleanup_for_unbind - Prepare codec for removal
- * @codec: codec device to cleanup
- */
 void snd_hda_codec_cleanup_for_unbind(struct hda_codec *codec)
 {
 	if (codec->registered) {
@@ -809,12 +805,7 @@ static void codec_display_power(struct hda_codec *codec, bool enable)
 		snd_hdac_display_power(&codec->bus->core, codec->addr, enable);
 }
 
-/**
- * snd_hda_codec_register - Finalize codec initialization
- * @codec: codec device to register
- *
- * Also called from hda_bind.c
- */
+/* also called from hda_bind.c */
 void snd_hda_codec_register(struct hda_codec *codec)
 {
 	if (codec->registered)
@@ -827,7 +818,6 @@ void snd_hda_codec_register(struct hda_codec *codec)
 		codec->registered = 1;
 	}
 }
-EXPORT_SYMBOL_GPL(snd_hda_codec_register);
 
 static int snd_hda_codec_dev_register(struct snd_device *device)
 {
@@ -835,12 +825,10 @@ static int snd_hda_codec_dev_register(struct snd_device *device)
 	return 0;
 }
 
-/**
- * snd_hda_codec_unregister - Unregister specified codec device
- * @codec: codec device to unregister
- */
-void snd_hda_codec_unregister(struct hda_codec *codec)
+static int snd_hda_codec_dev_free(struct snd_device *device)
 {
+	struct hda_codec *codec = device->device_data;
+
 	codec->in_freeing = 1;
 	/*
 	 * snd_hda_codec_device_new() is used by legacy HDA and ASoC driver.
@@ -857,12 +845,7 @@ void snd_hda_codec_unregister(struct hda_codec *codec)
 	 */
 	if (codec->core.type == HDA_DEV_LEGACY)
 		put_device(hda_codec_dev(codec));
-}
-EXPORT_SYMBOL_GPL(snd_hda_codec_unregister);
 
-static int snd_hda_codec_dev_free(struct snd_device *device)
-{
-	snd_hda_codec_unregister(device->device_data);
 	return 0;
 }
 
@@ -886,49 +869,36 @@ static void snd_hda_codec_dev_release(struct device *dev)
 
 #define DEV_NAME_LEN 31
 
-/**
- * snd_hda_codec_device_init - allocate HDA codec device
- * @bus: codec's parent bus
- * @codec_addr: the codec address on the parent bus
- * @codecp: the pointer to store the generated codec
- * @fmt: format string for the device's name
- *
- * Returns newly allocated codec device or ERR_PTR() on failure.
- */
-struct hda_codec *
-snd_hda_codec_device_init(struct hda_bus *bus, unsigned int codec_addr,
-			  const char *fmt, ...)
+static int snd_hda_codec_device_init(struct hda_bus *bus, struct snd_card *card,
+			unsigned int codec_addr, struct hda_codec **codecp)
 {
-	va_list vargs;
 	char name[DEV_NAME_LEN];
 	struct hda_codec *codec;
 	int err;
 
+	dev_dbg(card->dev, "%s: entry\n", __func__);
+
 	if (snd_BUG_ON(!bus))
-		return ERR_PTR(-EINVAL);
+		return -EINVAL;
 	if (snd_BUG_ON(codec_addr > HDA_MAX_CODEC_ADDRESS))
-		return ERR_PTR(-EINVAL);
+		return -EINVAL;
 
 	codec = kzalloc(sizeof(*codec), GFP_KERNEL);
 	if (!codec)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
-	va_start(vargs, fmt);
-	vsprintf(name, fmt, vargs);
-	va_end(vargs);
-
+	sprintf(name, "hdaudioC%dD%d", card->number, codec_addr);
 	err = snd_hdac_device_init(&codec->core, &bus->core, name, codec_addr);
 	if (err < 0) {
 		kfree(codec);
-		return ERR_PTR(err);
+		return err;
 	}
 
-	codec->bus = bus;
 	codec->core.type = HDA_DEV_LEGACY;
+	*codecp = codec;
 
-	return codec;
+	return err;
 }
-EXPORT_SYMBOL_GPL(snd_hda_codec_device_init);
 
 /**
  * snd_hda_codec_new - create a HDA codec
@@ -942,21 +912,18 @@ EXPORT_SYMBOL_GPL(snd_hda_codec_device_init);
 int snd_hda_codec_new(struct hda_bus *bus, struct snd_card *card,
 		      unsigned int codec_addr, struct hda_codec **codecp)
 {
-	struct hda_codec *codec;
+	int ret;
 
-	codec = snd_hda_codec_device_init(bus, codec_addr, "hdaudioC%dD%d",
-					  card->number, codec_addr);
-	if (IS_ERR(codec))
-		return PTR_ERR(codec);
-	*codecp = codec;
+	ret = snd_hda_codec_device_init(bus, card, codec_addr, codecp);
+	if (ret < 0)
+		return ret;
 
-	return snd_hda_codec_device_new(bus, card, codec_addr, *codecp, false);
+	return snd_hda_codec_device_new(bus, card, codec_addr, *codecp);
 }
 EXPORT_SYMBOL_GPL(snd_hda_codec_new);
 
 int snd_hda_codec_device_new(struct hda_bus *bus, struct snd_card *card,
-			unsigned int codec_addr, struct hda_codec *codec,
-			bool snddev_managed)
+			unsigned int codec_addr, struct hda_codec *codec)
 {
 	char component[31];
 	hda_nid_t fg;
@@ -1030,12 +997,9 @@ int snd_hda_codec_device_new(struct hda_bus *bus, struct snd_card *card,
 		codec->core.subsystem_id, codec->core.revision_id);
 	snd_component_add(card, component);
 
-	if (snddev_managed) {
-		/* ASoC features component management instead */
-		err = snd_device_new(card, SNDRV_DEV_CODEC, codec, &dev_ops);
-		if (err < 0)
-			goto error;
-	}
+	err = snd_device_new(card, SNDRV_DEV_CODEC, codec, &dev_ops);
+	if (err < 0)
+		goto error;
 
 	/* PM runtime needs to be enabled later after binding codec */
 	pm_runtime_forbid(&codec->core.dev);
@@ -3381,12 +3345,7 @@ int snd_hda_add_new_ctls(struct hda_codec *codec,
 EXPORT_SYMBOL_GPL(snd_hda_add_new_ctls);
 
 #ifdef CONFIG_PM
-/**
- * snd_hda_codec_set_power_save - Configure codec's runtime PM
- * @codec: codec device to configure
- * @delay: autosuspend delay
- */
-void snd_hda_codec_set_power_save(struct hda_codec *codec, int delay)
+static void codec_set_power_save(struct hda_codec *codec, int delay)
 {
 	struct device *dev = hda_codec_dev(codec);
 
@@ -3404,7 +3363,6 @@ void snd_hda_codec_set_power_save(struct hda_codec *codec, int delay)
 		pm_runtime_forbid(dev);
 	}
 }
-EXPORT_SYMBOL_GPL(snd_hda_codec_set_power_save);
 
 /**
  * snd_hda_set_power_save - reprogram autosuspend for the given delay
@@ -3418,7 +3376,7 @@ void snd_hda_set_power_save(struct hda_bus *bus, int delay)
 	struct hda_codec *c;
 
 	list_for_each_codec(c, bus)
-		snd_hda_codec_set_power_save(c, delay);
+		codec_set_power_save(c, delay);
 }
 EXPORT_SYMBOL_GPL(snd_hda_set_power_save);
 
