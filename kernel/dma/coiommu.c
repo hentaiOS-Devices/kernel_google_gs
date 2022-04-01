@@ -18,11 +18,6 @@
 
 static struct coiommu *global_coiommu;
 
-static inline struct coiommu_dtt *get_coiommu_dtt(struct device *dev)
-{
-	return (struct coiommu_dtt *)dev_iommu_priv_get(dev);
-}
-
 static inline unsigned int dtt_level_to_offset(unsigned long pfn,
 					       unsigned int level)
 {
@@ -260,7 +255,7 @@ static inline unsigned short get_pci_device_id(struct device *dev)
 static void unmark_dma_addr(struct device *dev, size_t size,
 			    dma_addr_t dma_addr)
 {
-	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
+	struct coiommu_dtt *dtt = &global_coiommu->dtt;
 	phys_addr_t phys_addr = dma_to_phys(dev, dma_addr);
 	unsigned long pfn = phys_addr >> PAGE_SHIFT;
 	unsigned long nr_pages = get_aligned_nrpages(phys_addr, size);
@@ -298,11 +293,10 @@ static void unmark_sg_pfns(struct coiommu_dtt *dtt,
 	}
 }
 
-static void unmark_sg(struct device *dev,
-		      struct scatterlist *sgl,
+static void unmark_sg(struct scatterlist *sgl,
 		      int nents, bool clear_accessed)
 {
-	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
+	struct coiommu_dtt *dtt = &global_coiommu->dtt;
 
 	if (likely(dtt))
 		unmark_sg_pfns(dtt, sgl, nents, clear_accessed);
@@ -350,7 +344,7 @@ static int pin_and_mark_pfn(struct device *dev, unsigned long pfn)
 {
 	struct dtt_leaf_entry *leaf_pte;
 	unsigned short bdf = get_pci_device_id(dev);
-	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
+	struct coiommu_dtt *dtt = &global_coiommu->dtt;
 	int ret = 0;
 	bool pinned;
 
@@ -390,7 +384,7 @@ static int pin_and_mark_pfns(struct device *dev, unsigned long start_pfn,
 			     unsigned long nr_pages)
 {
 	unsigned short bdf = get_pci_device_id(dev);
-	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
+	struct coiommu_dtt *dtt = &global_coiommu->dtt;
 	struct pin_pages_info *pin_info;
 	int ret;
 
@@ -457,7 +451,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 				int nents)
 {
 	unsigned short bdf = get_pci_device_id(dev);
-	struct coiommu_dtt *dtt = get_coiommu_dtt(dev);
+	struct coiommu_dtt *dtt = &global_coiommu->dtt;
 	struct scatterlist *sg;
 	unsigned long nr_pages = 0;
 	phys_addr_t phys_addr;
@@ -633,7 +627,7 @@ static void coiommu_unmap_sg(struct device *dev, struct scatterlist *sgl,
 {
 	dma_direct_unmap_sg(dev, sgl, nents, dir, attrs);
 
-	unmark_sg(dev, sgl, nents, false);
+	unmark_sg(sgl, nents, false);
 }
 
 static const struct dma_map_ops coiommu_ops = {
@@ -792,21 +786,7 @@ static int coiommu_setup_endpoint(struct device *dev)
 		return -EPROBE_DEFER;
 	}
 
-	if (dev->iommu) {
-		if (dev_iommu_priv_get(dev)) {
-			dev_info(dev, "%s: already translated by coiommu\n", __func__);
-			return 0;
-		}
-	} else {
-		dev->iommu = kzalloc(sizeof(struct dev_iommu), GFP_KERNEL);
-		if (!dev->iommu)
-			return -ENOMEM;
-		mutex_init(&dev->iommu->lock);
-	}
-
-	dev_iommu_priv_set(dev, (void *)&coiommu->dtt);
 	set_dma_ops(dev, &coiommu_ops);
-
 	return 0;
 }
 
