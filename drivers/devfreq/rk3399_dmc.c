@@ -808,16 +808,12 @@ no_pmu:
 
 	devm_devfreq_register_opp_notifier(dev, data->devfreq);
 
-	ret = pd_register_dmc_nb(data->devfreq);
-	if (ret < 0)
-		goto out;
-
 	data->cpufreq_policy_nb.notifier_call = rk3399_cpufreq_policy_notify;
 	data->cpufreq_trans_nb.notifier_call = rk3399_cpufreq_trans_notify;
 	ret = cpufreq_register_notifier(&data->cpufreq_policy_nb,
 					CPUFREQ_POLICY_NOTIFIER);
 	if (ret < 0)
-		goto pd_unregister;
+		goto out;
 
 	ret = cpufreq_register_notifier(&data->cpufreq_trans_nb,
 					CPUFREQ_TRANSITION_NOTIFIER);
@@ -843,9 +839,6 @@ policy_unregister:
 				    CPUFREQ_POLICY_NOTIFIER);
 	cancel_work_sync(&data->boost_work);
 
-pd_unregister:
-	pd_unregister_dmc_nb(data->devfreq);
-
 out:
 	return ret;
 }
@@ -859,7 +852,6 @@ static int rk3399_dmcfreq_remove(struct platform_device *pdev)
 	WARN_ON(cpufreq_unregister_notifier(&dmcfreq->cpufreq_policy_nb,
 					    CPUFREQ_POLICY_NOTIFIER));
 	cancel_work_sync(&dmcfreq->boost_work);
-	WARN_ON(pd_unregister_dmc_nb(dmcfreq->devfreq));
 
 	return devfreq_remove_governor(&rk3399_dfi_governor);
 }

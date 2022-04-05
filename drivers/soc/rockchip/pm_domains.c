@@ -5,11 +5,9 @@
  * Copyright (c) 2015 ROCKCHIP, Co. Ltd.
  */
 
-#include <linux/devfreq.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/err.h>
-#include <linux/notifier.h>
 #include <linux/pm_clock.h>
 #include <linux/pm_domain.h>
 #include <linux/of_address.h>
@@ -84,11 +82,8 @@ struct rockchip_pmu {
 	const struct rockchip_pmu_info *info;
 	struct mutex mutex; /* mutex lock for pmu */
 	struct genpd_onecell_data genpd_data;
-	struct notifier_block dmc_nb;
 	struct generic_pm_domain *domains[];
 };
-
-static struct rockchip_pmu *dmc_pmu;
 
 #define to_rockchip_pd(gpd) container_of(gpd, struct rockchip_pm_domain, genpd)
 
@@ -629,35 +624,6 @@ err_out:
 	return error;
 }
 
-static int dmc_notify(struct notifier_block *nb, unsigned long event,
-		      void *data)
-{
-	if (event == DEVFREQ_PRECHANGE)
-		mutex_lock(&dmc_pmu->mutex);
-	else if (event == DEVFREQ_POSTCHANGE)
-		mutex_unlock(&dmc_pmu->mutex);
-
-	return NOTIFY_OK;
-}
-
-int pd_register_dmc_nb(struct devfreq *devfreq)
-{
-	if (!dmc_pmu)
-		return -EPROBE_DEFER;
-
-	dmc_pmu->dmc_nb.notifier_call = dmc_notify;
-	return devfreq_register_notifier(devfreq, &dmc_pmu->dmc_nb,
-					 DEVFREQ_TRANSITION_NOTIFIER);
-}
-EXPORT_SYMBOL(pd_register_dmc_nb);
-
-int pd_unregister_dmc_nb(struct devfreq *devfreq)
-{
-	return devfreq_unregister_notifier(devfreq, &dmc_pmu->dmc_nb,
-					   DEVFREQ_TRANSITION_NOTIFIER);
-}
-EXPORT_SYMBOL(pd_unregister_dmc_nb);
-
 static int rockchip_pm_domain_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -749,8 +715,6 @@ static int rockchip_pm_domain_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to add provider: %d\n", error);
 		goto err_out;
 	}
-
-	dmc_pmu = pmu;
 
 	return 0;
 

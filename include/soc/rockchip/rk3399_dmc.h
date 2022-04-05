@@ -30,17 +30,4 @@ static inline int rockchip_dmcfreq_block(struct devfreq *devfreq) { return 0; }
 static inline int rockchip_dmcfreq_unblock(struct devfreq *devfreq)
 { return 0; }
 #endif
-
-#if IS_ENABLED(CONFIG_ROCKCHIP_PM_DOMAINS)
-
-int pd_register_dmc_nb(struct devfreq *devfreq);
-int pd_unregister_dmc_nb(struct devfreq *devfreq);
-
-#else
-
-static inline int pd_register_dmc_nb(struct devfreq *devfreq) { return 0; }
-static inline int pd_unregister_dmc_nb(struct devfreq *devfreq) { return 0; }
-
-#endif /* CONFIG_ROCKCHIP_PM_DOMAINS */
-
 #endif
