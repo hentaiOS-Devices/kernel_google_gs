@@ -369,13 +369,11 @@
 };
 
 &dfi {
-	/* TODO(b/225995392): re-enable once stability problems are resolved. */
-	status = "disabled";
+	status = "okay";
 };
 
 &dmc {
-	/* TODO(b/225995392): re-enable once stability problems are resolved. */
-	status = "disabled";
+	status = "okay";
 
 	rockchip,pd-idle-ns = <160>;
 	rockchip,sr-idle-ns = <10240>;
