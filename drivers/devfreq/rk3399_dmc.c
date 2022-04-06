@@ -25,6 +25,7 @@
 #include <linux/suspend.h>
 #include <linux/workqueue.h>
 
+#include <soc/rockchip/pm_domains.h>
 #include <soc/rockchip/rk3399_ddrclk.h>
 #include <soc/rockchip/rk3399_dmc.h>
 #include <soc/rockchip/rk3399_grf.h>
@@ -341,6 +342,16 @@ static int rk3399_dmcfreq_target(struct device *dev, unsigned long *freq,
 	mutex_lock(&dmcfreq->lock);
 
 	/*
+	 * Ensure power-domain transitions don't interfere with ARM Trusted
+	 * Firmware power-domain idling.
+	 */
+	err = rockchip_pmu_block();
+	if (err) {
+		dev_err(dev, "Failed to block PMU: %d\n", err);
+		goto out_unlock;
+	}
+
+	/*
 	 * Some idle parameters may be based on the DDR controller clock, which
 	 * is half of the DDR frequency.
 	 * pd_idle and standby_idle are based on the controller clock cycle.
@@ -465,6 +476,8 @@ static int rk3399_dmcfreq_target(struct device *dev, unsigned long *freq,
 	rk3399_dfi_calc_top_threshold(dmcfreq->devfreq);
 	devfreq_event_set_event(dmcfreq->edev);
 out:
+	rockchip_pmu_unblock();
+out_unlock:
 	mutex_unlock(&dmcfreq->lock);
 	return err;
 }
