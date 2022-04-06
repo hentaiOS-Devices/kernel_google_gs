@@ -399,6 +399,8 @@ void intel_pipe_update_start(const struct intel_crtc_state *new_crtc_state)
 		intel_crtc_has_type(new_crtc_state, INTEL_OUTPUT_DSI);
 	DEFINE_WAIT(wait);
 
+	intel_psr_lock(new_crtc_state);
+
 	if (new_crtc_state->uapi.async_flip)
 		return;
 
@@ -411,8 +413,6 @@ void intel_pipe_update_start(const struct intel_crtc_state *new_crtc_state)
 	min = vblank_start - intel_usecs_to_scanlines(adjusted_mode,
 						      VBLANK_EVASION_TIME_US);
 	max = vblank_start - 1;
-
-	intel_psr_lock(new_crtc_state);
 
 	if (min <= 0 || max <= 0)
 		goto irq_disable;
@@ -539,6 +539,8 @@ void intel_pipe_update_end(struct intel_crtc_state *new_crtc_state)
 	ktime_t end_vbl_time = ktime_get();
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 
+	intel_psr_unlock(new_crtc_state);
+
 	if (new_crtc_state->uapi.async_flip)
 		return;
 
@@ -585,8 +587,6 @@ void intel_pipe_update_end(struct intel_crtc_state *new_crtc_state)
 	intel_vrr_send_push(new_crtc_state);
 
 	local_irq_enable();
-
-	intel_psr_unlock(new_crtc_state);
 
 	if (intel_vgpu_active(dev_priv))
 		return;
