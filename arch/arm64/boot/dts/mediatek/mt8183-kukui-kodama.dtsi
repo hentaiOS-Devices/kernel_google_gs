@@ -65,9 +65,9 @@
 	clock-frequency = <400000>;
 	vbus-supply = <&mt6358_vcamio_reg>;
 
-	eeprom@58 {
+	eeprom@50 {
 		compatible = "atmel,24c64";
-		reg = <0x58>;
+		reg = <0x50>;
 		pagesize = <32>;
 		vcc-supply = <&mt6358_vcamio_reg>;
 		device-id = <0>;
