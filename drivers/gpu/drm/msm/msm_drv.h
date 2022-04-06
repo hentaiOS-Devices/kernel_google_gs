@@ -53,13 +53,6 @@ struct msm_disp_state;
 
 #define FRAC_16_16(mult, div)    (((mult) << 16) / (div))
 
-enum msm_mdp_plane_property {
-	PLANE_PROP_ZPOS,
-	PLANE_PROP_ALPHA,
-	PLANE_PROP_PREMULTIPLIED,
-	PLANE_PROP_MAX_NUM
-};
-
 enum msm_dp_controller {
 	MSM_DP_CONTROLLER_0,
 	MSM_DP_CONTROLLER_1,
@@ -224,9 +217,6 @@ struct msm_drm_private {
 
 	unsigned int num_connectors;
 	struct drm_connector *connectors[MAX_CONNECTORS];
-
-	/* Properties */
-	struct drm_property *plane_property[PLANE_PROP_MAX_NUM];
 
 	/* VRAM carveout, used when no IOMMU: */
 	struct {
