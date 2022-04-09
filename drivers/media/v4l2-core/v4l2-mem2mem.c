@@ -606,7 +606,7 @@ int v4l2_m2m_querybuf(struct file *file, struct v4l2_m2m_ctx *m2m_ctx,
 		      struct v4l2_buffer *buf)
 {
 	struct vb2_queue *vq;
-	int ret = 0;
+	int ret;
 
 	vq = v4l2_m2m_get_vq(m2m_ctx, buf->type);
 	ret = vb2_querybuf(vq, buf);
