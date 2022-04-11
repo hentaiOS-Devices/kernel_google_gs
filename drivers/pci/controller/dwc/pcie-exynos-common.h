@@ -311,6 +311,7 @@ struct exynos_pcie {
 
 	bool use_phy_isol_con;
 	int phy_control;
+	struct logbuffer *log;
 };
 
 #define PCIE_MAX_MSI_NUM	(8)
