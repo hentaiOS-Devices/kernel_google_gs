@@ -324,6 +324,17 @@ static int s0ix_stats_show(struct seq_file *s, void *unused)
 	struct amd_pmc_dev *dev = s->private;
 	u64 entry_time, exit_time, residency;
 
+	/* Use FCH registers to get the S0ix stats */
+	if (!dev->fch_virt_addr) {
+		u32 base_addr_lo = FCH_BASE_PHY_ADDR_LOW;
+		u32 base_addr_hi = FCH_BASE_PHY_ADDR_HIGH;
+		u64 fch_phys_addr = ((u64)base_addr_hi << 32 | base_addr_lo);
+
+		dev->fch_virt_addr = devm_ioremap(dev->dev, fch_phys_addr, FCH_SSC_MAPPING_SIZE);
+		if (!dev->fch_virt_addr)
+			return -ENOMEM;
+	}
+
 	entry_time = ioread32(dev->fch_virt_addr + FCH_S0I3_ENTRY_TIME_H_OFFSET);
 	entry_time = entry_time << 32 | ioread32(dev->fch_virt_addr + FCH_S0I3_ENTRY_TIME_L_OFFSET);
 
@@ -683,7 +694,7 @@ static int amd_pmc_probe(struct platform_device *pdev)
 	struct amd_pmc_dev *dev = &pmc;
 	struct pci_dev *rdev;
 	u32 base_addr_lo, base_addr_hi;
-	u64 base_addr, fch_phys_addr;
+	u64 base_addr;
 	int err;
 	u32 val;
 
@@ -736,16 +747,6 @@ static int amd_pmc_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&dev->lock);
-
-	/* Use FCH registers to get the S0ix stats */
-	base_addr_lo = FCH_BASE_PHY_ADDR_LOW;
-	base_addr_hi = FCH_BASE_PHY_ADDR_HIGH;
-	fch_phys_addr = ((u64)base_addr_hi << 32 | base_addr_lo);
-	dev->fch_virt_addr = devm_ioremap(dev->dev, fch_phys_addr, FCH_SSC_MAPPING_SIZE);
-	if (!dev->fch_virt_addr) {
-		err = -ENOMEM;
-		goto err_pci_dev_put;
-	}
 
 	amd_pmc_get_smu_version(dev);
 	platform_set_drvdata(pdev, dev);
