@@ -224,10 +224,18 @@ static int avs_cldma_load_module(struct avs_dev *adev, struct avs_module_entry *
 	if (ret < 0)
 		return ret;
 
+	avs_hda_power_gating_enable(adev, false);
+	avs_hda_clock_gating_enable(adev, false);
+	avs_hda_l1sen_enable(adev, false);
+
 	hda_cldma_set_data(cl, (void *)mod->data, mod->size);
 	hda_cldma_transfer(cl, msecs_to_jiffies(AVS_CLDMA_START_DELAY_MS));
 	ret = avs_ipc_load_modules(adev, &mentry->module_id, 1);
 	hda_cldma_stop(cl);
+
+	avs_hda_l1sen_enable(adev, true);
+	avs_hda_clock_gating_enable(adev, true);
+	avs_hda_power_gating_enable(adev, true);
 
 	if (ret) {
 		dev_err(adev->dev, "load module %d failed: %d\n", mentry->module_id, ret);
