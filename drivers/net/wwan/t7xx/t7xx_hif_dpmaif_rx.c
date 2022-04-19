@@ -760,6 +760,11 @@ static void t7xx_dpmaif_rx_skb(struct dpmaif_rx_queue *rxq,
 	skb->ip_summed = skb_info->check_sum == DPMAIF_CS_RESULT_PASS ? CHECKSUM_UNNECESSARY :
 									CHECKSUM_NONE;
 
+	netif_id = FIELD_GET(NETIF_MASK, skb_info->cur_chn_idx);
+	skb_cb = T7XX_SKB_CB(skb);
+	skb_cb->netif_idx = netif_id;
+	skb_cb->rx_pkt_type = skb_info->pkt_type;
+
 	if (dpmaif_ctrl->napi_enable) {
 		struct dpmaif_callbacks *cb = dpmaif_ctrl->callbacks;
 
@@ -767,10 +772,6 @@ static void t7xx_dpmaif_rx_skb(struct dpmaif_rx_queue *rxq,
 		return;
 	}
 
-	netif_id = FIELD_GET(NETIF_MASK, skb_info->cur_chn_idx);
-	skb_cb = T7XX_SKB_CB(skb);
-	skb_cb->netif_idx = netif_id;
-	skb_cb->rx_pkt_type = skb_info->pkt_type;
 	t7xx_dpmaif_rx_skb_enqueue(rxq, skb);
 }
 
