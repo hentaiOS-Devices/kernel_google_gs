@@ -2406,17 +2406,17 @@ static int regulator_ena_gpio_ctrl(struct regulator_dev *rdev, bool enable)
 }
 
 /**
- * _regulator_enable_delay - a delay helper function
+ * _regulator_delay_helper - a delay helper function
  * @delay: time to delay in microseconds
  *
  * Delay for the requested amount of time as per the guidelines in:
  *
  *     Documentation/timers/timers-howto.rst
  *
- * The assumption here is that regulators will never be enabled in
+ * The assumption here is that these regulator operations will never used in
  * atomic context and therefore sleeping functions can be used.
  */
-static void _regulator_enable_delay(unsigned int delay)
+static void _regulator_delay_helper(unsigned int delay)
 {
 	unsigned int ms = delay / 1000;
 	unsigned int us = delay % 1000;
@@ -2506,11 +2506,11 @@ static int _regulator_do_enable(struct regulator_dev *rdev)
 			 * in case of multiple timer wrapping, either it can be
 			 * detected by out-of-range remaining, or it cannot be
 			 * detected and we get a penalty of
-			 * _regulator_enable_delay().
+			 * _regulator_delay_helper().
 			 */
 			remaining = intended - start_jiffy;
 			if (remaining <= max_delay)
-				_regulator_enable_delay(
+				_regulator_delay_helper(
 						jiffies_to_usecs(remaining));
 		}
 	}
@@ -2538,14 +2538,14 @@ static int _regulator_do_enable(struct regulator_dev *rdev)
 	/* If poll_enabled_time is set, poll upto the delay calculated
 	 * above, delaying poll_enabled_time uS to check if the regulator
 	 * actually got enabled.
-	 * If the regulator isn't enabled after enable_delay has
-	 * expired, return -ETIMEDOUT.
+	 * If the regulator isn't enabled after our delay helper has expired,
+	 * return -ETIMEDOUT.
 	 */
 	if (rdev->desc->poll_enabled_time) {
 		unsigned int time_remaining = delay;
 
 		while (time_remaining > 0) {
-			_regulator_enable_delay(rdev->desc->poll_enabled_time);
+			_regulator_delay_helper(rdev->desc->poll_enabled_time);
 
 			if (rdev->desc->ops->get_status) {
 				ret = _regulator_check_status_enabled(rdev);
@@ -2564,7 +2564,7 @@ static int _regulator_do_enable(struct regulator_dev *rdev)
 			return -ETIMEDOUT;
 		}
 	} else {
-		_regulator_enable_delay(delay);
+		_regulator_delay_helper(delay);
 	}
 
 	trace_regulator_enable_complete(rdev_get_name(rdev));
