@@ -103,6 +103,7 @@ static int cs35l41_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct snd_soc_dai *codec_dai;
 	int clk_freq, i, ret;
+	int rx_ch[2] = {1, 0};
 
 	clk_freq = sof_dai_get_bclk(rtd); /* BCLK freq */
 
@@ -129,6 +130,17 @@ static int cs35l41_hw_params(struct snd_pcm_substream *substream,
 			dev_err(codec_dai->dev, "fail to set component sysclk, ret %d\n",
 				ret);
 			return ret;
+		}
+
+		/* Setup for R channel Slot: WR and TR */
+		if (i % 2) {
+			ret = snd_soc_dai_set_channel_map(codec_dai, 0, NULL,
+							  ARRAY_SIZE(rx_ch), rx_ch);
+			if (ret < 0) {
+				dev_err(codec_dai->dev, "fail to set channel map, ret %d\n",
+					ret);
+				return ret;
+			}
 		}
 	}
 
