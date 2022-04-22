@@ -636,7 +636,6 @@ static int ath11k_wow_protocol_offload(struct ath11k *ar, bool enable)
 	return 0;
 }
 
-#ifdef CONFIG_PM
 int ath11k_wow_op_suspend(struct ieee80211_hw *hw,
 			  struct cfg80211_wowlan *wowlan)
 {
@@ -831,4 +830,3 @@ int ath11k_wow_init(struct ath11k *ar)
 
 	return 0;
 }
-#endif
