@@ -678,7 +678,7 @@ config HID_MONTEREY
 
 config HID_MULTITOUCH
 	tristate "HID Multitouch panels"
-	depends on HID
+	depends on HID && I2C_HID_CORE
 	help
 	  Generic support for HID multitouch panels.
 
