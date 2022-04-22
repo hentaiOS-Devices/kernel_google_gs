@@ -84,6 +84,3 @@ obj-$(CONFIG_SND_SOC_INTEL_HDA_DSP_COMMON) += snd-soc-intel-hda-dsp-common.o
 
 snd-soc-intel-sof-maxim-common-objs += sof_maxim_common.o
 obj-$(CONFIG_SND_SOC_INTEL_SOF_MAXIM_COMMON) += snd-soc-intel-sof-maxim-common.o
-
-snd-soc-intel-sof-cirrus-common-objs += sof_cirrus_common.o
-obj-$(CONFIG_SND_SOC_INTEL_SOF_CIRRUS_COMMON) += snd-soc-intel-sof-cirrus-common.o
