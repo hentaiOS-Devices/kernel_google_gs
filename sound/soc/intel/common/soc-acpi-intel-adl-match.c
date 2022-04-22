@@ -377,13 +377,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_machines[] = {
 		.sof_fw_filename = "sof-adl.ri",
 		.sof_tplg_filename = "sof-adl-rt5682.tplg",
 	},
-	/* place amp-only boards in the end of table */
-	{
-		.id = "CSC3541",
-		.drv_name = "adl_cs35l41",
-		.sof_fw_filename = "sof-adl.ri",
-		.sof_tplg_filename = "sof-adl-cs35l41.tplg",
-	},
 	{
 		.id = "10134242",
 		.drv_name = "adl_mx98360a_cs4242",
