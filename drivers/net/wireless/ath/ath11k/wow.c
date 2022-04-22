@@ -15,6 +15,16 @@
 #include "wow.h"
 #include "dp_rx.h"
 
+static const struct wiphy_wowlan_support ath11k_wowlan_support = {
+	.flags = WIPHY_WOWLAN_DISCONNECT |
+		 WIPHY_WOWLAN_MAGIC_PKT |
+		 WIPHY_WOWLAN_SUPPORTS_GTK_REKEY |
+		 WIPHY_WOWLAN_GTK_REKEY_FAILURE,
+	.pattern_min_len = WOW_MIN_PATTERN_SIZE,
+	.pattern_max_len = WOW_MAX_PATTERN_SIZE,
+	.max_pkt_offset = WOW_MAX_PKT_OFFSET,
+};
+
 int ath11k_wow_enable(struct ath11k_base *ab)
 {
 	struct ath11k *ar = ath11k_ab_to_ar(ab, 0);
@@ -74,17 +84,6 @@ int ath11k_wow_wakeup(struct ath11k_base *ab)
 
 	return 0;
 }
-
-#ifdef CONFIG_PM
-static const struct wiphy_wowlan_support ath11k_wowlan_support = {
-	.flags = WIPHY_WOWLAN_DISCONNECT |
-		 WIPHY_WOWLAN_MAGIC_PKT |
-		 WIPHY_WOWLAN_SUPPORTS_GTK_REKEY |
-		 WIPHY_WOWLAN_GTK_REKEY_FAILURE,
-	.pattern_min_len = WOW_MIN_PATTERN_SIZE,
-	.pattern_max_len = WOW_MAX_PATTERN_SIZE,
-	.max_pkt_offset = WOW_MAX_PKT_OFFSET,
-};
 
 static int ath11k_wow_vif_cleanup(struct ath11k_vif *arvif)
 {
@@ -637,6 +636,7 @@ static int ath11k_wow_protocol_offload(struct ath11k *ar, bool enable)
 	return 0;
 }
 
+#ifdef CONFIG_PM
 int ath11k_wow_op_suspend(struct ieee80211_hw *hw,
 			  struct cfg80211_wowlan *wowlan)
 {
