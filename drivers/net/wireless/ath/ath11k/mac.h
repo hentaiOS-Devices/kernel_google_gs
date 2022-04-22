@@ -174,5 +174,4 @@ void ath11k_mac_handle_beacon_miss(struct ath11k *ar, u32 vdev_id);
 void ath11k_mac_fill_reg_tpc_info(struct ath11k *ar,
 				  struct ieee80211_vif *vif,
 				  struct ieee80211_chanctx_conf *ctx);
-int ath11k_mac_wait_tx_complete(struct ath11k *ar);
 #endif
