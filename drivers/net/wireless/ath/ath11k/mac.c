@@ -6067,15 +6067,9 @@ void ath11k_mac_11d_scan_start(struct ath11k *ar, u32 vdev_id)
 		ar->vdev_id_11d_scan = vdev_id;
 		if (ar->state_11d == ATH11K_11D_PREPARING)
 			ar->state_11d = ATH11K_11D_RUNNING;
-		goto ret;
 	}
 
 fin:
-	if (ar->state_11d == ATH11K_11D_PREPARING) {
-		ar->state_11d = ATH11K_11D_IDLE;
-		complete(&ar->completed_11d_scan);
-	}
-ret:
 	mutex_unlock(&ar->ab->vdev_id_11d_lock);
 }
 
