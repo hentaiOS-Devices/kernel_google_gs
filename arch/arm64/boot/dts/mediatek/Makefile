@@ -54,6 +54,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-evb.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-dojo-rev0.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-dojo-rev1-sku0-sku2.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-dojo-rev1-sku1-sku3.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-dojo-rev2-sku0-sku2.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-tomato-rev1.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-tomato-rev2.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8195-tomato-rev3.dtb
