@@ -1993,7 +1993,7 @@ static int mt_suspend(struct hid_device *hdev, pm_message_t state)
 	mutex_unlock(&td->mode_mutex);
 
 	if (td->is_haptic_touchpad)
-		hid_haptic_resume(hdev, haptic);
+		hid_haptic_suspend(hdev, haptic);
 
 	return 0;
 }
@@ -2031,7 +2031,7 @@ static int mt_resume(struct hid_device *hdev)
 	mutex_unlock(&td->mode_mutex);
 
 	if (td->is_haptic_touchpad)
-		hid_haptic_suspend(hdev, haptic);
+		hid_haptic_resume(hdev, haptic);
 
 	return 0;
 }
