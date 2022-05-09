@@ -3136,6 +3136,8 @@ irqreturn_t xhci_irq(struct usb_hcd *hcd)
 		if (xhci->isoc_bei_interval > AVOID_BEI_INTERVAL_MIN)
 			xhci->isoc_bei_interval = xhci->isoc_bei_interval / 2;
 
+		event_ring_deq = xhci->event_ring->dequeue;
+
 		event_loop = 0;
 	}
 
