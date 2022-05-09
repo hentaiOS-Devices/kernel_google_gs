@@ -50,6 +50,16 @@
 	};
 };
 
+&mmc1_pins_uhs {
+	pins_cmd_dat {
+		drive-strength = <MTK_DRIVE_10mA>;
+	};
+
+	pins_clk {
+		drive-strength = <MTK_DRIVE_10mA>;
+	};
+};
+
 &pcie0 {
 	status = "okay";
 };
