@@ -842,6 +842,7 @@ struct mfc_platdata {
 	struct mfc_feature hevc_pic_output_flag;
 	struct mfc_feature metadata_interface;
 	struct mfc_feature hdr10_plus_full;
+	struct mfc_feature enc_capability;
 
 	/* AV1 Decoder */
 	unsigned int support_av1_dec;
@@ -1075,7 +1076,12 @@ typedef struct __EncoderOutputStr {
 	unsigned int ReconLumaDpbAddr;
 	unsigned int ReconChromaDpbAddr;
 	int EncCnt;
-} EncoderOutputStr; /* 16*4 = 64 bytes */
+	unsigned int MfcHwCycle;
+	unsigned int MfcProcessingCycle;
+	unsigned int SumSkipMb;
+	unsigned int SumIntraMb;
+	unsigned int SumZeroMvMb;
+} EncoderOutputStr; /* 21*4 = 84 bytes */
 
 /**
  * enum nal_queue_state - The state for nal queue operation.
