@@ -1709,6 +1709,11 @@ static int ov8856_identify_module(struct ov8856 *ov8856)
 		return -ENXIO;
 	}
 
+	/*
+	 * TODO(b/234095445): Re-enable OTP read when the root
+	 * cause of streaming error is fixed.
+	 */
+#if 0
 	ret = ov8856_write_reg(ov8856, OV8856_REG_MODE_SELECT,
 			       OV8856_REG_VALUE_08BIT, OV8856_MODE_STREAMING);
 	if (ret)
@@ -1748,6 +1753,7 @@ static int ov8856_identify_module(struct ov8856 *ov8856)
 		dev_err(&client->dev, "failed to exit streaming mode");
 		return ret;
 	}
+#endif
 
 	ov8856->identified = true;
 
