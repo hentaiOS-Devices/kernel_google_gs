@@ -877,6 +877,7 @@ static int mt79xx_setup(struct hci_dev *hdev, const char *fwname)
 	}
 
 	hci_set_msft_opcode(hdev, 0xFD30);
+	hci_set_aosp_capable(hdev);
 	set_bit(BTMTKSDIO_PATCH_ENABLED, &bdev->tx_state);
 
 	return err;
