@@ -214,7 +214,7 @@ static void thr_update_throttling(struct throttler *thr)
 		clamp_freq = thr_get_throttling_freq(&target->freq_table,
 						     thr->level);
 		if (target->dev) {
-			dev_dbg(thr->dev, "Clamping target '%s' to %d kHz\n",
+			dev_dbg(thr->dev, "Clamping target '%s' to %lu kHz\n",
 				dev_name(target->dev), clamp_freq);
 			err = dev_pm_qos_update_request(&target->dev_req,
 							clamp_freq);
