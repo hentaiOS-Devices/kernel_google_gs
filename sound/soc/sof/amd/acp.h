@@ -89,9 +89,9 @@ struct dma_descriptor {
 /* Scratch memory structure for communication b/w host and dsp */
 struct  scratch_ipc_conf {
 	/* DSP mailbox */
-	u8 sof_out_box[512];
+	u8 sof_out_box[1024];
 	/* Host mailbox */
-	u8 sof_in_box[512];
+	u8 sof_in_box[1024];
 	/* Debug memory */
 	u8 sof_debug_box[1024];
 	/* Exception memory*/
