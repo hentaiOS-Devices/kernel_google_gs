@@ -1244,6 +1244,18 @@ void eh_destroy(struct eh_device *eh_dev)
 }
 EXPORT_SYMBOL(eh_destroy);
 
+static int eh_s2mpu_suspend(struct eh_device *eh_dev)
+{
+	return (IS_ENABLED(CONFIG_PKVM_S2MPU) && eh_dev->s2mpu)
+		? pkvm_s2mpu_suspend(eh_dev->s2mpu) : 0;
+}
+
+static int eh_s2mpu_resume(struct eh_device *eh_dev)
+{
+	return (IS_ENABLED(CONFIG_PKVM_S2MPU) && eh_dev->s2mpu)
+		? pkvm_s2mpu_resume(eh_dev->s2mpu) : 0;
+}
+
 #ifdef CONFIG_OF
 static int eh_of_probe(struct platform_device *pdev)
 {
@@ -1253,14 +1265,19 @@ static int eh_of_probe(struct platform_device *pdev)
 	int error_irq = 0;
 	unsigned short quirks = 0;
 	struct clk *clk;
+	struct device *s2mpu = NULL;
 	int sw_fifo_size = EH_SW_FIFO_SIZE;
 
 	if (IS_ENABLED(CONFIG_PKVM_S2MPU)) {
-		ret = pkvm_s2mpu_of_link(&pdev->dev);
-		if (ret == -EAGAIN)
+		s2mpu = pkvm_s2mpu_of_parse(&pdev->dev);
+		if (IS_ERR(s2mpu)) {
+			dev_err(&pdev->dev, "pkvm_s2mpu_of_parse returned: %ld\n",
+				PTR_ERR(s2mpu));
+			return PTR_ERR(s2mpu);
+		}
+		if (s2mpu && !pkvm_s2mpu_ready(s2mpu)) {
 			return -EPROBE_DEFER;
-		else if (ret)
-			return ret;
+		}
 	}
 
 	pr_info("starting probing\n");
@@ -1304,6 +1321,11 @@ static int eh_of_probe(struct platform_device *pdev)
 	if (ret)
 		goto free_ehdev;
 
+	eh_dev->s2mpu = s2mpu;
+	ret = eh_s2mpu_resume(eh_dev);
+	if (ret)
+		dev_err(&pdev->dev, "could not resume s2mpu: %d", ret);
+
 	eh_dev->clk = clk;
 	platform_set_drvdata(pdev, eh_dev);
 
@@ -1342,6 +1364,7 @@ static int eh_suspend(struct device *dev)
 {
 	unsigned long data;
 	struct eh_device *eh_dev = dev_get_drvdata(dev);
+	int ret;
 
 	/* check pending work */
 	if (atomic_read(&eh_dev->nr_request) > 0) {
@@ -1361,6 +1384,11 @@ static int eh_suspend(struct device *dev)
 
 	/* disable EH clock */
 	clk_disable_unprepare(eh_dev->clk);
+
+	ret = eh_s2mpu_suspend(eh_dev);
+	if (ret)
+		dev_err(dev, "could not suspend s2mpu: %d", ret);
+
 	dev_dbg(dev, "EH suspended\n");
 
 	return 0;
@@ -1369,6 +1397,11 @@ static int eh_suspend(struct device *dev)
 static int eh_resume(struct device *dev)
 {
 	struct eh_device *eh_dev = dev_get_drvdata(dev);
+	int ret;
+
+	ret = eh_s2mpu_resume(eh_dev);
+	if (ret)
+		dev_err(dev, "could not resume s2mpu: %d", ret);
 
 	/* re-enable EH clock */
 	clk_prepare_enable(eh_dev->clk);
