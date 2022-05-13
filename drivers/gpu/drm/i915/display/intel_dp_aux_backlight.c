@@ -553,58 +553,56 @@ intel_dp_aux_vesa_enable_backlight(const struct intel_crtc_state *crtc_state,
 	u8 dpcd_buf, new_dpcd_buf, edp_backlight_mode;
 	u8 pwmgen_bit_count = panel->backlight.edp.vesa.pwmgen_bit_count;
 
-	if (intel_dp->edp_dpcd[1] & DP_EDP_BACKLIGHT_AUX_ENABLE_CAP) {
-		if (drm_dp_dpcd_readb(&intel_dp->aux,
-				DP_EDP_BACKLIGHT_MODE_SET_REGISTER, &dpcd_buf) != 1) {
-			drm_dbg_kms(&i915->drm, "Failed to read DPCD register 0x%x\n",
-					DP_EDP_BACKLIGHT_MODE_SET_REGISTER);
-			return;
+	if (drm_dp_dpcd_readb(&intel_dp->aux,
+			DP_EDP_BACKLIGHT_MODE_SET_REGISTER, &dpcd_buf) != 1) {
+		drm_dbg_kms(&i915->drm, "Failed to read DPCD register 0x%x\n",
+			    DP_EDP_BACKLIGHT_MODE_SET_REGISTER);
+		return;
+	}
+
+	new_dpcd_buf = dpcd_buf;
+	edp_backlight_mode = dpcd_buf & DP_EDP_BACKLIGHT_CONTROL_MODE_MASK;
+
+	switch (edp_backlight_mode) {
+	case DP_EDP_BACKLIGHT_CONTROL_MODE_PWM:
+	case DP_EDP_BACKLIGHT_CONTROL_MODE_PRESET:
+	case DP_EDP_BACKLIGHT_CONTROL_MODE_PRODUCT:
+		new_dpcd_buf &= ~DP_EDP_BACKLIGHT_CONTROL_MODE_MASK;
+		new_dpcd_buf |= DP_EDP_BACKLIGHT_CONTROL_MODE_DPCD;
+
+		if (drm_dp_dpcd_writeb(&intel_dp->aux,
+				       DP_EDP_PWMGEN_BIT_COUNT,
+				       pwmgen_bit_count) < 0)
+			drm_dbg_kms(&i915->drm,
+				    "Failed to write aux pwmgen bit count\n");
+
+		break;
+
+	/* Do nothing when it is already DPCD mode */
+	case DP_EDP_BACKLIGHT_CONTROL_MODE_DPCD:
+	default:
+		break;
+	}
+
+	if (i915_modparams.enable_dbc &&
+	    (intel_dp->edp_dpcd[2] & DP_EDP_DYNAMIC_BACKLIGHT_CAP)) {
+		if (intel_dp_aux_set_dynamic_backlight_percent(intel_dp,
+						0, 100)) {
+			new_dpcd_buf |= DP_EDP_DYNAMIC_BACKLIGHT_ENABLE;
+			drm_dbg_kms(&i915->drm,
+				    "Enable dynamic brightness.\n");
 		}
+	}
 
-		new_dpcd_buf = dpcd_buf;
-		edp_backlight_mode = dpcd_buf & DP_EDP_BACKLIGHT_CONTROL_MODE_MASK;
+	if (intel_dp->edp_dpcd[2] & DP_EDP_BACKLIGHT_FREQ_AUX_SET_CAP)
+		if (intel_dp_aux_vesa_set_pwm_freq(connector))
+			new_dpcd_buf |= DP_EDP_BACKLIGHT_FREQ_AUX_SET_ENABLE;
 
-		switch (edp_backlight_mode) {
-		case DP_EDP_BACKLIGHT_CONTROL_MODE_PWM:
-		case DP_EDP_BACKLIGHT_CONTROL_MODE_PRESET:
-		case DP_EDP_BACKLIGHT_CONTROL_MODE_PRODUCT:
-			new_dpcd_buf &= ~DP_EDP_BACKLIGHT_CONTROL_MODE_MASK;
-			new_dpcd_buf |= DP_EDP_BACKLIGHT_CONTROL_MODE_DPCD;
-
-			if (drm_dp_dpcd_writeb(&intel_dp->aux,
-						   DP_EDP_PWMGEN_BIT_COUNT,
-						   pwmgen_bit_count) < 0)
-				drm_dbg_kms(&i915->drm,
-						"Failed to write aux pwmgen bit count\n");
-
-			break;
-
-		/* Do nothing when it is already DPCD mode */
-		case DP_EDP_BACKLIGHT_CONTROL_MODE_DPCD:
-		default:
-			break;
-		}
-
-		if (i915_modparams.enable_dbc &&
-			(intel_dp->edp_dpcd[2] & DP_EDP_DYNAMIC_BACKLIGHT_CAP)) {
-			if (intel_dp_aux_set_dynamic_backlight_percent(intel_dp,
-							0, 100)) {
-				new_dpcd_buf |= DP_EDP_DYNAMIC_BACKLIGHT_ENABLE;
-				drm_dbg_kms(&i915->drm,
-						"Enable dynamic brightness.\n");
-			}
-		}
-
-		if (intel_dp->edp_dpcd[2] & DP_EDP_BACKLIGHT_FREQ_AUX_SET_CAP)
-			if (intel_dp_aux_vesa_set_pwm_freq(connector))
-				new_dpcd_buf |= DP_EDP_BACKLIGHT_FREQ_AUX_SET_ENABLE;
-
-		if (new_dpcd_buf != dpcd_buf) {
-			if (drm_dp_dpcd_writeb(&intel_dp->aux,
-				DP_EDP_BACKLIGHT_MODE_SET_REGISTER, new_dpcd_buf) < 0) {
-				drm_dbg_kms(&i915->drm,
-						"Failed to write aux backlight mode\n");
-			}
+	if (new_dpcd_buf != dpcd_buf) {
+		if (drm_dp_dpcd_writeb(&intel_dp->aux,
+			DP_EDP_BACKLIGHT_MODE_SET_REGISTER, new_dpcd_buf) < 0) {
+			drm_dbg_kms(&i915->drm,
+				    "Failed to write aux backlight mode\n");
 		}
 	}
 
@@ -725,8 +723,12 @@ intel_dp_aux_supports_vesa_backlight(struct intel_connector *connector)
 	/* Check the eDP Display control capabilities registers to determine if
 	 * the panel can support backlight control over the aux channel.
 	 *
+	 * TODO: We currently only support AUX only backlight configurations, not backlights which
+	 * require a mix of PWM and AUX controls to work. In the mean time, these machines typically
+	 * work just fine using normal PWM controls anyway.
 	 */
 	if ((intel_dp->edp_dpcd[1] & DP_EDP_TCON_BACKLIGHT_ADJUSTMENT_CAP) &&
+	    (intel_dp->edp_dpcd[1] & DP_EDP_BACKLIGHT_AUX_ENABLE_CAP) &&
 	    (intel_dp->edp_dpcd[2] & DP_EDP_BACKLIGHT_BRIGHTNESS_AUX_SET_CAP)) {
 		drm_dbg_kms(&i915->drm, "AUX Backlight Control Supported!\n");
 		return true;
