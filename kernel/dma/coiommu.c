@@ -280,7 +280,7 @@ static void unmark_sg_pfns(struct coiommu_dtt *dtt,
 	int i;
 
 	for_each_sg(sgl, sg, nents, i) {
-		phys_addr = sg_phys(sg);
+		phys_addr = sg->dma_address;
 		pfn = phys_addr >> PAGE_SHIFT;
 		nr_pages = get_aligned_nrpages(phys_addr, sg->length);
 		read_lock(&dtt->lock);
@@ -463,7 +463,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 		return -ENODEV;
 
 	for_each_sg(sgl, sg, nents, i) {
-		phys_addr = sg_phys(sg);
+		phys_addr = sg->dma_address;
 		nr_pages +=  get_aligned_nrpages(phys_addr, sg->length);
 	}
 
@@ -480,7 +480,7 @@ static int pin_and_mark_sg_list(struct device *dev,
 	}
 
 	for_each_sg(sgl, sg, nents, i) {
-		phys_addr = sg_phys(sg);
+		phys_addr = sg->dma_address;
 		pfn = phys_addr >> PAGE_SHIFT;
 		nr_pages = get_aligned_nrpages(phys_addr, sg->length);
 
