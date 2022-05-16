@@ -220,19 +220,19 @@ static void thr_update_throttling(struct throttler *thr)
 							clamp_freq);
 			if (err < 0)
 				dev_err(thr->dev,
-					"Failed to set QoS for device '%s' / %d kHz\n",
+					"Failed to set QoS for device '%s' / %lu kHz\n",
 					dev_name(target->dev), clamp_freq);
 		} else {
 			struct cpufreq_policy *policy = target->policy;
 
 			dev_dbg(thr->dev,
-				"Clamping policy for CPU%d to %d kHz\n",
+				"Clamping policy for CPU%d to %lu kHz\n",
 				policy->cpu, clamp_freq);
 			err = freq_qos_update_request(&target->freq_req,
 						      clamp_freq);
 			if (err < 0)
 				dev_err(thr->dev,
-					"Failed to set QoS for CPU%d / %d kHz\n",
+					"Failed to set QoS for CPU%d / %lu kHz\n",
 					policy->cpu, clamp_freq);
 		}
 	}
