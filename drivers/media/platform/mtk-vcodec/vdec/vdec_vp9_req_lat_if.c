@@ -1944,7 +1944,7 @@ static int vdec_vp9_slice_lat_decode(void *h_vdec,
 	}
 	vdec_vp9_slice_vsi_to_remote(vsi, instance->vsi);
 
-	ret = vpu_dec_start(&instance->vpu, NULL, 0);
+	ret = vpu_dec_start(&instance->vpu, 0, 0);
 	if (ret) {
 		mtk_vcodec_err(instance,
 			"Failed to dec VP9 ret %d\n", ret);
