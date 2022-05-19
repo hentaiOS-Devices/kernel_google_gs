@@ -192,6 +192,7 @@ struct mtk_vcodec_pm {
 	struct mtk_vcodec_clk	vdec_clk;
 	struct mtk_vcodec_clk	venc_clk;
 	struct device	*dev;
+	struct mtk_vcodec_dev	*mtkdev;
 };
 
 /**
