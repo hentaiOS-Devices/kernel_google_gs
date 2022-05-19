@@ -1985,8 +1985,8 @@ static int vdec_vp9_slice_lat_decode(void *h_vdec,
 		return -EBUSY;
 	}
 
-	mtk_vcodec_debug(instance, "lat dma 1 0x%pad 0x%pad\n",
-		&pfc->vsi.trans.dma_addr, &pfc->vsi.trans.dma_addr_end);
+	mtk_vcodec_debug(instance, "lat dma 1 0x%llx 0x%llx\n",
+		pfc->vsi.trans.dma_addr, pfc->vsi.trans.dma_addr_end);
 
 	vdec_msg_queue_update_ube_wptr(&ctx->msg_queue,
 		vsi->trans.dma_addr_end  + ctx->msg_queue.wdma_addr.dma_addr);
@@ -2055,8 +2055,8 @@ static int vdec_vp9_slice_core_decode(
 	}
 
 	pfc->vsi.trans.dma_addr_end += ctx->msg_queue.wdma_addr.dma_addr;
-	mtk_vcodec_debug(instance, "core dma_addr_end 0x%pad\n",
-		&pfc->vsi.trans.dma_addr_end);
+	mtk_vcodec_debug(instance, "core dma_addr_end 0x%llx\n",
+		pfc->vsi.trans.dma_addr_end);
 	vdec_msg_queue_update_ube_rptr(&ctx->msg_queue,
 		pfc->vsi.trans.dma_addr_end);
 	ctx->dev->vdec_pdata->cap_to_disp(ctx, fb, 0);
