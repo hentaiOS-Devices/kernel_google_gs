@@ -20,13 +20,7 @@ int vdec_if_init(struct mtk_vcodec_ctx *ctx, unsigned int fourcc)
 
 	switch (fourcc) {
 	case V4L2_PIX_FMT_H264_SLICE:
-		if (ctx->dev->vdec_pdata->hw_arch == MTK_VDEC_PURE_SINGLE_CORE) {
-			ctx->dec_if = &vdec_h264_slice_if;
-			ctx->hw_id = MTK_VDEC_CORE;
-		} else {
-			ctx->dec_if = &vdec_h264_slice_lat_if;
-			ctx->hw_id = MTK_VDEC_LAT0;
-		}
+		ctx->dec_if = &vdec_h264_slice_if;
 		break;
 	case V4L2_PIX_FMT_H264:
 		ctx->dec_if = &vdec_h264_if;
