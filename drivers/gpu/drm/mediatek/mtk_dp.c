@@ -2738,7 +2738,7 @@ mtk_dp_bridge_mode_valid(struct drm_bridge *bridge,
 	u32 rx_linkrate;
 	u32 bpp;
 
-	bpp = info->color_formats & DRM_COLOR_FORMAT_YCRCB422 ? 16 : 24;
+	bpp = info->color_formats & DRM_COLOR_FORMAT_YCBCR422 ? 16 : 24;
 	rx_linkrate = (u32)mtk_dp->train_info.link_rate * 27000;
 	if (rx_linkrate * mtk_dp->train_info.lane_count < mode->clock * bpp / 8)
 		return MODE_CLOCK_HIGH;
@@ -2803,7 +2803,7 @@ static u32 *mtk_dp_bridge_atomic_get_input_bus_fmts(
 	     (mode->clock * 24 / 8)) &&
 	    ((rx_linkrate * mtk_dp->train_info.lane_count) >
 	     (mode->clock * 16 / 8)) &&
-	    (display_info->color_formats & DRM_COLOR_FORMAT_YCRCB422)) {
+	    (display_info->color_formats & DRM_COLOR_FORMAT_YCBCR422)) {
 		kfree(input_fmts);
 		input_fmts = kcalloc(1, sizeof(*input_fmts), GFP_KERNEL);
 		*num_input_fmts = 1;
