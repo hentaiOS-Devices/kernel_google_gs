@@ -35,8 +35,6 @@ enum vdec_ipi_msgid {
  * @msg_id	: vdec_ipi_msgid
  * @vpu_inst_addr : VPU decoder instance address. Used if ABI version < 2.
  * @inst_id     : instance ID. Used if the ABI version >= 2.
- * @codec_type	: Codec fourcc
- * @reserved	: reserved param
  */
 struct vdec_ap_ipi_cmd {
 	uint32_t msg_id;
@@ -44,8 +42,6 @@ struct vdec_ap_ipi_cmd {
 		uint32_t vpu_inst_addr;
 		uint32_t inst_id;
 	};
-	uint32_t codec_type;
-	uint32_t reserved;
 };
 
 /**
@@ -63,12 +59,12 @@ struct vdec_vpu_ipi_ack {
 /**
  * struct vdec_ap_ipi_init - for AP_IPIMSG_DEC_INIT
  * @msg_id	: AP_IPIMSG_DEC_INIT
- * @codec_type	: Codec fourcc
+ * @reserved	: Reserved field
  * @ap_inst_addr	: AP video decoder instance address
  */
 struct vdec_ap_ipi_init {
 	uint32_t msg_id;
-	uint32_t codec_type;
+	uint32_t reserved;
 	uint64_t ap_inst_addr;
 };
 
@@ -81,7 +77,7 @@ struct vdec_ap_ipi_init {
  *	H264 decoder [0]:buf_sz [1]:nal_start
  *	VP8 decoder  [0]:width/height
  *	VP9 decoder  [0]:profile, [1][2] width/height
- * @codec_type	: Codec fourcc
+ * @reserved	: Reserved field
  */
 struct vdec_ap_ipi_dec_start {
 	uint32_t msg_id;
@@ -90,7 +86,7 @@ struct vdec_ap_ipi_dec_start {
 		uint32_t inst_id;
 	};
 	uint32_t data[3];
-	uint32_t codec_type;
+	uint32_t reserved;
 };
 
 /**
