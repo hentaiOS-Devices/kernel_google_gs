@@ -291,7 +291,7 @@ static int vdec_h264_slice_init(struct mtk_vcodec_ctx *ctx)
 	if (err)
 		goto error_deinit;
 
-	mtk_vcodec_debug(inst, "struct size = %zd,%zd,%zd,%zd\n",
+	mtk_vcodec_debug(inst, "struct size = %ld,%ld,%ld,%ld\n",
 		sizeof(struct mtk_h264_sps_param),
 		sizeof(struct mtk_h264_pps_param),
 		sizeof(struct mtk_h264_dec_slice_param),
