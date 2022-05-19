@@ -39,10 +39,6 @@ static struct of_device_id mtk_vdec_drv_ids[] = {
 		.compatible = "mediatek,mtk-vcodec-lat-soc",
 		.data = (void *)MTK_VDEC_LAT_SOC,
 	},
-	{
-		.compatible = "mediatek,mtk-vcodec-core1",
-		.data = (void *)MTK_VDEC_CORE1,
-	},
 	{},
 };
 
@@ -88,8 +84,6 @@ static int mtk_vcodec_get_hw_count(struct mtk_vcodec_dev *dev)
 		return 1;
 	else if(dev->vdec_pdata->hw_arch == MTK_VDEC_LAT_SINGLE_CORE)
 		return 2;
-	else if(dev->vdec_pdata->hw_arch == MTK_VDEC_LAT_DUAL_CORE)
-		return 3;
 	else
 		return 0;
 }
@@ -560,7 +554,6 @@ err_res:
 extern const struct mtk_vcodec_dec_pdata mtk_vdec_8173_pdata;
 extern const struct mtk_vcodec_dec_pdata mtk_vdec_8183_pdata;
 extern const struct mtk_vcodec_dec_pdata mtk_lat_sig_core_pdata;
-extern const struct mtk_vcodec_dec_pdata mtk_lat_dual_core_pdata;
 
 static const struct of_device_id mtk_vcodec_match[] = {
 	{
@@ -577,7 +570,7 @@ static const struct of_device_id mtk_vcodec_match[] = {
 	},
 	{
 		.compatible = "mediatek,mt8195-vcodec-dec",
-		.data = &mtk_lat_dual_core_pdata,
+		.data = &mtk_lat_sig_core_pdata,
 	},
 	{},
 };
