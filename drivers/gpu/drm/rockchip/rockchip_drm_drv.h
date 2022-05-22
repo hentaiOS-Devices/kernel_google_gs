@@ -31,6 +31,7 @@ struct rockchip_crtc_state {
 	int output_bpc;
 	int output_flags;
 	bool enable_afbc;
+	bool needs_dmcfreq_block;
 };
 #define to_rockchip_crtc_state(s) \
 		container_of(s, struct rockchip_crtc_state, base)
@@ -48,9 +49,13 @@ struct rockchip_drm_private {
 	struct iommu_domain *domain;
 	struct mutex mm_lock;
 	struct drm_mm mm;
-	struct list_head psr_list;
-	struct mutex psr_list_lock;
+
+	struct devfreq *devfreq;
+	struct devfreq_event_dev *devfreq_event_dev;
+	bool dmc_disable_flag;
 };
+
+uint32_t rockchip_drm_get_vblank_ns(struct drm_display_mode *mode);
 
 int rockchip_drm_dma_attach_device(struct drm_device *drm_dev,
 				   struct device *dev);

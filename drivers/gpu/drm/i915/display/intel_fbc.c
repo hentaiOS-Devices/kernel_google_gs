@@ -911,11 +911,11 @@ static bool intel_fbc_can_activate(struct intel_crtc *crtc)
 	}
 
 	/*
-	 * Tigerlake is not supporting FBC with PSR2.
+	 * Display 12+ is not supporting FBC with PSR2.
 	 * Recommendation is to keep this combination disabled
 	 * Bspec: 50422 HSD: 14010260002
 	 */
-	if (fbc->state_cache.psr2_active && IS_TIGERLAKE(dev_priv)) {
+	if (fbc->state_cache.psr2_active && DISPLAY_VER(dev_priv) >= 12) {
 		fbc->no_fbc_reason = "not supported with PSR2";
 		return false;
 	}
@@ -1128,7 +1128,7 @@ void intel_fbc_invalidate(struct drm_i915_private *dev_priv,
 	if (!HAS_FBC(dev_priv))
 		return;
 
-	if (origin == ORIGIN_GTT || origin == ORIGIN_FLIP)
+	if (origin == ORIGIN_FLIP || origin == ORIGIN_CURSOR_UPDATE)
 		return;
 
 	mutex_lock(&fbc->lock);
@@ -1149,19 +1149,11 @@ void intel_fbc_flush(struct drm_i915_private *dev_priv,
 	if (!HAS_FBC(dev_priv))
 		return;
 
-	/*
-	 * GTT tracking does not nuke the entire cfb
-	 * so don't clear busy_bits set for some other
-	 * reason.
-	 */
-	if (origin == ORIGIN_GTT)
-		return;
-
 	mutex_lock(&fbc->lock);
 
 	fbc->busy_bits &= ~frontbuffer_bits;
 
-	if (origin == ORIGIN_FLIP)
+	if (origin == ORIGIN_FLIP || origin == ORIGIN_CURSOR_UPDATE)
 		goto out;
 
 	if (!fbc->busy_bits && fbc->crtc &&

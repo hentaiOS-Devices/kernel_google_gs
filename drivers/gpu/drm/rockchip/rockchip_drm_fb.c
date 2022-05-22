@@ -14,6 +14,8 @@
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_probe_helper.h>
 
+#include <soc/rockchip/rk3399_dmc.h>
+
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_fb.h"
 #include "rockchip_drm_gem.h"
@@ -98,11 +100,84 @@ rockchip_fb_create(struct drm_device *dev, struct drm_file *file,
 	return &afbc_fb->base;
 }
 
+uint32_t rockchip_drm_get_vblank_ns(struct drm_display_mode *mode)
+{
+	uint64_t vblank_time = mode->vtotal - mode->vdisplay;
+
+	vblank_time *= (uint64_t)NSEC_PER_SEC * mode->htotal;
+	do_div(vblank_time, mode->clock * 1000);
+
+	return vblank_time;
+}
+
+static void
+rockchip_drm_check_and_block_dmcfreq(struct drm_device *dev,
+				     struct drm_atomic_state *state)
+{
+	struct rockchip_drm_private *priv = dev->dev_private;
+	struct drm_crtc_state *old_state, *new_state;
+	struct drm_crtc *crtc;
+	int i;
+
+	for_each_oldnew_crtc_in_state(state, crtc, old_state, new_state, i) {
+		struct rockchip_crtc_state *s =
+			to_rockchip_crtc_state(new_state);
+		struct rockchip_crtc_state *old_s =
+			to_rockchip_crtc_state(old_state);
+
+		if (!old_s->needs_dmcfreq_block && s->needs_dmcfreq_block) {
+			rockchip_dmcfreq_block(priv->devfreq);
+			DRM_DEV_DEBUG_KMS(dev->dev,
+				"%s: vblank period too short, blocking dmcfreq (crtc = %d)\n",
+				__func__, drm_crtc_index(crtc));
+		}
+	}
+}
+
+static void
+rockchip_drm_check_and_unblock_dmcfreq(struct drm_device *dev,
+				       struct drm_atomic_state *state)
+{
+	struct rockchip_drm_private *priv = dev->dev_private;
+	struct drm_crtc_state *old_state, *new_state;
+	struct drm_crtc *crtc;
+	int i;
+
+	for_each_oldnew_crtc_in_state(state, crtc, old_state, new_state, i) {
+		struct rockchip_crtc_state *s =
+			to_rockchip_crtc_state(new_state);
+		struct rockchip_crtc_state *old_s =
+			to_rockchip_crtc_state(old_state);
+
+		if (old_s->needs_dmcfreq_block && !s->needs_dmcfreq_block) {
+			rockchip_dmcfreq_unblock(priv->devfreq);
+			DRM_DEV_DEBUG_KMS(dev->dev,
+				"%s: vblank period long enough, unblocking dmcfreq (crtc = %d)\n",
+				__func__, drm_crtc_index(crtc));
+		}
+	}
+}
+
+static int rockchip_drm_atomic_commit(struct drm_device *dev,
+				      struct drm_atomic_state *state,
+				      bool nonblock)
+{
+	int ret;
+
+	rockchip_drm_check_and_block_dmcfreq(dev, state);
+
+	ret = drm_atomic_helper_commit(dev, state, nonblock);
+
+	rockchip_drm_check_and_unblock_dmcfreq(dev, state);
+
+	return ret;
+}
+
 static const struct drm_mode_config_funcs rockchip_drm_mode_config_funcs = {
 	.fb_create = rockchip_fb_create,
 	.output_poll_changed = drm_fb_helper_output_poll_changed,
 	.atomic_check = drm_atomic_helper_check,
-	.atomic_commit = drm_atomic_helper_commit,
+	.atomic_commit = rockchip_drm_atomic_commit,
 };
 
 struct drm_framebuffer *

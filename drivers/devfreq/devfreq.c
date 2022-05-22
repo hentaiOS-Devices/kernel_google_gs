@@ -36,7 +36,9 @@
 #define IS_SUPPORTED_ATTR(f, name) ((f & DEVFREQ_GOV_ATTR_##name) ? true : false)
 #define HZ_PER_KHZ	1000
 
-static struct class *devfreq_class;
+struct class *devfreq_class;
+EXPORT_SYMBOL_GPL(devfreq_class);
+
 static struct dentry *devfreq_debugfs;
 
 /*
@@ -375,8 +377,8 @@ static int devfreq_set_target(struct devfreq *devfreq, unsigned long new_freq,
 	devfreq_notify_transition(devfreq, &freqs, DEVFREQ_POSTCHANGE);
 
 	if (devfreq_update_status(devfreq, new_freq))
-		dev_err(&devfreq->dev,
-			"Couldn't update frequency transition information.\n");
+		dev_warn(&devfreq->dev,
+			 "Couldn't update frequency transition information.\n");
 
 	devfreq->previous_freq = new_freq;
 

@@ -253,6 +253,17 @@ config PAGE_REPORTING
 	  those pages to another entity, such as a hypervisor, so that the
 	  memory can be freed within the host for other uses.
 
+config PROCESS_RECLAIM
+	bool "Enable process reclaim"
+	depends on PROC_FS && MMU
+	help
+	 It allows to reclaim pages of the process by /proc/pid/reclaim.
+
+	 (echo file > /proc/PID/reclaim) reclaims file-backed pages only.
+	 (echo anon > /proc/PID/reclaim) reclaims anonymous pages only.
+	 (echo all > /proc/PID/reclaim) reclaims all pages.
+
+	 Any other value is ignored.
 #
 # support for page migration
 #
@@ -889,6 +900,13 @@ config LOW_MEM_NOTIFY
 	  is meant to be used in systems with no or very little swap space.  In
 	  the presence of large swap space, the system is likely to become
 	  unusable before the OOM killer is triggered.
+
+config KMAP_LOCAL_NON_LINEAR_PTE_ARRAY
+	bool
+
+# struct io_mapping based helper.  Selected by drivers that need them
+config IO_MAPPING
+	bool
 
 # the multigenerational lru {
 config LRU_GEN

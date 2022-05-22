@@ -22,6 +22,8 @@ properties:
   compatible:
     enum:
       - mediatek,mt8183-svs
+      - mediatek,mt8192-svs
+      - mediatek,mt8195-svs
 
   reg:
     maxItems: 1
@@ -50,6 +52,13 @@ properties:
     items:
       - const: svs-calibration-data
       - const: t-calibration-data
+
+  resets:
+    maxItems: 1
+
+  reset-names:
+    items:
+      - const: svs_rst
 
 required:
   - compatible

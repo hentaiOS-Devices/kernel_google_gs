@@ -19,7 +19,6 @@
  */
 #include <media/mpeg2-ctrls.h>
 #include <media/hevc-ctrls.h>
-#include <media/vp9-ctrls.h>
 
 /* forward references */
 struct file;
@@ -51,12 +50,19 @@ struct video_device;
  * @p_h264_decode_params:	Pointer to a struct v4l2_ctrl_h264_decode_params.
  * @p_h264_pred_weights:	Pointer to a struct v4l2_ctrl_h264_pred_weights.
  * @p_vp8_frame:		Pointer to a VP8 frame params structure.
+ * @p_vp9_compressed_hdr_probs:	Pointer to a VP9 frame compressed header probs structure.
+ * @p_vp9_frame:		Pointer to a VP9 frame params structure.
  * @p_hevc_sps:			Pointer to an HEVC sequence parameter set structure.
  * @p_hevc_pps:			Pointer to an HEVC picture parameter set structure.
  * @p_hevc_slice_params:	Pointer to an HEVC slice parameters structure.
  * @p_hdr10_cll:		Pointer to an HDR10 Content Light Level structure.
  * @p_hdr10_mastering:		Pointer to an HDR10 Mastering Display structure.
  * @p_area:			Pointer to an area.
+ * @p_av1_sequence:		Pointer to an AV1 sequence.
+ * @p_av1_tile_group:		Pointer to an AV1 tile group.
+ * @p_av1_tile_group_entry:	Pointer to an AV1 tile group entry.
+ * @p_av1_frame_header:		Pointer to an AV1 frame header.
+ * @p_av1_film_grain:		Pointer to an AV1 film grain.
  * @p:				Pointer to a compound value.
  * @p_const:			Pointer to a constant compound value.
  */
@@ -80,9 +86,16 @@ union v4l2_ctrl_ptr {
 	struct v4l2_ctrl_hevc_sps *p_hevc_sps;
 	struct v4l2_ctrl_hevc_pps *p_hevc_pps;
 	struct v4l2_ctrl_hevc_slice_params *p_hevc_slice_params;
+	struct v4l2_ctrl_vp9_compressed_hdr *p_vp9_compressed_hdr_probs;
+	struct v4l2_ctrl_vp9_frame *p_vp9_frame;
 	struct v4l2_ctrl_hdr10_cll_info *p_hdr10_cll;
 	struct v4l2_ctrl_hdr10_mastering_display *p_hdr10_mastering;
 	struct v4l2_area *p_area;
+	struct v4l2_ctrl_av1_sequence *p_av1_sequence;
+	struct v4l2_ctrl_av1_tile_group *p_av1_tile_group;
+	struct v4l2_ctrl_av1_tile_group_entry *p_av1_tile_group_entry;
+	struct v4l2_ctrl_av1_frame_header *p_av1_frame_header;
+	struct v4l2_ctrl_av1_film_grain *p_av1_film_grain;
 	void *p;
 	const void *p_const;
 };

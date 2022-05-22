@@ -41,17 +41,17 @@ void kbase_platform_unregister(void)
 }
 
 #ifdef CONFIG_OF
-static const struct kbase_mali_platform_functions mediatek_mt8183_data = {
+static const struct kbase_platform_specific_conf mediatek_mt8183_data = {
 	.pm_callbacks = &mt8183_pm_callbacks,
 	.platform_funcs = &mt8183_platform_funcs,
 };
 
-static const struct kbase_mali_platform_functions mediatek_mt8192_data = {
+static const struct kbase_platform_specific_conf mediatek_mt8192_data = {
 	.pm_callbacks = &mt8192_pm_callbacks,
 	.platform_funcs = &mt8192_platform_funcs,
 };
 
-static const struct kbase_mali_platform_functions mediatek_mt8195_data = {
+static const struct kbase_platform_specific_conf mediatek_mt8195_data = {
 	.pm_callbacks = &mt8195_pm_callbacks,
 	.platform_funcs = &mt8195_platform_funcs,
 };

@@ -6,6 +6,8 @@
  * based on exynos_drm_drv.c
  */
 
+#include <linux/devfreq.h>
+#include <linux/devfreq-event.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-iommu.h>
 #include <linux/pm_runtime.h>
@@ -110,6 +112,46 @@ static void rockchip_iommu_cleanup(struct drm_device *drm_dev)
 	iommu_domain_free(private->domain);
 }
 
+#ifdef CONFIG_ARM_RK3399_DMC_DEVFREQ
+static int rockchip_initialize_devfreq(struct device *dev,
+				       struct rockchip_drm_private *priv)
+{
+	struct devfreq *devfreq;
+	struct devfreq_event_dev *edev;
+	int ret;
+
+	devfreq = devfreq_get_devfreq_by_phandle(dev, "devfreq", 0);
+	if (IS_ERR(devfreq)) {
+		ret = PTR_ERR(devfreq);
+		if (ret == -ENODEV) {
+			DRM_DEV_INFO(dev, "devfreq missing, skip\n");
+			return 0;
+		}
+		return ret;
+	}
+
+	edev = devfreq_event_get_edev_by_phandle(devfreq->dev.parent, "devfreq-events", 0);
+	if (IS_ERR(edev)) {
+		ret = PTR_ERR(edev);
+		if (ret == -ENODEV) {
+			DRM_DEV_INFO(dev, "devfreq edev missing, skip\n");
+			return 0;
+		}
+		return ret;
+	}
+
+	priv->devfreq = devfreq;
+	priv->devfreq_event_dev = edev;
+	return 0;
+}
+#else
+static int rockchip_initialize_devfreq(struct device *dev,
+				       struct rockchip_drm_private *priv)
+{
+	return 0;
+}
+#endif
+
 static int rockchip_drm_bind(struct device *dev)
 {
 	struct drm_device *drm_dev;
@@ -137,10 +179,11 @@ static int rockchip_drm_bind(struct device *dev)
 		goto err_free;
 	}
 
-	drm_dev->dev_private = private;
+	ret = rockchip_initialize_devfreq(dev, private);
+	if (ret)
+		return ret;
 
-	INIT_LIST_HEAD(&private->psr_list);
-	mutex_init(&private->psr_list_lock);
+	drm_dev->dev_private = private;
 
 	ret = rockchip_drm_init_iommu(drm_dev);
 	if (ret)

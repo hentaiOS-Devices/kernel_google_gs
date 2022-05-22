@@ -8,6 +8,8 @@
 #ifndef _MTK_VCODEC_DRV_H_
 #define _MTK_VCODEC_DRV_H_
 
+#include <linux/component.h>
+#include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
@@ -15,7 +17,14 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-core.h>
+
 #include "mtk_vcodec_util.h"
+#include "vdec_msg_queue.h"
+
+#define VDEC_HW_ACTIVE	0x10
+#define VDEC_IRQ_CFG	0x11
+#define VDEC_IRQ_CLR	0x10
+#define VDEC_IRQ_CFG_REG	0xa4
 
 #define MTK_VCODEC_DRV_NAME	"mtk_vcodec_drv"
 #define MTK_VCODEC_DEC_NAME	"mtk-vcodec-dec"
@@ -25,6 +34,7 @@
 #define MTK_VCODEC_MAX_PLANES	3
 #define MTK_V4L2_BENCHMARK	0
 #define WAIT_INTR_TIMEOUT_MS	1000
+#define VDEC_LAT_ARCH(hw_arch) ((hw_arch) >= MTK_VDEC_LAT_SINGLE_CORE)
 
 /**
  * enum mtk_hw_reg_idx - MTK hw register base index
@@ -91,6 +101,19 @@ enum mtk_fmt_type {
 	MTK_FMT_DEC = 0,
 	MTK_FMT_ENC = 1,
 	MTK_FMT_FRAME = 2,
+};
+
+/**
+ * struct mtk_vdec_hw_id - Hardware index used to separate
+ *                         different hardware
+ */
+enum mtk_vdec_hw_id {
+	MTK_VDEC_CORE,
+	MTK_VDEC_CORE1,
+	MTK_VDEC_LAT0,
+	MTK_VDEC_LAT1,
+	MTK_VDEC_LAT_SOC,
+	MTK_VDEC_HW_MAX,
 };
 
 /**
@@ -192,7 +215,6 @@ struct mtk_vcodec_pm {
 	struct mtk_vcodec_clk	vdec_clk;
 	struct mtk_vcodec_clk	venc_clk;
 	struct device	*dev;
-	struct mtk_vcodec_dev	*mtkdev;
 };
 
 /**
@@ -243,6 +265,11 @@ struct vdec_pic_info {
  *	   finish
  * @irq_status: irq status
  *
+ * @int_core_cond: variable used by the waitqueue  for component arch
+ * @int_core_type: type of the last interrupt for component arch
+ * @core_queue: waitqueue that can be used to wait for this context to
+ *	   finish for component arch
+ *
  * @ctrl_hdl: handler for v4l2 framework
  * @decode_work: worker for the decoding
  * @encode_work: worker for the encoding
@@ -251,13 +278,22 @@ struct vdec_pic_info {
  *		     to be used with encoder and stateful decoder.
  * @is_flushing: set to true if flushing is in progress.
  * @current_codec: current set input codec, in V4L2 pixel format
+ * @capture_fourcc: capture queue type, in V4L2 pixel format
  *
  * @colorspace: enum v4l2_colorspace; supplemental to pixelformat
  * @ycbcr_enc: enum v4l2_ycbcr_encoding, Y'CbCr encoding
  * @quantization: enum v4l2_quantization, colorspace quantization
  * @xfer_func: enum v4l2_xfer_func, colorspace transfer function
+ *
+ * @decoded_frame_cnt: already decoded frame count
  * @lock: protect variables accessed by V4L2 threads and worker thread such as
  *	  mtk_video_dec_buf.
+ * @hw_id: hardware index used to identify different hardware
+ *
+ * @max_width: hardware supported max width
+ * @max_height: hardware supported max height
+ *
+ * @msg_queue: msg queue used to store lat buffer information
  */
 struct mtk_vcodec_ctx {
 	enum mtk_instance_type type;
@@ -284,6 +320,10 @@ struct mtk_vcodec_ctx {
 	wait_queue_head_t queue;
 	unsigned int irq_status;
 
+	int int_core_cond[MTK_VDEC_HW_MAX];
+	int int_core_type[MTK_VDEC_HW_MAX];
+	wait_queue_head_t core_queue[MTK_VDEC_HW_MAX];
+
 	struct v4l2_ctrl_handler ctrl_hdl;
 	struct work_struct decode_work;
 	struct work_struct encode_work;
@@ -292,6 +332,7 @@ struct mtk_vcodec_ctx {
 	bool is_flushing;
 
 	u32 current_codec;
+	u32 capture_fourcc;
 
 	enum v4l2_colorspace colorspace;
 	enum v4l2_ycbcr_encoding ycbcr_enc;
@@ -300,13 +341,39 @@ struct mtk_vcodec_ctx {
 
 	int decoded_frame_cnt;
 	struct mutex lock;
+	int hw_id;
 
+	unsigned int max_width;
+	unsigned int max_height;
+	struct vdec_msg_queue msg_queue;
 };
 
 enum mtk_chip {
 	MTK_MT8173,
 	MTK_MT8183,
 	MTK_MT8192,
+	MTK_MT8195,
+};
+
+/**
+ * struct mtk_vdec_hw_arch - Used to separate different hardware architecture
+ */
+enum mtk_vdec_hw_arch {
+	MTK_VDEC_PURE_SINGLE_CORE,
+	MTK_VDEC_LAT_SINGLE_CORE,
+	MTK_VDEC_LAT_DUAL_CORE,
+};
+
+/**
+ * struct mtk_vdec_format_types - Structure used to get supported
+ *		  format types according to decoder capability
+ */
+enum mtk_vdec_format_types {
+	MTK_VDEC_FORMAT_MM21 = 0x20,
+	MTK_VDEC_FORMAT_MT21C = 0x40,
+	MTK_VDEC_FORMAT_H264_SLICE = 0x100,
+	MTK_VDEC_FORMAT_VP8_FRAME = 0x200,
+	MTK_VDEC_FORMAT_VP9_FRAME = 0x400,
 };
 
 /**
@@ -315,7 +382,8 @@ enum mtk_chip {
  * @ctrls_setup: init vcodec dec ctrls
  * @worker: worker to start a decode job
  * @flush_decoder: function that flushes the decoder
- *
+ * @get_cap_buffer: get capture buffer from capture queue
+ * @cap_to_disp: put capture buffer to disp list
  * @vdec_vb2_ops: struct vb2_ops
  *
  * @vdec_formats: supported video decoder formats
@@ -327,6 +395,7 @@ enum mtk_chip {
  * @num_framesizes: count of video decoder frame sizes
  *
  * @chip: chip this decoder is compatible with
+ * @hw_arch: hardware arch is used to separate pure_sin_core and lat_sin_core
  *
  * @uses_stateless_api: whether the decoder uses the stateless API with requests
  */
@@ -336,19 +405,20 @@ struct mtk_vcodec_dec_pdata {
 	int (*ctrls_setup)(struct mtk_vcodec_ctx *ctx);
 	void (*worker)(struct work_struct *work);
 	int (*flush_decoder)(struct mtk_vcodec_ctx *ctx);
+	struct vdec_fb *(*get_cap_buffer)(struct mtk_vcodec_ctx *ctx);
+	void (*cap_to_disp)(struct mtk_vcodec_ctx *ctx, struct vdec_fb *fb, int error);
 
 	struct vb2_ops *vdec_vb2_ops;
 
 	const struct mtk_video_fmt *vdec_formats;
-	const int num_formats;
+	const int *num_formats;
 	const struct mtk_video_fmt *default_out_fmt;
 	const struct mtk_video_fmt *default_cap_fmt;
 
 	const struct mtk_codec_framesizes *vdec_framesizes;
-	const int num_framesizes;
+	const int *num_framesizes;
 
-	enum mtk_chip chip;
-
+	enum mtk_vdec_hw_arch hw_arch;
 	bool uses_stateless_api;
 };
 
@@ -400,6 +470,7 @@ struct mtk_vcodec_enc_pdata {
  *
  * @fw_handler: used to communicate with the firmware.
  * @id_counter: used to identify current opened instance
+ * @is_support_comp: 1: using compoent framework, 0: not support
  *
  * @encode_workqueue: encode work queue
  *
@@ -417,6 +488,17 @@ struct mtk_vcodec_enc_pdata {
  * @pm: power management control
  * @dec_capability: used to identify decode capability, ex: 4k
  * @enc_capability: used to identify encode capability
+ *
+ * comp_dev: component hardware device
+ * component_node: component node
+ * comp_idx: component index
+ *
+ * core_read: Wait queue used to signalize when core get useful lat buffer
+ * core_queue: List of V4L2 lat_buf
+ * core_lock: spin lock to protect the struct usage
+ * num_core: number of buffers ready to be processed
+ *
+ * @hardware_bitmap: used to record hardware is exist
  */
 struct mtk_vcodec_dev {
 	struct v4l2_device v4l2_dev;
@@ -437,6 +519,7 @@ struct mtk_vcodec_dev {
 	struct mtk_vcodec_fw *fw_handler;
 
 	unsigned long id_counter;
+	bool is_support_comp;
 
 	struct workqueue_struct *decode_workqueue;
 	struct workqueue_struct *encode_workqueue;
@@ -448,12 +531,23 @@ struct mtk_vcodec_dev {
 	int dec_irq;
 	int enc_irq;
 
-	struct mutex dec_mutex;
+	struct mutex dec_mutex[MTK_VDEC_HW_MAX];
 	struct mutex enc_mutex;
 
 	struct mtk_vcodec_pm pm;
 	unsigned int dec_capability;
 	unsigned int enc_capability;
+
+	void *comp_dev[MTK_VDEC_HW_MAX];
+	struct device_node *component_node[MTK_VDEC_HW_MAX];
+	int comp_idx;
+
+	struct task_struct *kthread_core;
+	wait_queue_head_t core_read;
+	struct list_head core_queue;
+	spinlock_t core_lock;
+	int num_core;
+	DECLARE_BITMAP(hardware_bitmap, MTK_VDEC_HW_MAX);
 };
 
 static inline struct mtk_vcodec_ctx *fh_to_ctx(struct v4l2_fh *fh)

@@ -78,7 +78,7 @@ static ssize_t drivers_allowlist_store(struct bus_type *bus, const char *buf,
 
 	/* Driver names cannot have special characters */
 	for (i = 0; i < strlen(drv); i++)
-		if (!isalnum(drv[i]) && drv[i] != '_') {
+		if (!isalnum(drv[i]) && drv[i] != '_' && drv[i] != '-') {
 			ret = -EINVAL;
 			goto out_kfree;
 		}
@@ -142,7 +142,8 @@ drivers_allowlist_lockdown_store(struct bus_type *bus, const char *buf,
 	if (state_changed && !lockdown) {
 		/* Attach any devices blocked earlier, subject to allowlist */
 		for_each_pci_dev(dev) {
-			if (dev->untrusted && !device_attach(&dev->dev))
+			if (dev_is_removable(&dev->dev) &&
+			    !device_attach(&dev->dev))
 				pci_dbg(dev, "No driver\n");
 		}
 	}
@@ -201,9 +202,9 @@ bool pci_allowed_to_attach(struct pci_driver *drv, struct pci_dev *dev)
 		goto allowed;
 	}
 
-	/* Allow trusted devices */
-	if (!dev->untrusted) {
-		reason = "trusted device";
+	/* Allow internal devices */
+	if (!dev_is_removable(&dev->dev)) {
+		reason = "internal device";
 		goto allowed;
 	}
 

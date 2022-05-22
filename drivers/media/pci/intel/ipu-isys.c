@@ -1026,7 +1026,6 @@ void ipu_put_fw_mgs_buf(struct ipu_isys *isys, u64 data)
 	list_move(&msg->head, &isys->framebuflist);
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
-EXPORT_SYMBOL_GPL(ipu_put_fw_mgs_buf);
 
 static int isys_probe(struct ipu_bus_device *adev)
 {
@@ -1284,7 +1283,6 @@ int isys_isr_one(struct ipu_bus_device *adev)
 
 	switch (resp->type) {
 	case IPU_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE:
-		ipu_put_fw_mgs_buf(ipu_bus_get_drvdata(adev), resp->buf_id);
 		complete(&pipe->stream_open_completion);
 		break;
 	case IPU_FW_ISYS_RESP_TYPE_STREAM_CLOSE_ACK:
@@ -1294,7 +1292,6 @@ int isys_isr_one(struct ipu_bus_device *adev)
 		complete(&pipe->stream_start_completion);
 		break;
 	case IPU_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
-		ipu_put_fw_mgs_buf(ipu_bus_get_drvdata(adev), resp->buf_id);
 		complete(&pipe->stream_start_completion);
 		break;
 	case IPU_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -1304,6 +1301,11 @@ int isys_isr_one(struct ipu_bus_device *adev)
 		complete(&pipe->stream_stop_completion);
 		break;
 	case IPU_FW_ISYS_RESP_TYPE_PIN_DATA_READY:
+		/*
+		 * firmware only release the capture msg until software
+		 * get pin_data_ready event
+		 */
+		ipu_put_fw_mgs_buf(ipu_bus_get_drvdata(adev), resp->buf_id);
 		if (resp->pin_id < IPU_ISYS_OUTPUT_PINS &&
 		    pipe->output_pins[resp->pin_id].pin_ready)
 			pipe->output_pins[resp->pin_id].pin_ready(pipe, resp);
@@ -1407,34 +1409,6 @@ leave:
 	return 0;
 }
 
-static void isys_isr_poll(struct ipu_bus_device *adev)
-{
-	struct ipu_isys *isys = ipu_bus_get_drvdata(adev);
-
-	if (!isys->fwcom) {
-		dev_dbg(&isys->adev->dev,
-			"got interrupt but device not configured yet\n");
-		return;
-	}
-
-	mutex_lock(&isys->mutex);
-	isys_isr(adev);
-	mutex_unlock(&isys->mutex);
-}
-
-int ipu_isys_isr_run(void *ptr)
-{
-	struct ipu_isys *isys = ptr;
-
-	while (!kthread_should_stop()) {
-		usleep_range(500, 1000);
-		if (isys->stream_opened)
-			isys_isr_poll(isys->adev);
-	}
-
-	return 0;
-}
-
 static struct ipu_bus_driver isys_driver = {
 	.probe = isys_probe,
 	.remove = isys_remove,
@@ -1452,7 +1426,9 @@ module_ipu_bus_driver(isys_driver);
 static const struct pci_device_id ipu_pci_tbl[] = {
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6_PCI_ID)},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6SE_PCI_ID)},
-	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_ADL_P_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_ADL_N_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_RPL_P_PCI_ID)},
 	{0,}
 };
 MODULE_DEVICE_TABLE(pci, ipu_pci_tbl);

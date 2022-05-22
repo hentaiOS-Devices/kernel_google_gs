@@ -365,13 +365,13 @@ struct amdgpu_display_manager {
 
 	spinlock_t irq_handler_list_table_lock;
 
-	struct backlight_device *backlight_dev;
+	struct backlight_device *backlight_dev[AMDGPU_DM_MAX_NUM_EDP];
 
 	const struct dc_link *backlight_link[AMDGPU_DM_MAX_NUM_EDP];
 
 	uint8_t num_of_edps;
 
-	struct amdgpu_dm_backlight_caps backlight_caps;
+	struct amdgpu_dm_backlight_caps backlight_caps[AMDGPU_DM_MAX_NUM_EDP];
 
 	struct mod_freesync *freesync_module;
 #ifdef CONFIG_DRM_AMD_DC_HDCP
@@ -443,6 +443,12 @@ struct amdgpu_display_manager {
 	 * cached backlight values.
 	 */
 	u32 brightness[AMDGPU_DM_MAX_NUM_EDP];
+	/**
+	 * @actual_brightness:
+	 *
+	 * last successfully applied backlight values.
+	 */
+	u32 actual_brightness[AMDGPU_DM_MAX_NUM_EDP];
 };
 
 enum dsc_clock_force_state {
@@ -537,6 +543,8 @@ struct dm_crtc_state {
 
 	bool dsc_force_changed;
 	bool vrr_supported;
+
+	bool force_dpms_off;
 	struct mod_freesync_config freesync_config;
 	struct dc_info_packet vrr_infopacket;
 
