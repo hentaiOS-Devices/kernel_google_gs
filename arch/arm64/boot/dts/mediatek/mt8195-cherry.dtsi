@@ -597,6 +597,7 @@
 	cap-mmc-highspeed;
 	mmc-hs200-1_8v;
 	mmc-hs400-1_8v;
+	supports-cqe;
 	cap-mmc-hw-reset;
 	no-sdio;
 	no-sd;

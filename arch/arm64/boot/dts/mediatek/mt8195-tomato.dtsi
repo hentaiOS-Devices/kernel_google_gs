@@ -61,3 +61,7 @@
 		CROS_STD_MAIN_KEYMAP
 	>;
 };
+
+&mmc0 {
+	/delete-property/supports-cqe;
+};
