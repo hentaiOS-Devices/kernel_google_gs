@@ -42,8 +42,6 @@ static int mtk_vdec_comp_bind(struct device *dev, struct device *master,
 
 	comp_dev->reg_base[VDEC_COMP_SYS] =
 		master_dev->reg_base[VDEC_COMP_SYS];
-	set_bit(comp_dev->comp_idx, master_dev->hardware_bitmap);
-
 	return 0;
 }
 
@@ -181,9 +179,6 @@ static const struct of_device_id mtk_vdec_comp_ids[] = {
 	},
 	{
 		.compatible = "mediatek,mtk-vcodec-core",
-	},
-	{
-		.compatible = "mediatek,mtk-vcodec-lat-soc",
 	},
 	{},
 };
