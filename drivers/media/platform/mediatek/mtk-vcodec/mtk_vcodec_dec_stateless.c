@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
-#include "media/videobuf2-v4l2.h"
+#include <media/videobuf2-v4l2.h>
 #include <media/videobuf2-dma-contig.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-mem2mem.h>
@@ -10,8 +10,8 @@
 #include "mtk_vcodec_dec.h"
 #include "mtk_vcodec_intr.h"
 #include "mtk_vcodec_util.h"
-#include "vdec_drv_if.h"
 #include "mtk_vcodec_dec_pm.h"
+#include "vdec_drv_if.h"
 
 /**
  * struct mtk_stateless_control  - CID control type
@@ -78,6 +78,7 @@ static const struct mtk_stateless_control mtk_stateless_controls[] = {
 		.codec_type = V4L2_PIX_FMT_H264_SLICE,
 	}
 };
+
 #define NUM_CTRLS ARRAY_SIZE(mtk_stateless_controls)
 
 static const struct mtk_video_fmt mtk_video_formats[] = {
@@ -92,6 +93,7 @@ static const struct mtk_video_fmt mtk_video_formats[] = {
 		.num_planes = 2,
 	},
 };
+
 #define NUM_FORMATS ARRAY_SIZE(mtk_video_formats)
 #define DEFAULT_OUT_FMT_IDX    0
 #define DEFAULT_CAP_FMT_IDX    1
@@ -141,12 +143,9 @@ static struct vdec_fb *vdec_get_cap_buffer(struct mtk_vcodec_ctx *ctx,
 			vb2_dma_contig_plane_dma_addr(dst_buf, 1);
 		pfb->base_c.size = ctx->q_data[MTK_Q_DATA_DST].sizeimage[1];
 	}
-	mtk_v4l2_debug(1,
-		"id=%d Framebuf  pfb=%p VA=%p Y_DMA=%pad C_DMA=%pad Size=%zx frame_count = %d",
-		dst_buf->index, pfb,
-		pfb->base_y.va, &pfb->base_y.dma_addr,
-		&pfb->base_c.dma_addr, pfb->base_y.size,
-		ctx->decoded_frame_cnt);
+	mtk_v4l2_debug(1, "id=%d Framebuf  pfb=%p VA=%p Y_DMA=%pad C_DMA=%pad Size=%zx frame_count = %d",
+		       dst_buf->index, pfb, pfb->base_y.va, &pfb->base_y.dma_addr,
+		       &pfb->base_c.dma_addr, pfb->base_y.size, ctx->decoded_frame_cnt);
 
 	return pfb;
 }
@@ -156,26 +155,6 @@ static void vb2ops_vdec_buf_request_complete(struct vb2_buffer *vb)
 	struct mtk_vcodec_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 
 	v4l2_ctrl_request_complete(vb->req_obj.req, &ctx->ctrl_hdl);
-}
-
-static int fops_media_request_validate(struct media_request *mreq)
-{
-	const unsigned int buffer_cnt = vb2_request_buffer_cnt(mreq);
-
-	switch (buffer_cnt) {
-	case 1:
-		/* We expect exactly one buffer with the request */
-		break;
-	case 0:
-		mtk_v4l2_err("No buffer provided with the request");
-		return -ENOENT;
-	default:
-		mtk_v4l2_err("Too many buffers (%d) provided with the request",
-			     buffer_cnt);
-		return -EINVAL;
-	}
-
-	return vb2_request_validate(mreq);
 }
 
 static void mtk_vdec_worker(struct work_struct *work)
@@ -193,14 +172,14 @@ static void mtk_vdec_worker(struct work_struct *work)
 	int ret;
 
 	vb2_v4l2_src = v4l2_m2m_next_src_buf(ctx->m2m_ctx);
-	if (vb2_v4l2_src == NULL) {
+	if (!vb2_v4l2_src) {
 		v4l2_m2m_job_finish(dev->m2m_dev_dec, ctx->m2m_ctx);
 		mtk_v4l2_debug(1, "[%d] no available source buffer", ctx->id);
 		return;
 	}
 
 	vb2_v4l2_dst = v4l2_m2m_next_dst_buf(ctx->m2m_ctx);
-	if (vb2_v4l2_dst == NULL) {
+	if (!vb2_v4l2_dst) {
 		v4l2_m2m_job_finish(dev->m2m_dev_dec, ctx->m2m_ctx);
 		mtk_v4l2_debug(1, "[%d] no available destination buffer", ctx->id);
 		return;
@@ -211,16 +190,15 @@ static void mtk_vdec_worker(struct work_struct *work)
 				   m2m_buf.vb);
 	bs_src = &dec_buf_src->bs_buffer;
 
-	mtk_v4l2_debug(3, "[%d] (%d) id=%d, vb=%p buf_info = %p",
-			ctx->id, src_buf->vb2_queue->type,
-			src_buf->index, src_buf, src_buf_info);
+	mtk_v4l2_debug(3, "[%d] (%d) id=%d, vb=%p", ctx->id,
+		       vb2_src->vb2_queue->type, vb2_src->index, vb2_src);
 
 	bs_src->va = NULL;
 	bs_src->dma_addr = vb2_dma_contig_plane_dma_addr(vb2_src, 0);
 	bs_src->size = (size_t)vb2_src->planes[0].bytesused;
 
 	mtk_v4l2_debug(3, "[%d] Bitstream VA=%p DMA=%pad Size=%zx vb=%p",
-			ctx->id, buf->va, &buf->dma_addr, buf->size, src_buf);
+		       ctx->id, bs_src->va, &bs_src->dma_addr, bs_src->size, vb2_src);
 	/* Apply request controls. */
 	src_buf_req = vb2_src->req_obj.req;
 	if (src_buf_req)
@@ -232,10 +210,9 @@ static void mtk_vdec_worker(struct work_struct *work)
 	v4l2_m2m_buf_copy_metadata(vb2_v4l2_src, vb2_v4l2_dst, true);
 	ret = vdec_if_decode(ctx, bs_src, dst_buf, &res_chg);
 	if (ret) {
-		mtk_v4l2_err(
-			" <===[%d], src_buf[%d] sz=0x%zx pts=%llu vdec_if_decode() ret=%d res_chg=%d===>",
-			ctx->id, vb2_src->index, bs_src->size,
-			vb2_src->timestamp, ret, res_chg);
+		mtk_v4l2_err(" <===[%d], src_buf[%d] sz=0x%zx pts=%llu vdec_if_decode() ret=%d res_chg=%d===>",
+			     ctx->id, vb2_src->index, bs_src->size,
+			     vb2_src->timestamp, ret, res_chg);
 		if (ret == -EIO) {
 			mutex_lock(&ctx->lock);
 			dec_buf_src->error = true;
@@ -246,7 +223,7 @@ static void mtk_vdec_worker(struct work_struct *work)
 	mtk_vdec_stateless_set_dst_payload(ctx, dst_buf);
 
 	v4l2_m2m_buf_done_and_job_finish(dev->m2m_dev_dec, ctx->m2m_ctx,
-		ret ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
+					 ret ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
 
 	v4l2_ctrl_request_complete(src_buf_req, &ctx->ctrl_hdl);
 }
@@ -256,9 +233,7 @@ static void vb2ops_vdec_stateless_buf_queue(struct vb2_buffer *vb)
 	struct mtk_vcodec_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 	struct vb2_v4l2_buffer *vb2_v4l2 = to_vb2_v4l2_buffer(vb);
 
-	mtk_v4l2_debug(3, "[%d] (%d) id=%d, vb=%p",
-			ctx->id, vb->vb2_queue->type,
-			vb->index, vb);
+	mtk_v4l2_debug(3, "[%d] (%d) id=%d, vb=%p", ctx->id, vb->vb2_queue->type, vb->index, vb);
 
 	mutex_lock(&ctx->lock);
 	v4l2_m2m_buf_queue(ctx->m2m_ctx, vb2_v4l2);
@@ -266,16 +241,12 @@ static void vb2ops_vdec_stateless_buf_queue(struct vb2_buffer *vb)
 	if (vb->vb2_queue->type != V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
 		return;
 
-	mtk_v4l2_debug(3, "(%d) id=%d, bs=%p",
-		vb->vb2_queue->type, vb->index, src_buf);
-
 	/* If an OUTPUT buffer, we may need to update the state */
 	if (ctx->state == MTK_STATE_INIT) {
 		ctx->state = MTK_STATE_HEADER;
 		mtk_v4l2_debug(1, "Init driver from init to header.");
 	} else {
-		mtk_v4l2_debug(3, "[%d] already init driver %d",
-				ctx->id, ctx->state);
+		mtk_v4l2_debug(3, "[%d] already init driver %d", ctx->id, ctx->state);
 	}
 }
 
@@ -301,8 +272,7 @@ static int mtk_vcodec_dec_ctrls_setup(struct mtk_vcodec_ctx *ctx)
 
 		v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &cfg, NULL);
 		if (ctx->ctrl_hdl.error) {
-			mtk_v4l2_err("Adding control %d failed %d",
-					i, ctx->ctrl_hdl.error);
+			mtk_v4l2_err("Adding control %d failed %d", i, ctx->ctrl_hdl.error);
 			return ctx->ctrl_hdl.error;
 		}
 	}
@@ -310,6 +280,26 @@ static int mtk_vcodec_dec_ctrls_setup(struct mtk_vcodec_ctx *ctx)
 	v4l2_ctrl_handler_setup(&ctx->ctrl_hdl);
 
 	return 0;
+}
+
+static int fops_media_request_validate(struct media_request *mreq)
+{
+	const unsigned int buffer_cnt = vb2_request_buffer_cnt(mreq);
+
+	switch (buffer_cnt) {
+	case 1:
+		/* We expect exactly one buffer with the request */
+		break;
+	case 0:
+		mtk_v4l2_debug(1, "No buffer provided with the request");
+		return -ENOENT;
+	default:
+		mtk_v4l2_debug(1, "Too many buffers (%d) provided with the request",
+			       buffer_cnt);
+		return -EINVAL;
+	}
+
+	return vb2_request_validate(mreq);
 }
 
 const struct media_device_ops mtk_vcodec_media_ops = {
@@ -339,16 +329,16 @@ static int vb2ops_vdec_out_buf_validate(struct vb2_buffer *vb)
 
 static struct vb2_ops mtk_vdec_request_vb2_ops = {
 	.queue_setup	= vb2ops_vdec_queue_setup,
-	.buf_prepare	= vb2ops_vdec_buf_prepare,
 	.wait_prepare	= vb2_ops_wait_prepare,
 	.wait_finish	= vb2_ops_wait_finish,
 	.start_streaming	= vb2ops_vdec_start_streaming,
+	.stop_streaming	= vb2ops_vdec_stop_streaming,
 
 	.buf_queue	= vb2ops_vdec_stateless_buf_queue,
 	.buf_out_validate = vb2ops_vdec_out_buf_validate,
 	.buf_init	= vb2ops_vdec_buf_init,
+	.buf_prepare	= vb2ops_vdec_buf_prepare,
 	.buf_finish	= vb2ops_vdec_buf_finish,
-	.stop_streaming	= vb2ops_vdec_stop_streaming,
 	.buf_request_complete = vb2ops_vdec_buf_request_complete,
 };
 

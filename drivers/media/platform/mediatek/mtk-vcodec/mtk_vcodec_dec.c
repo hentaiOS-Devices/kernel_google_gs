@@ -19,8 +19,9 @@
 #define DFT_CFG_WIDTH	MTK_VDEC_MIN_W
 #define DFT_CFG_HEIGHT	MTK_VDEC_MIN_H
 
-static const struct mtk_video_fmt *mtk_vdec_find_format(struct v4l2_format *f,
-				   const struct mtk_vcodec_dec_pdata *dec_pdata)
+static const struct mtk_video_fmt *
+mtk_vdec_find_format(struct v4l2_format *f,
+		     const struct mtk_vcodec_dec_pdata *dec_pdata)
 {
 	const struct mtk_video_fmt *fmt;
 	unsigned int k;
@@ -55,6 +56,7 @@ static int vidioc_try_decoder_cmd(struct file *file, void *priv,
 	else
 		return v4l2_m2m_ioctl_try_decoder_cmd(file, priv, cmd);
 }
+
 
 static int vidioc_decoder_cmd(struct file *file, void *priv,
 				struct v4l2_decoder_cmd *cmd)
@@ -219,16 +221,13 @@ static int vidioc_try_fmt(struct v4l2_format *f,
 			  const struct mtk_video_fmt *fmt)
 {
 	struct v4l2_pix_format_mplane *pix_fmt_mp = &f->fmt.pix_mp;
-	int i;
 
 	pix_fmt_mp->field = V4L2_FIELD_NONE;
 
-	pix_fmt_mp->width = clamp(pix_fmt_mp->width,
-				MTK_VDEC_MIN_W,
-				MTK_VDEC_MAX_W);
-	pix_fmt_mp->height = clamp(pix_fmt_mp->height,
-				MTK_VDEC_MIN_H,
-				MTK_VDEC_MAX_H);
+	pix_fmt_mp->width =
+		clamp(pix_fmt_mp->width, MTK_VDEC_MIN_W, MTK_VDEC_MAX_W);
+	pix_fmt_mp->height =
+		clamp(pix_fmt_mp->height, MTK_VDEC_MIN_H, MTK_VDEC_MAX_H);
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		pix_fmt_mp->num_planes = 1;
@@ -277,12 +276,7 @@ static int vidioc_try_fmt(struct v4l2_format *f,
 		}
 	}
 
-	for (i = 0; i < pix_fmt_mp->num_planes; i++)
-		memset(&(pix_fmt_mp->plane_fmt[i].reserved[0]), 0x0,
-			   sizeof(pix_fmt_mp->plane_fmt[0].reserved));
-
 	pix_fmt_mp->flags = 0;
-	memset(&pix_fmt_mp->reserved, 0x0, sizeof(pix_fmt_mp->reserved));
 	return 0;
 }
 
@@ -419,7 +413,7 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 	 * if using the stateful API.
 	 */
 	if (!dec_pdata->uses_stateless_api &&
-	    (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) &&
+	    f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE &&
 	    vb2_is_busy(&ctx->m2m_ctx->out_q_ctx.q)) {
 		mtk_v4l2_err("out_q_ctx buffers already requested");
 		ret = -EBUSY;
@@ -485,7 +479,7 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 		ret = vdec_if_get_param(ctx, GET_PARAM_PIC_INFO, &ctx->picinfo);
 		if (ret) {
 			mtk_v4l2_err("[%d]Error!! Get GET_PARAM_PICTURE_INFO Fail",
-				ctx->id);
+				     ctx->id);
 			return -EINVAL;
 		}
 
@@ -511,11 +505,10 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 		ctx->q_data[MTK_Q_DATA_DST].coded_width = ctx->picinfo.buf_w;
 		ctx->q_data[MTK_Q_DATA_DST].coded_height = ctx->picinfo.buf_h;
 		mtk_v4l2_debug(2, "[%d] vdec_if_init() num_plane = %d wxh=%dx%d pic wxh=%dx%d sz[0]=0x%x sz[1]=0x%x",
-			ctx->id, pix_mp->num_planes,
-			ctx->picinfo.buf_w, ctx->picinfo.buf_h,
-			ctx->picinfo.pic_w, ctx->picinfo.pic_h,
-			ctx->q_data[MTK_Q_DATA_DST].sizeimage[0],
-			ctx->q_data[MTK_Q_DATA_DST].sizeimage[1]);
+			       ctx->id, pix_mp->num_planes, ctx->picinfo.buf_w, ctx->picinfo.buf_h,
+			       ctx->picinfo.pic_w, ctx->picinfo.pic_h,
+			       ctx->q_data[MTK_Q_DATA_DST].sizeimage[0],
+			       ctx->q_data[MTK_Q_DATA_DST].sizeimage[1]);
 	}
 	return 0;
 }
@@ -559,7 +552,7 @@ static int vidioc_enum_framesizes(struct file *file, void *priv,
 }
 
 static int vidioc_enum_fmt(struct v4l2_fmtdesc *f, void *priv,
-				bool output_queue)
+			   bool output_queue)
 {
 	struct mtk_vcodec_ctx *ctx = fh_to_ctx(priv);
 	const struct mtk_vcodec_dec_pdata *dec_pdata = ctx->dev->vdec_pdata;
@@ -568,10 +561,10 @@ static int vidioc_enum_fmt(struct v4l2_fmtdesc *f, void *priv,
 
 	for (i = 0; i < dec_pdata->num_formats; i++) {
 		if (output_queue &&
-			(dec_pdata->vdec_formats[i].type != MTK_FMT_DEC))
+		    dec_pdata->vdec_formats[i].type != MTK_FMT_DEC)
 			continue;
 		if (!output_queue &&
-			(dec_pdata->vdec_formats[i].type != MTK_FMT_FRAME))
+		    dec_pdata->vdec_formats[i].type != MTK_FMT_FRAME)
 			continue;
 
 		if (j == f->index)
@@ -689,11 +682,9 @@ static int vidioc_vdec_g_fmt(struct file *file, void *priv,
 	return 0;
 }
 
-int vb2ops_vdec_queue_setup(struct vb2_queue *vq,
-				unsigned int *nbuffers,
-				unsigned int *nplanes,
-				unsigned int sizes[],
-				struct device *alloc_devs[])
+int vb2ops_vdec_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
+			    unsigned int *nplanes, unsigned int sizes[],
+			    struct device *alloc_devs[])
 {
 	struct mtk_vcodec_ctx *ctx = vb2_get_drv_priv(vq);
 	struct mtk_q_data *q_data;
@@ -824,8 +815,7 @@ void vb2ops_vdec_stop_streaming(struct vb2_queue *q)
 				v4l2_m2m_buf_done(src_buf,
 						VB2_BUF_STATE_ERROR);
 				if (req)
-					v4l2_ctrl_request_complete(req,
-								&ctx->ctrl_hdl);
+					v4l2_ctrl_request_complete(req, &ctx->ctrl_hdl);
 			}
 		}
 		return;

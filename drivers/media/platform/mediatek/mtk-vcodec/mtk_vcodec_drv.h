@@ -438,7 +438,7 @@ struct mtk_vcodec_enc_pdata {
  * @curr_ctx: The context that is waiting for codec hardware
  *
  * @reg_base: Mapped address of MTK Vcodec registers.
- * @vdec_pdata: Current arch private data.
+ * @vdec_pdata: decoder IC-specific data
  * @venc_pdata: encoder IC-specific data
  *
  * @fw_handler: used to communicate with the firmware.

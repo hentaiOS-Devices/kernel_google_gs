@@ -55,7 +55,6 @@ struct mtk_video_dec_buf {
 	bool	used;
 	bool	queued_in_vb2;
 	bool	queued_in_v4l2;
-
 	bool	error;
 
 	union {
@@ -88,11 +87,9 @@ void mtk_vcodec_dec_release(struct mtk_vcodec_ctx *ctx);
 /*
  * VB2 ops
  */
-int vb2ops_vdec_queue_setup(struct vb2_queue *vq,
-				unsigned int *nbuffers,
-				unsigned int *nplanes,
-				unsigned int sizes[],
-				struct device *alloc_devs[]);
+int vb2ops_vdec_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
+			    unsigned int *nplanes, unsigned int sizes[],
+			    struct device *alloc_devs[]);
 int vb2ops_vdec_buf_prepare(struct vb2_buffer *vb);
 void vb2ops_vdec_buf_finish(struct vb2_buffer *vb);
 int vb2ops_vdec_buf_init(struct vb2_buffer *vb);

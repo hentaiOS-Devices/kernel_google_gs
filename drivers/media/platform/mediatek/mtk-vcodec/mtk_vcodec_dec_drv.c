@@ -404,14 +404,14 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 	if (dev->vdec_pdata->uses_stateless_api) {
 		dev->mdev_dec.dev = &pdev->dev;
 		strscpy(dev->mdev_dec.model, MTK_VCODEC_DEC_NAME,
-				sizeof(dev->mdev_dec.model));
+			sizeof(dev->mdev_dec.model));
 
 		media_device_init(&dev->mdev_dec);
 		dev->mdev_dec.ops = &mtk_vcodec_media_ops;
 		dev->v4l2_dev.mdev = &dev->mdev_dec;
 
-		ret = v4l2_m2m_register_media_controller(dev->m2m_dev_dec,
-			dev->vfd_dec, MEDIA_ENT_F_PROC_VIDEO_DECODER);
+		ret = v4l2_m2m_register_media_controller(dev->m2m_dev_dec, dev->vfd_dec,
+							 MEDIA_ENT_F_PROC_VIDEO_DECODER);
 		if (ret) {
 			mtk_v4l2_err("Failed to register media controller");
 			goto err_dec_mem_init;
@@ -423,12 +423,10 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 			goto err_media_reg;
 		}
 
-		mtk_v4l2_debug(0, "media registered as /dev/media%d",
-			vfd_dec->num);
+		mtk_v4l2_debug(0, "media registered as /dev/media%d", vfd_dec->minor);
 	}
 
-	mtk_v4l2_debug(0, "decoder registered as /dev/video%d",
-		vfd_dec->num);
+	mtk_v4l2_debug(0, "decoder registered as /dev/video%d", vfd_dec->minor);
 
 	return 0;
 
@@ -437,6 +435,8 @@ err_media_reg:
 err_dec_mem_init:
 	video_unregister_device(vfd_dec);
 err_reg_cont:
+	if (dev->vdec_pdata->uses_stateless_api)
+		media_device_cleanup(&dev->mdev_dec);
 	destroy_workqueue(dev->decode_workqueue);
 err_event_workq:
 	v4l2_m2m_release(dev->m2m_dev_dec);
@@ -474,7 +474,6 @@ static int mtk_vcodec_dec_remove(struct platform_device *pdev)
 {
 	struct mtk_vcodec_dev *dev = platform_get_drvdata(pdev);
 
-	flush_workqueue(dev->decode_workqueue);
 	destroy_workqueue(dev->decode_workqueue);
 
 	if (media_devnode_is_registered(dev->mdev_dec.devnode)) {
