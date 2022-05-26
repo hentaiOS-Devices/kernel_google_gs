@@ -2448,7 +2448,7 @@ static struct svs_bank svs_mt8183_banks[] = {
 		.hw_id			= 3,
 		.tzone_name		= "tzts2",
 		.buck_name		= "mali",
-		.pd_req			= true,
+		.pd_req			= false,
 		.volt_flags		= SVSB_INIT01_VOLT_INC_ONLY,
 		.mode_support		= SVSB_MODE_INIT01 | SVSB_MODE_INIT02 |
 					  SVSB_MODE_MON,
@@ -2593,10 +2593,6 @@ static int svs_get_svs_mt8183_platform_data(struct svs_platform *svsp)
 			break;
 		case SVSB_GPU:
 			svsb->opp_dev = svs_add_device_link(svsp, "mali");
-			svsb->pd_dev = svs_add_device_link(svsp,
-							   "mali_gpu_core2");
-			if (IS_ERR(svsb->pd_dev))
-				return PTR_ERR(svsb->pd_dev);
 			break;
 		default:
 			WARN_ON(1);
