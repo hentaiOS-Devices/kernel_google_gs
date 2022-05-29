@@ -66,4 +66,8 @@ void pre_validate_dsc(struct drm_atomic_state *state,
 		      struct dsc_mst_fairness_vars *vars);
 #endif
 
+enum dc_status dm_dp_mst_is_port_support_mode(
+	struct amdgpu_dm_connector *aconnector,
+	struct dc_stream_state *stream);
+
 #endif
