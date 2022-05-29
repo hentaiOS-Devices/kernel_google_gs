@@ -288,7 +288,7 @@ static int avs_register_i2s_board(struct avs_dev *adev, struct snd_soc_acpi_mach
 	num_ssps = adev->hw_cfg.i2s_caps.ctrl_count;
 	if (fls(mach->link_mask) > num_ssps) {
 		dev_err(adev->dev, "Platform supports %d SSPs but board %s requires SSP%ld\n",
-			num_ssps, mach->drv_name, __fls(mach->link_mask));
+			num_ssps, mach->drv_name, (unsigned long)__fls(mach->link_mask));
 		return -ENODEV;
 	}
 
