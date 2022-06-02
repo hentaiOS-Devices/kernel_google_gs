@@ -1943,8 +1943,6 @@ struct rtw89_vif {
 	struct ieee80211_tx_queue_params tx_params[IEEE80211_NUM_ACS];
 	struct rtw89_traffic_stats stats;
 	struct rtw89_phy_rate_pattern rate_pattern;
-	struct cfg80211_scan_request *scan_req;
-	struct ieee80211_scan_ies *scan_ies;
 };
 
 enum rtw89_lv1_rcvy_step {
@@ -2325,7 +2323,6 @@ struct rtw89_fw_info {
 	struct rtw89_fw_suit wowlan;
 	bool fw_log_enable;
 	bool old_ht_ra_format;
-	bool scan_offload;
 };
 
 struct rtw89_cam_info {
@@ -2366,7 +2363,6 @@ struct rtw89_hal {
 	u8 current_primary_channel;
 	enum rtw89_subband current_subband;
 	u8 current_band_width;
-	u8 prev_band_type;
 	u8 current_band_type;
 	u32 sw_amsdu_max_size;
 	u32 antenna_tx;
@@ -2376,7 +2372,6 @@ struct rtw89_hal {
 };
 
 #define RTW89_MAX_MAC_ID_NUM 128
-#define RTW89_MAX_PKT_OFLD_NUM 255
 
 enum rtw89_flags {
 	RTW89_FLAG_POWERON,
@@ -2785,21 +2780,11 @@ struct rtw89_early_h2c {
 	u16 h2c_len;
 };
 
-struct rtw89_hw_scan_info {
-	struct ieee80211_vif *scanning_vif;
-	struct list_head pkt_list[NUM_NL80211_BANDS];
-	u8 op_pri_ch;
-	u8 op_chan;
-	u8 op_bw;
-	u8 op_band;
-};
-
 struct rtw89_dev {
 	struct ieee80211_hw *hw;
 	struct device *dev;
 
 	bool dbcc_en;
-	struct rtw89_hw_scan_info scan_info;
 	const struct rtw89_chip_info *chip;
 	struct rtw89_hal hal;
 	struct rtw89_mac_info mac;
@@ -2826,7 +2811,6 @@ struct rtw89_dev {
 
 	struct sk_buff_head c2h_queue;
 	struct work_struct c2h_work;
-	struct work_struct ips_work;
 
 	struct list_head early_h2c_list;
 
@@ -2835,7 +2819,6 @@ struct rtw89_dev {
 	DECLARE_BITMAP(hw_port, RTW89_MAX_HW_PORT_NUM);
 	DECLARE_BITMAP(mac_id_map, RTW89_MAX_MAC_ID_NUM);
 	DECLARE_BITMAP(flags, NUM_OF_RTW89_FLAGS);
-	DECLARE_BITMAP(pkt_offload, RTW89_MAX_PKT_OFLD_NUM);
 
 	struct rtw89_phy_stat phystat;
 	struct rtw89_dack_info dack;
@@ -3421,9 +3404,5 @@ void rtw89_traffic_stats_init(struct rtw89_dev *rtwdev,
 			      struct rtw89_traffic_stats *stats);
 int rtw89_core_start(struct rtw89_dev *rtwdev);
 void rtw89_core_stop(struct rtw89_dev *rtwdev);
-void rtw89_core_scan_start(struct rtw89_dev *rtwdev, struct rtw89_vif *rtwvif,
-			   const u8 *mac_addr, bool hw_scan);
-void rtw89_core_scan_complete(struct rtw89_dev *rtwdev,
-			      struct ieee80211_vif *vif, bool hw_scan);
 
 #endif
