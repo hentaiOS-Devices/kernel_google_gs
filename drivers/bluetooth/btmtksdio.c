@@ -1305,7 +1305,7 @@ static bool btmtksdio_sdio_wakeup(struct hci_dev *hdev)
 			kfree_skb(skb);
 	}
 
-	return !may_wakeup;
+	return may_wakeup;
 }
 
 static int btmtksdio_probe(struct sdio_func *func,
@@ -1348,7 +1348,7 @@ static int btmtksdio_probe(struct sdio_func *func,
 	hdev->setup    = btmtksdio_setup;
 	hdev->shutdown = btmtksdio_shutdown;
 	hdev->send     = btmtksdio_send_frame;
-	hdev->prevent_wake = btmtksdio_sdio_wakeup;
+	hdev->wakeup   = btmtksdio_sdio_wakeup;
 	hdev->set_bdaddr = btmtk_set_bdaddr;
 
 	SET_HCIDEV_DEV(hdev, &func->dev);
