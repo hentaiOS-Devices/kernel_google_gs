@@ -13,6 +13,7 @@
 #include <trace/hooks/binder.h>
 #include <trace/hooks/sched.h>
 #include <trace/hooks/topology.h>
+#include <trace/hooks/cpufreq.h>
 
 #include "sched_priv.h"
 #include "../../../../../android/binder_internal.h"
@@ -93,6 +94,12 @@ extern void rvh_set_user_nice_pixel_mod(void *data, struct task_struct *p, long 
 extern void rvh_setscheduler_pixel_mod(void *data, struct task_struct *p);
 extern void rvh_update_misfit_status_pixel_mod(void *data, struct task_struct *p,
 			struct rq *rq, bool *need_update);
+
+extern void android_rvh_show_max_freq(void *unused, struct cpufreq_policy *policy,
+						unsigned int *max_freq);
+
+extern void vh_sched_setaffinity_mod(void *data, struct task_struct *task,
+					const struct cpumask *in_mask, int *skip);
 
 extern struct cpufreq_governor sched_pixel_gov;
 
@@ -330,6 +337,14 @@ static int vh_sched_init(void)
 
 	ret = register_trace_android_rvh_cpumask_any_and_distribute(
 		rvh_cpumask_any_and_distribute, NULL);
+	if (ret)
+		return ret;
+
+	ret = register_trace_android_rvh_show_max_freq(android_rvh_show_max_freq, NULL);
+	if (ret)
+		return ret;
+
+	ret = register_trace_android_vh_sched_setaffinity_early(vh_sched_setaffinity_mod, NULL);
 	if (ret)
 		return ret;
 
