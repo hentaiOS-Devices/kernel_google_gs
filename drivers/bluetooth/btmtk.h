@@ -73,14 +73,6 @@ struct btmtk_tci_sleep {
 	u8 time_compensation;
 } __packed;
 
-struct btmtk_wakeon {
-	u8 mode;
-	u8 gpo;
-	u8 active_high;
-	__le16 enable_delay;
-	__le16 wakeup_delay;
-} __packed;
-
 struct btmtk_sco {
 	u8 clock_config;
 	u8 transmit_format_config;
