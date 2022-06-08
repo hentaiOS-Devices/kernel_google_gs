@@ -1443,6 +1443,7 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 	struct uvc_fh *handle = fh;
 	struct uvc_streaming *stream = handle->stream;
 	struct uvc_video_chain *chain = handle->chain;
+	struct uvc_roi roi_backup;
 	struct uvc_roi *roi;
 	int ret;
 
@@ -1481,6 +1482,8 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 
 	validate_roi_bounds(stream, sel);
 
+	roi_backup = *roi;
+
 	/*
 	 * ROI left, top, right, bottom are global coordinates.
 	 * Note that we use ->auto_controls value which we read earlier.
@@ -1493,8 +1496,10 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 	ret = uvc_query_ctrl(stream->dev, UVC_SET_CUR, 1, stream->dev->intfnum,
 			     UVC_CT_REGION_OF_INTEREST_CONTROL, roi,
 			     sizeof(struct uvc_roi));
-	if (ret)
+	if (ret) {
+		*roi = roi_backup;
 		goto out;
+	}
 
 out:
 	uvc_pm_put(stream);
