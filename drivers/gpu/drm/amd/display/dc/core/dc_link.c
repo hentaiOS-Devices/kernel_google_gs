@@ -1742,7 +1742,8 @@ static enum dc_status enable_link_dp(struct dc_state *state,
 	enum dc_status status;
 	bool skip_video_pattern;
 	struct dc_link *link = stream->link;
-	struct dc_link_settings link_settings = {0};
+	const struct dc_link_settings *link_settings =
+			&pipe_ctx->link_config.dp_link_settings;
 	bool fec_enable;
 	int i;
 	bool apply_seamless_boot_optimization = false;
@@ -1759,9 +1760,6 @@ static enum dc_status enable_link_dp(struct dc_state *state,
 		}
 	}
 
-	/* get link settings for video mode timing */
-	decide_link_settings(stream, &link_settings);
-
 	if (pipe_ctx->stream->signal == SIGNAL_TYPE_EDP) {
 		/*in case it is not on*/
 		link->dc->hwss.edp_power_control(link, true);
@@ -1769,7 +1767,7 @@ static enum dc_status enable_link_dp(struct dc_state *state,
 	}
 
 	pipe_ctx->stream_res.pix_clk_params.requested_sym_clk =
-			link_settings.link_rate * LINK_RATE_REF_FREQ_IN_KHZ;
+			link_settings->link_rate * LINK_RATE_REF_FREQ_IN_KHZ;
 	if (state->clk_mgr && !apply_seamless_boot_optimization)
 		state->clk_mgr->funcs->update_clocks(state->clk_mgr,
 						     state, false);
@@ -1781,16 +1779,15 @@ static enum dc_status enable_link_dp(struct dc_state *state,
 
 	skip_video_pattern = true;
 
-	if (link_settings.link_rate == LINK_RATE_LOW)
+	if (link_settings->link_rate == LINK_RATE_LOW)
 		skip_video_pattern = false;
 
-	if (perform_link_training_with_retries(&link_settings,
+	if (perform_link_training_with_retries(link_settings,
 					       skip_video_pattern,
 					       LINK_TRAINING_ATTEMPTS,
 					       pipe_ctx,
 					       pipe_ctx->stream->signal,
 					       do_fallback)) {
-		link->cur_link_settings = link_settings;
 		status = DC_OK;
 	} else {
 		status = DC_FAIL_DP_LINK_TRAINING;
@@ -3621,10 +3618,7 @@ void dc_link_set_preferred_link_settings(struct dc *dc,
 	if (link_stream->dpms_off)
 		return;
 
-	decide_link_settings(link_stream, &store_settings);
-
-	if ((store_settings.lane_count != LANE_COUNT_UNKNOWN) &&
-		(store_settings.link_rate != LINK_RATE_UNKNOWN))
+	if (decide_link_settings(link_stream, &store_settings))
 		dp_retrain_link_dp_test(link, &store_settings, false);
 }
 
