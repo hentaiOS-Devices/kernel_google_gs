@@ -39,14 +39,14 @@
 		reg = <0x38>;
 		reset-gpios = <&pio 100 GPIO_ACTIVE_HIGH>;
 		maxim,dsm_param_name = "dsm_param_R_Google_Dojo.bin";
-		status = "disabled";
+		status = "okay";
 	};
 
 	max98390_l: max98390@39 {
 		compatible = "maxim,max98390";
 		reg = <0x39>;
 		maxim,dsm_param_name = "dsm_param_L_Google_Dojo.bin";
-		status = "disabled";
+		status = "okay";
 	};
 };
 
@@ -118,14 +118,6 @@
 	compatible = "mediatek,mt8195_mt6359_max98390_rt5682";
 	model = "m8195_m98390_5682s";
 	mediatek,dptx-codec = <&dp_tx>;
-};
-
-&max98390_l {
-	status = "okay";
-};
-
-&max98390_r {
-	status = "okay";
 };
 
 &rt5682s {

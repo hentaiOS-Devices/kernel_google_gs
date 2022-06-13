@@ -45,13 +45,3 @@
 		MATRIX_KEY(0x03, 0x05, KEY_VOLUMEUP)
 	>;
 };
-
-&max98390_l {
-	maxim,dsm_param_name = "dsm_param_L_Google_Dojo.bin";
-	status = "okay";
-};
-
-&max98390_r {
-	maxim,dsm_param_name = "dsm_param_R_Google_Dojo.bin";
-	status = "okay";
-};
