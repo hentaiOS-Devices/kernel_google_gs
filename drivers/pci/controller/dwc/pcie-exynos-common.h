@@ -313,6 +313,7 @@ struct exynos_pcie {
 	int phy_control;
 };
 
+#define PCIE_MAX_MSI_NUM	(8)
 #define PCIE_MAX_SEPA_IRQ_NUM	(5)
 #define PCIE_START_SEP_MSI_VEC	(1)
 #define PCIE_MSI_MAX_VEC_NUM	(32)
