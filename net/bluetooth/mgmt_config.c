@@ -195,6 +195,7 @@ int set_def_system_config(struct sock *sk, struct hci_dev *hdev, void *data,
 					MGMT_OP_SET_DEF_SYSTEM_CONFIG,
 					MGMT_STATUS_INVALID_PARAMS);
 			}
+			fallthrough;
 		case 0x001d:
 		case 0x001e:
 			exp_type_len = sizeof(u16);
