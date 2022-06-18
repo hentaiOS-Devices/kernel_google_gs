@@ -115,6 +115,14 @@ static void drm_self_refresh_transition(struct drm_self_refresh_data *sr_data,
 retry:
 	state->acquire_ctx = &ctx;
 
+	/*
+	 * Can happen when input events race with initial CRTC state.
+	 * drm_atomic_get_crtc_state() doesn't really expect this (and may
+	 * throw a WARN_ON()), so just short circuit here.
+	 */
+	if (!crtc->state && !enable)
+		goto out;
+
 	crtc_state = drm_atomic_get_crtc_state(state, crtc);
 	if (IS_ERR(crtc_state)) {
 		ret = PTR_ERR(crtc_state);
