@@ -195,6 +195,7 @@ struct ath11k_hw_params {
 	bool supports_rssi_stats;
 	bool fw_wmi_diag_event;
 	bool current_cc_support;
+	const struct cfg80211_sar_capa *bios_sar_capa;
 };
 
 struct ath11k_hw_ops {
@@ -365,4 +366,5 @@ extern const struct ath11k_hw_regs qca6390_regs;
 extern const struct ath11k_hw_regs qcn9074_regs;
 extern const struct ath11k_hw_regs wcn6855_regs;
 
+extern const struct cfg80211_sar_capa ath11k_hw_sar_capa_wcn6855;
 #endif
