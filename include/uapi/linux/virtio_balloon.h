@@ -118,8 +118,8 @@ struct virtio_balloon_stat {
 	__virtio64 val;
 } __attribute__((packed));
 
-#define VIRTIO_BALLOON_EVENT_PRESSURE		1
-#define VIRTIO_BALLOON_EVENT_PUFF_FAILURE	2
+#define VIRTIO_BALLOON_EVENT_PRESSURE		((__force __virtio32) 1)
+#define VIRTIO_BALLOON_EVENT_PUFF_FAILURE	((__force __virtio32) 2)
 
 struct virtio_balloon_event_header {
 	__virtio32 type;
