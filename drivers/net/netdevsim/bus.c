@@ -112,9 +112,7 @@ new_port_store(struct device *dev, struct device_attribute *attr,
 	devlink = priv_to_devlink(nsim_dev);
 
 	mutex_lock(&nsim_bus_dev->nsim_bus_reload_lock);
-	devlink_reload_disable(devlink);
 	ret = nsim_dev_port_add(nsim_bus_dev, port_index);
-	devlink_reload_enable(devlink);
 	mutex_unlock(&nsim_bus_dev->nsim_bus_reload_lock);
 	return ret ? ret : count;
 }
@@ -141,9 +139,7 @@ del_port_store(struct device *dev, struct device_attribute *attr,
 	devlink = priv_to_devlink(nsim_dev);
 
 	mutex_lock(&nsim_bus_dev->nsim_bus_reload_lock);
-	devlink_reload_disable(devlink);
 	ret = nsim_dev_port_del(nsim_bus_dev, port_index);
-	devlink_reload_enable(devlink);
 	mutex_unlock(&nsim_bus_dev->nsim_bus_reload_lock);
 	return ret ? ret : count;
 }
