@@ -45,6 +45,7 @@ struct devlink {
 	struct list_head trap_group_list;
 	struct list_head trap_policer_list;
 	const struct devlink_ops *ops;
+	u64 features;
 	struct xarray snapshot_ids;
 	struct devlink_dev_stats stats;
 	struct device *dev;
@@ -1156,6 +1157,11 @@ enum devlink_trap_group_generic_id {
 		.min_burst = _min_burst,				      \
 	}
 
+enum {
+	/* device supports reload operations */
+	DEVLINK_F_RELOAD = 1UL << 0,
+};
+
 struct devlink_ops {
 	/**
 	 * @supported_flash_update_params:
@@ -1381,6 +1387,7 @@ struct ib_device;
 struct net *devlink_net(const struct devlink *devlink);
 void devlink_net_set(struct devlink *devlink, struct net *net);
 struct devlink *devlink_alloc(const struct devlink_ops *ops, size_t priv_size);
+void devlink_set_features(struct devlink *devlink, u64 features);
 void devlink_register(struct devlink *devlink, struct device *dev);
 void devlink_unregister(struct devlink *devlink);
 void devlink_reload_enable(struct devlink *devlink);

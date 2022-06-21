@@ -1078,6 +1078,7 @@ int nsim_dev_probe(struct nsim_bus_dev *nsim_bus_dev)
 	if (err)
 		goto err_devlink_free;
 
+	devlink_set_features(devlink, DEVLINK_F_RELOAD);
 	devlink_register(devlink, &nsim_bus_dev->dev);
 	err = devlink_params_register(devlink, nsim_devlink_params,
 				      ARRAY_SIZE(nsim_devlink_params));

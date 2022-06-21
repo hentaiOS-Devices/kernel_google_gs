@@ -1925,8 +1925,10 @@ __mlxsw_core_bus_device_register(const struct mlxsw_bus_info *mlxsw_bus_info,
 	if (err)
 		goto err_emad_init;
 
-	if (!reload)
+	if (!reload) {
+		devlink_set_features(devlink, DEVLINK_F_RELOAD);
 		devlink_register(devlink, mlxsw_bus_info->dev);
+	}
 
 	if (!reload) {
 		err = mlxsw_core_params_register(mlxsw_core);

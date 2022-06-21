@@ -385,6 +385,7 @@ int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
 				      ARRAY_SIZE(mlx5_devlink_params));
 	if (err)
 		goto params_reg_err;
+	devlink_set_features(devlink, DEVLINK_F_RELOAD);
 	mlx5_devlink_set_params_init_values(devlink);
 	devlink_params_publish(devlink);
 	return 0;
