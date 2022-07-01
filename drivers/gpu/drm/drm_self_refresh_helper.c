@@ -120,8 +120,10 @@ retry:
 	 * drm_atomic_get_crtc_state() doesn't really expect this (and may
 	 * throw a WARN_ON()), so just short circuit here.
 	 */
-	if (!crtc->state && !enable)
+	if (!crtc->state) {
+		WARN(enable, "enable call with NULL crtc->state\n");
 		goto out;
+	}
 
 	crtc_state = drm_atomic_get_crtc_state(state, crtc);
 	if (IS_ERR(crtc_state)) {
