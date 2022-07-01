@@ -275,7 +275,6 @@ static int t7xx_devlink_fb_send_buffer(struct t7xx_port *port,
 		}
 		remaining -= len;
 		offset += len;
-		udelay(500);
 	}
 
 err_out:
