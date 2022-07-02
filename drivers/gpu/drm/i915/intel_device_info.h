@@ -76,8 +76,6 @@ enum intel_platform {
 	INTEL_GEMINILAKE,
 	INTEL_COFFEELAKE,
 	INTEL_COMETLAKE,
-	/* gen10 */
-	INTEL_CANNONLAKE,
 	/* gen11 */
 	INTEL_ICELAKE,
 	INTEL_ELKHARTLAKE,
@@ -105,7 +103,7 @@ enum intel_platform {
 #define INTEL_SUBPLATFORM_ULT	(0)
 #define INTEL_SUBPLATFORM_ULX	(1)
 
-/* CNL/ICL */
+/* ICL */
 #define INTEL_SUBPLATFORM_PORTF	(0)
 
 /* DG2 */
@@ -145,7 +143,7 @@ enum intel_ppgtt_type {
 	func(has_llc); \
 	func(has_logical_ring_contexts); \
 	func(has_logical_ring_elsq); \
-	func(has_master_unit_irq); \
+	func(has_mslices); \
 	func(has_pooled_eu); \
 	func(has_pxp); \
 	func(has_rc6); \
@@ -186,7 +184,6 @@ struct intel_device_info {
 	u8 media_ver;
 	u8 media_rel;
 
-	u8 gt; /* GT number, 0 if undefined */
 	intel_engine_mask_t platform_engine_mask; /* Engines supported by the HW */
 
 	enum intel_platform platform;
@@ -201,6 +198,8 @@ struct intel_device_info {
 	u32 memory_regions; /* regions supported by the HW */
 
 	u32 display_mmio_offset;
+
+	u8 gt; /* GT number, 0 if undefined */
 
 	u8 pipe_mask;
 	u8 cpu_transcoder_mask;

@@ -115,15 +115,12 @@ __i915_gem_object_create_user_ext(struct drm_i915_private *i915, u64 size,
 		goto object_free;
 
 	/*
-	 * For now resort to CPU based clearing for device local-memory, in the
-	 * near future this will use the blitter engine for accelerated, GPU
-	 * based clearing.
+	 * I915_BO_ALLOC_USER will make sure the object is cleared before
+	 * any user access.
 	 */
-	flags = 0;
-	if (mr->type == INTEL_MEMORY_LOCAL)
-		flags = I915_BO_ALLOC_CPU_CLEAR;
+	flags = I915_BO_ALLOC_USER;
 
-	ret = mr->ops->init_object(mr, obj, size, flags);
+	ret = mr->ops->init_object(mr, obj, size, 0, flags);
 	if (ret)
 		goto object_free;
 
