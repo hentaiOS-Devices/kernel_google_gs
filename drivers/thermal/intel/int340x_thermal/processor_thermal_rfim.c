@@ -9,8 +9,6 @@
 #include <linux/pci.h>
 #include "processor_thermal_device.h"
 
-MODULE_IMPORT_NS(INT340X_THERMAL);
-
 struct mmio_reg {
 	int read_only;
 	u32 offset;
@@ -196,7 +194,8 @@ static ssize_t rfi_restriction_store(struct device *dev,
 				     struct device_attribute *attr,
 				     const char *buf, size_t count)
 {
-	u16 id = 0x0008;
+	u16 cmd_id = 0x0008;
+	u64 cmd_resp;
 	u32 input;
 	int ret;
 
@@ -204,7 +203,7 @@ static ssize_t rfi_restriction_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	ret = processor_thermal_send_mbox_write_cmd(to_pci_dev(dev), id, input);
+	ret = processor_thermal_send_mbox_cmd(to_pci_dev(dev), cmd_id, input, &cmd_resp);
 	if (ret)
 		return ret;
 
@@ -215,30 +214,30 @@ static ssize_t rfi_restriction_show(struct device *dev,
 				    struct device_attribute *attr,
 				    char *buf)
 {
-	u16 id = 0x0007;
-	u64 resp;
+	u16 cmd_id = 0x0007;
+	u64 cmd_resp;
 	int ret;
 
-	ret = processor_thermal_send_mbox_read_cmd(to_pci_dev(dev), id, &resp);
+	ret = processor_thermal_send_mbox_cmd(to_pci_dev(dev), cmd_id, 0, &cmd_resp);
 	if (ret)
 		return ret;
 
-	return sprintf(buf, "%llu\n", resp);
+	return sprintf(buf, "%llu\n", cmd_resp);
 }
 
 static ssize_t ddr_data_rate_show(struct device *dev,
 				  struct device_attribute *attr,
 				  char *buf)
 {
-	u16 id = 0x0107;
-	u64 resp;
+	u16 cmd_id = 0x0107;
+	u64 cmd_resp;
 	int ret;
 
-	ret = processor_thermal_send_mbox_read_cmd(to_pci_dev(dev), id, &resp);
+	ret = processor_thermal_send_mbox_cmd(to_pci_dev(dev), cmd_id, 0, &cmd_resp);
 	if (ret)
 		return ret;
 
-	return sprintf(buf, "%llu\n", resp);
+	return sprintf(buf, "%llu\n", cmd_resp);
 }
 
 static DEVICE_ATTR_RW(rfi_restriction);
