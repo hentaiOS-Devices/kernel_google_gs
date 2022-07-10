@@ -1932,6 +1932,7 @@ static const struct pci_device_id pci_ids[] = {
 	SDHCI_PCI_DEVICE(INTEL, JSL_SD,    intel_byt_sd),
 	SDHCI_PCI_DEVICE(INTEL, LKF_EMMC,  intel_glk_emmc),
 	SDHCI_PCI_DEVICE(INTEL, LKF_SD,    intel_byt_sd),
+	SDHCI_PCI_DEVICE(INTEL, ADL_EMMC,  intel_glk_emmc),
 	SDHCI_PCI_DEVICE(O2, 8120,     o2),
 	SDHCI_PCI_DEVICE(O2, 8220,     o2),
 	SDHCI_PCI_DEVICE(O2, 8221,     o2),
@@ -2198,6 +2199,8 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
 						   slot->cd_idx,
 						   slot->cd_override_level,
 						   0);
+		if (ret == 0)
+			mmc_detect_change(host->mmc, msecs_to_jiffies(200));
 		if (ret == -EPROBE_DEFER)
 			goto remove;
 

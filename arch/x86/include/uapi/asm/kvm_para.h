@@ -33,6 +33,7 @@
 #define KVM_FEATURE_PV_SCHED_YIELD	13
 #define KVM_FEATURE_ASYNC_PF_INT	14
 #define KVM_FEATURE_MSI_EXT_DEST_ID	15
+#define KVM_FEATURE_HOST_SUSPEND_TIME	30
 
 #define KVM_HINTS_REALTIME      0
 
@@ -54,6 +55,7 @@
 #define MSR_KVM_POLL_CONTROL	0x4b564d05
 #define MSR_KVM_ASYNC_PF_INT	0x4b564d06
 #define MSR_KVM_ASYNC_PF_ACK	0x4b564d07
+#define MSR_KVM_HOST_SUSPEND_TIME      0x4b564d98
 
 struct kvm_steal_time {
 	__u64 steal;
@@ -74,6 +76,10 @@ struct kvm_clock_pairing {
 	__u64 tsc;
 	__u32 flags;
 	__u32 pad[9];
+};
+
+struct kvm_suspend_time {
+	__u64   suspend_time_ns;
 };
 
 #define KVM_STEAL_ALIGNMENT_BITS 5

@@ -1643,7 +1643,22 @@ static void soc_check_tplg_fes(struct snd_soc_card *card)
 match:
 		/* machine matches, so override the rtd data */
 		for_each_card_prelinks(card, i, dai_link) {
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_MTK_TOPLEVEL)
+			struct snd_soc_dai_link_component *dlc;
+			struct snd_soc_dai *dai;
 
+			/*
+			 * ignore dailinks exposed by other components, with the
+			 * assumption that all cpu_dais are exposed by the same
+			 * component
+			 */
+			dlc = asoc_link_to_cpu(dai_link, 0);
+			dai = snd_soc_find_dai(dlc);
+
+			if (!dai || dai->component != component)
+				continue;
+
+#endif
 			/* ignore this FE */
 			if (dai_link->dynamic) {
 				dai_link->ignore = true;
@@ -2339,6 +2354,7 @@ struct snd_soc_dai *snd_soc_register_dai(struct snd_soc_component *component,
 	dev_dbg(dev, "ASoC: Registered DAI '%s'\n", dai->name);
 	return dai;
 }
+EXPORT_SYMBOL(snd_soc_register_dai);
 
 /**
  * snd_soc_unregister_dais - Unregister DAIs from the ASoC core
@@ -2448,6 +2464,7 @@ int snd_soc_component_initialize(struct snd_soc_component *component,
 	INIT_LIST_HEAD(&component->dai_list);
 	INIT_LIST_HEAD(&component->dobj_list);
 	INIT_LIST_HEAD(&component->card_list);
+	INIT_LIST_HEAD(&component->list);
 	mutex_init(&component->io_mutex);
 
 	component->name = fmt_single_name(dev, &component->id);
@@ -3008,7 +3025,7 @@ int snd_soc_get_dai_name(const struct of_phandle_args *args,
 	for_each_component(pos) {
 		component_of_node = soc_component_to_node(pos);
 
-		if (component_of_node != args->np)
+		if (component_of_node != args->np || !pos->num_dai)
 			continue;
 
 		ret = snd_soc_component_of_xlate_dai_name(pos, args, dai_name);

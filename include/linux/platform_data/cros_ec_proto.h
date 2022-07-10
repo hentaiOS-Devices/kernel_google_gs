@@ -219,6 +219,9 @@ int cros_ec_prepare_tx(struct cros_ec_device *ec_dev,
 int cros_ec_check_result(struct cros_ec_device *ec_dev,
 			 struct cros_ec_command *msg);
 
+int cros_ec_cmd_xfer(struct cros_ec_device *ec_dev,
+		     struct cros_ec_command *msg);
+
 int cros_ec_cmd_xfer_status(struct cros_ec_device *ec_dev,
 			    struct cros_ec_command *msg);
 
@@ -233,6 +236,9 @@ u32 cros_ec_get_host_event(struct cros_ec_device *ec_dev);
 int cros_ec_check_features(struct cros_ec_dev *ec, int feature);
 
 int cros_ec_get_sensor_count(struct cros_ec_dev *ec);
+
+int cros_ec_command(struct cros_ec_device *ec_dev, unsigned int version, int command, void *outdata,
+		    int outsize, void *indata, int insize);
 
 /**
  * cros_ec_get_time_ns() - Return time in ns.

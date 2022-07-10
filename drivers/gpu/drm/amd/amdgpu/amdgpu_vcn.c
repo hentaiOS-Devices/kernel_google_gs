@@ -258,8 +258,6 @@ int amdgpu_vcn_sw_fini(struct amdgpu_device *adev)
 {
 	int i, j;
 
-	cancel_delayed_work_sync(&adev->vcn.idle_work);
-
 	for (j = 0; j < adev->vcn.num_vcn_inst; ++j) {
 		if (adev->vcn.harvest_config & (1 << j))
 			continue;
@@ -286,6 +284,29 @@ int amdgpu_vcn_sw_fini(struct amdgpu_device *adev)
 	mutex_destroy(&adev->vcn.vcn_pg_lock);
 
 	return 0;
+}
+
+bool amdgpu_vcn_is_disabled_vcn(struct amdgpu_device *adev, enum vcn_ring_type type, uint32_t vcn_instance)
+{
+	bool ret = false;
+
+	int major;
+	int minor;
+	int revision;
+
+	/* if cannot find IP data, then this VCN does not exist */
+	if (amdgpu_discovery_get_vcn_version(adev, vcn_instance, &major, &minor, &revision) != 0)
+		return true;
+
+	if ((type == VCN_ENCODE_RING) && (revision & VCN_BLOCK_ENCODE_DISABLE_MASK)) {
+		ret = true;
+	} else if ((type == VCN_DECODE_RING) && (revision & VCN_BLOCK_DECODE_DISABLE_MASK)) {
+		ret = true;
+	} else if ((type == VCN_UNIFIED_RING) && (revision & VCN_BLOCK_QUEUE_DISABLE_MASK)) {
+		ret = true;
+	}
+
+	return ret;
 }
 
 int amdgpu_vcn_suspend(struct amdgpu_device *adev)

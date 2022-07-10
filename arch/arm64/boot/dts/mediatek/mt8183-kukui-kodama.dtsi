@@ -65,14 +65,15 @@
 	clock-frequency = <400000>;
 	vbus-supply = <&mt6358_vcamio_reg>;
 
-	eeprom@58 {
+	eeprom@50 {
 		compatible = "atmel,24c64";
-		reg = <0x58>;
+		reg = <0x50>;
 		pagesize = <32>;
 		vcc-supply = <&mt6358_vcamio_reg>;
+		device-id = <0>;
 	};
 
-	camera_main_af: camera_main_af {
+	camera_main_af: camera_main_af@c {
 		compatible = "dongwoon,dw9768";
 		reg = <0x0c>;
 
@@ -88,14 +89,15 @@
 	clock-frequency = <400000>;
 	vbus-supply = <&mt6358_vcn18_reg>;
 
-	eeprom@54 {
+	eeprom@50 {
 		compatible = "atmel,24c64";
-		reg = <0x54>;
+		reg = <0x50>;
 		pagesize = <32>;
 		vcc-supply = <&mt6358_vcn18_reg>;
+		device-id = <0>;
 	};
 
-	sensor_sub: sensor_sub {
+	sensor_sub: sensor_sub@3d {
 		status = "okay";
 		compatible = "ovti,ov02a10";
 		reg = <0x3d>;
@@ -382,6 +384,12 @@
 	};
 };
 
+&cros_ec {
+	keyboard-controller {
+		compatible = "google,cros-ec-keyb-switches";
+	};
+};
+
 &qca_wifi {
 	qcom,ath10k-calibration-variant = "GO_KODAMA";
 };
@@ -397,6 +405,25 @@
 				remote-endpoint = <&ov02a10_endpoint>;
 			};
 		};
+	};
+};
+
+&camera_pins_cam0 {
+	pins_reset {
+		pinmux = <PINMUX_GPIO111__FUNC_GPIO111>;
+		output-low;
+	};
+};
+
+&camera_pins_cam1 {
+	pins_powerdown {
+		pinmux = <PINMUX_GPIO107__FUNC_GPIO107>;
+		output-high;
+	};
+
+	pins_reset {
+		pinmux = <PINMUX_GPIO109__FUNC_GPIO109>;
+		output-low;
 	};
 };
 

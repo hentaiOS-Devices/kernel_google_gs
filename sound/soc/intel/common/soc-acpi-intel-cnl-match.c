@@ -20,7 +20,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_cnl_machines[] = {
 		.drv_name = "cnl_rt274",
 		.fw_filename = "intel/dsp_fw_cnl.bin",
 		.pdata = &cnl_pdata,
-		.sof_fw_filename = "sof-cnl.ri",
 		.sof_tplg_filename = "sof-cnl-rt274.tplg",
 	},
 	{},
@@ -57,7 +56,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_cnl_sdw_machines[] = {
 		.link_mask = BIT(2),
 		.links = up_extreme_rt5682_2,
 		.drv_name = "sof_sdw",
-		.sof_fw_filename = "sof-cnl.ri",
 		.sof_tplg_filename = "sof-cnl-rt5682-sdw2.tplg"
 	},
 	{}

@@ -28,6 +28,7 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_mipi_dsi.h>
 
+#include "icl_dsi.h"
 #include "intel_atomic.h"
 #include "intel_combo_phy.h"
 #include "intel_connector.h"
@@ -1577,8 +1578,14 @@ static void gen11_dsi_sync_state(struct intel_encoder *encoder,
 				 const struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
-	enum pipe pipe = intel_crtc->pipe;
+	struct intel_crtc *intel_crtc;
+	enum pipe pipe;
+
+	if (!crtc_state)
+		return;
+
+	intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
+	pipe = intel_crtc->pipe;
 
 	/* wa verify 1409054076:icl,jsl,ehl */
 	if (DISPLAY_VER(dev_priv) == 11 && pipe == PIPE_B &&

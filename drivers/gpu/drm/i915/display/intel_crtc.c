@@ -12,7 +12,7 @@
 
 #include "i915_trace.h"
 #include "i915_vgpu.h"
-
+#include "icl_dsi.h"
 #include "intel_atomic.h"
 #include "intel_atomic_plane.h"
 #include "intel_color.h"
@@ -335,7 +335,7 @@ int intel_crtc_init(struct drm_i915_private *dev_priv, enum pipe pipe)
 		dev_priv->plane_to_crtc_mapping[i9xx_plane] = crtc;
 	}
 
-	if (DISPLAY_VER(dev_priv) >= 11 || IS_CANNONLAKE(dev_priv))
+	if (DISPLAY_VER(dev_priv) >= 11)
 		drm_crtc_create_scaling_filter_property(&crtc->base,
 						BIT(DRM_SCALING_FILTER_DEFAULT) |
 						BIT(DRM_SCALING_FILTER_NEAREST_NEIGHBOR));
@@ -399,6 +399,8 @@ void intel_pipe_update_start(const struct intel_crtc_state *new_crtc_state)
 		intel_crtc_has_type(new_crtc_state, INTEL_OUTPUT_DSI);
 	DEFINE_WAIT(wait);
 
+	intel_psr_lock(new_crtc_state);
+
 	if (new_crtc_state->uapi.async_flip)
 		return;
 
@@ -423,7 +425,7 @@ void intel_pipe_update_start(const struct intel_crtc_state *new_crtc_state)
 	 * VBL interrupts will start the PSR exit and prevent a PSR
 	 * re-entry as well.
 	 */
-	intel_psr_wait_for_idle(new_crtc_state);
+	intel_psr_wait_for_idle_locked(new_crtc_state);
 
 	local_irq_disable();
 
@@ -537,6 +539,8 @@ void intel_pipe_update_end(struct intel_crtc_state *new_crtc_state)
 	ktime_t end_vbl_time = ktime_get();
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 
+	intel_psr_unlock(new_crtc_state);
+
 	if (new_crtc_state->uapi.async_flip)
 		return;
 
@@ -566,10 +570,23 @@ void intel_pipe_update_end(struct intel_crtc_state *new_crtc_state)
 		new_crtc_state->uapi.event = NULL;
 	}
 
-	local_irq_enable();
-
-	/* Send VRR Push to terminate Vblank */
+	/*
+	 * Send VRR Push to terminate Vblank. If we are already in vblank
+	 * this has to be done _after_ sampling the frame counter, as
+	 * otherwise the push would immediately terminate the vblank and
+	 * the sampled frame counter would correspond to the next frame
+	 * instead of the current frame.
+	 *
+	 * There is a tiny race here (iff vblank evasion failed us) where
+	 * we might sample the frame counter just before vmax vblank start
+	 * but the push would be sent just after it. That would cause the
+	 * push to affect the next frame instead of the current frame,
+	 * which would cause the next frame to terminate already at vmin
+	 * vblank start instead of vmax vblank start.
+	 */
 	intel_vrr_send_push(new_crtc_state);
+
+	local_irq_enable();
 
 	if (intel_vgpu_active(dev_priv))
 		return;

@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
 
@@ -9,227 +9,12 @@
 #include <media/videobuf2-dma-contig.h>
 #include "mtk-mdp3-core.h"
 #include "mtk-mdp3-regs.h"
+#include "mtk-mdp3-m2m.h"
 
-static const struct mdp_format mdp_formats[] = {
-	{
-		.pixelformat	= V4L2_PIX_FMT_GREY,
-		.mdp_color	= MDP_COLOR_GREY,
-		.depth		= { 8 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_RGB565X,
-		.mdp_color	= MDP_COLOR_RGB565,
-		.depth		= { 16 },
-		.row_depth	= { 16 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_RGB565,
-		.mdp_color	= MDP_COLOR_BGR565,
-		.depth		= { 16 },
-		.row_depth	= { 16 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_RGB24,
-		.mdp_color	= MDP_COLOR_RGB888,
-		.depth		= { 24 },
-		.row_depth	= { 24 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_BGR24,
-		.mdp_color	= MDP_COLOR_BGR888,
-		.depth		= { 24 },
-		.row_depth	= { 24 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_ABGR32,
-		.mdp_color	= MDP_COLOR_BGRA8888,
-		.depth		= { 32 },
-		.row_depth	= { 32 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_ARGB32,
-		.mdp_color	= MDP_COLOR_ARGB8888,
-		.depth		= { 32 },
-		.row_depth	= { 32 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_UYVY,
-		.mdp_color	= MDP_COLOR_UYVY,
-		.depth		= { 16 },
-		.row_depth	= { 16 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_VYUY,
-		.mdp_color	= MDP_COLOR_VYUY,
-		.depth		= { 16 },
-		.row_depth	= { 16 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_YUYV,
-		.mdp_color	= MDP_COLOR_YUYV,
-		.depth		= { 16 },
-		.row_depth	= { 16 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_YVYU,
-		.mdp_color	= MDP_COLOR_YVYU,
-		.depth		= { 16 },
-		.row_depth	= { 16 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_YUV420,
-		.mdp_color	= MDP_COLOR_I420,
-		.depth		= { 12 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_YVU420,
-		.mdp_color	= MDP_COLOR_YV12,
-		.depth		= { 12 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV12,
-		.mdp_color	= MDP_COLOR_NV12,
-		.depth		= { 12 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV21,
-		.mdp_color	= MDP_COLOR_NV21,
-		.depth		= { 12 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV16,
-		.mdp_color	= MDP_COLOR_NV16,
-		.depth		= { 16 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV61,
-		.mdp_color	= MDP_COLOR_NV61,
-		.depth		= { 16 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV24,
-		.mdp_color	= MDP_COLOR_NV24,
-		.depth		= { 24 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV42,
-		.mdp_color	= MDP_COLOR_NV42,
-		.depth		= { 24 },
-		.row_depth	= { 8 },
-		.num_planes	= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_MT21C,
-		.mdp_color	= MDP_COLOR_420_BLK_UFO,
-		.depth		= { 8, 4 },
-		.row_depth	= { 8, 8 },
-		.num_planes	= 2,
-		.walign		= 4,
-		.halign		= 5,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_MM21,
-		.mdp_color	= MDP_COLOR_420_BLK,
-		.depth		= { 8, 4 },
-		.row_depth	= { 8, 8 },
-		.num_planes	= 2,
-		.walign		= 4,
-		.halign		= 5,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV12M,
-		.mdp_color	= MDP_COLOR_NV12,
-		.depth		= { 8, 4 },
-		.row_depth	= { 8, 8 },
-		.num_planes	= 2,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV21M,
-		.mdp_color	= MDP_COLOR_NV21,
-		.depth		= { 8, 4 },
-		.row_depth	= { 8, 8 },
-		.num_planes	= 2,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV16M,
-		.mdp_color	= MDP_COLOR_NV16,
-		.depth		= { 8, 8 },
-		.row_depth	= { 8, 8 },
-		.num_planes	= 2,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_NV61M,
-		.mdp_color	= MDP_COLOR_NV61,
-		.depth		= { 8, 8 },
-		.row_depth	= { 8, 8 },
-		.num_planes	= 2,
-		.walign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_YUV420M,
-		.mdp_color	= MDP_COLOR_I420,
-		.depth		= { 8, 2, 2 },
-		.row_depth	= { 8, 4, 4 },
-		.num_planes	= 3,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}, {
-		.pixelformat	= V4L2_PIX_FMT_YVU420M,
-		.mdp_color	= MDP_COLOR_YV12,
-		.depth		= { 8, 2, 2 },
-		.row_depth	= { 8, 4, 4 },
-		.num_planes	= 3,
-		.walign		= 1,
-		.halign		= 1,
-		.flags		= MDP_FMT_FLAG_OUTPUT | MDP_FMT_FLAG_CAPTURE,
-	}
-};
+#define FHD (1920 * 1080)
+
+static const struct mdp_format *mdp_formats;
+static u32 format_len;
 
 static const struct mdp_limit mdp_def_limit = {
 	.out_limit = {
@@ -256,7 +41,7 @@ static const struct mdp_format *mdp_find_fmt(u32 pixelformat, u32 type)
 
 	flag = V4L2_TYPE_IS_OUTPUT(type) ? MDP_FMT_FLAG_OUTPUT :
 					MDP_FMT_FLAG_CAPTURE;
-	for (i = 0; i < ARRAY_SIZE(mdp_formats); ++i) {
+	for (i = 0; i < format_len; ++i) {
 		if (!(mdp_formats[i].flags & flag))
 			continue;
 		if (mdp_formats[i].pixelformat == pixelformat)
@@ -271,7 +56,7 @@ static const struct mdp_format *mdp_find_fmt_by_index(u32 index, u32 type)
 
 	flag = V4L2_TYPE_IS_OUTPUT(type) ? MDP_FMT_FLAG_OUTPUT :
 					MDP_FMT_FLAG_CAPTURE;
-	for (i = 0; i < ARRAY_SIZE(mdp_formats); ++i) {
+	for (i = 0; i < format_len; ++i) {
 		if (!(mdp_formats[i].flags & flag))
 			continue;
 		if (index == num)
@@ -310,8 +95,8 @@ enum mdp_ycbcr_profile mdp_map_ycbcr_prof_mplane(struct v4l2_format *f,
 
 static void mdp_bound_align_image(u32 *w, unsigned int wmin, unsigned int wmax,
 				  unsigned int walign,
-				u32 *h, unsigned int hmin, unsigned int hmax,
-				unsigned int halign, unsigned int salign)
+				  u32 *h, unsigned int hmin, unsigned int hmax,
+				  unsigned int halign, unsigned int salign)
 {
 	unsigned int org_w, org_h, wstep, hstep;
 
@@ -356,41 +141,79 @@ int mdp_enum_fmt_mplane(struct v4l2_fmtdesc *f)
 {
 	const struct mdp_format *fmt;
 
-	if (!V4L2_TYPE_IS_MULTIPLANAR(f->type))
-		return -EINVAL;
-
 	fmt = mdp_find_fmt_by_index(f->index, f->type);
 	if (!fmt)
 		return -EINVAL;
 
-	/* f->description */
 	f->pixelformat = fmt->pixelformat;
 	return 0;
+}
+
+static u32 mdp_fmt_get_hyfbc_plane_size(u32 width,
+					u32 height, u32 color, unsigned int plane)
+{
+	u32 y_data_size = 0;
+	u32 c_data_size = 0;
+	u32 y_header_size = 0;
+	u32 c_header_size = 0;
+	u32 y_data_ofst = 0;
+	u32 y_header_ofst = 0;
+	u32 c_data_ofst = 0;
+	u32 c_header_ofst = 0;
+
+	y_data_size = (((width + 63) >> 6) << 6) * (((height + 63) >> 6) << 6);
+	y_header_size = y_data_size >> 6;
+	if (MDP_COLOR_IS_10BIT_PACKED(color))
+		y_data_size = (y_data_size * 6) >> 2;
+
+	c_data_size = y_data_size >> 1;
+	c_header_size = (((y_header_size >> 1) + 63) >> 6) << 6;
+
+	// Setup source buffer base
+	y_data_ofst = ((y_header_size + 4095) >> 12) << 12; // align 4k
+	y_header_ofst = y_data_ofst - y_header_size;
+	c_data_ofst = ((y_data_ofst + y_data_size + c_header_size + 4095) >> 12) << 12; // align 4k
+	c_header_ofst = c_data_ofst - c_header_size;
+
+	if (plane == 0)
+		return c_header_ofst;
+	else
+		return (c_data_ofst + c_data_size);
+}
+
+static u32 mdp_fmt_get_afbc_plane_size(u32 width, u32 height, u32 color)
+{
+	u32 align_w = ((width + 31) >> 5) << 5;
+	u32 align_h = ((height + 31) >> 5) << 5;
+
+	if (MDP_COLOR_IS_10BIT_PACKED(color))
+		return ((align_w >> 4) * (align_h >> 4) * (16 + 512));
+	else
+		return ((align_w >> 4) * (align_h >> 4) * (16 + 384));
 }
 
 const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 					    struct mdp_frameparam *param,
 					    u32 ctx_id)
 {
+	struct device *dev = &param->ctx->mdp_dev->pdev->dev;
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
 	const struct mdp_format *fmt;
 	const struct mdp_pix_limit *pix_limit;
 	u32 wmin, wmax, hmin, hmax, org_w, org_h;
 	unsigned int i;
 
-	if (!V4L2_TYPE_IS_MULTIPLANAR(f->type))
-		return NULL;
-
 	fmt = mdp_find_fmt(pix_mp->pixelformat, f->type);
-	if (!fmt)
-		fmt = mdp_find_fmt_by_index(0, f->type);
 	if (!fmt) {
-		mdp_dbg(0, "[%d] pixelformat %c%c%c%c invalid", ctx_id,
-			(pix_mp->pixelformat & 0xff),
-			(pix_mp->pixelformat >>  8) & 0xff,
-			(pix_mp->pixelformat >> 16) & 0xff,
-			(pix_mp->pixelformat >> 24) & 0xff);
-		return NULL;
+		fmt = mdp_find_fmt_by_index(0, f->type);
+		if (!fmt) {
+			dev_dbg(dev, "%d: pixelformat %c%c%c%c invalid", ctx_id,
+				(pix_mp->pixelformat & 0xff),
+				(pix_mp->pixelformat >>  8) & 0xff,
+				(pix_mp->pixelformat >> 16) & 0xff,
+				(pix_mp->pixelformat >> 24) & 0xff);
+			return NULL;
+		}
 	}
 
 	pix_mp->field = V4L2_FIELD_NONE;
@@ -402,10 +225,9 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 		pix_mp->ycbcr_enc = param->ycbcr_enc;
 		pix_mp->quantization = param->quant;
 	}
-	memset(pix_mp->reserved, 0, sizeof(pix_mp->reserved));
 
 	pix_limit = V4L2_TYPE_IS_OUTPUT(f->type) ? &param->limit->out_limit :
-		&param->limit->cap_limit;
+						&param->limit->cap_limit;
 	wmin = pix_limit->wmin;
 	wmax = pix_limit->wmax;
 	hmin = pix_limit->hmin;
@@ -415,13 +237,13 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 
 	mdp_bound_align_image(&pix_mp->width, wmin, wmax, fmt->walign,
 			      &pix_mp->height, hmin, hmax, fmt->halign,
-				fmt->salign);
+			      fmt->salign);
 	if (org_w != pix_mp->width || org_h != pix_mp->height)
-		mdp_dbg(1, "[%d] size change: %ux%u to %ux%u", ctx_id,
+		dev_dbg(dev, "%d: size change: %ux%u to %ux%u", ctx_id,
 			org_w, org_h, pix_mp->width, pix_mp->height);
 
 	if (pix_mp->num_planes && pix_mp->num_planes != fmt->num_planes)
-		mdp_dbg(1, "[%d] num of planes change: %u to %u", ctx_id,
+		dev_dbg(dev, "%d num of planes change: %u to %u", ctx_id,
 			pix_mp->num_planes, fmt->num_planes);
 	pix_mp->num_planes = fmt->num_planes;
 
@@ -434,13 +256,17 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 			bpl = min_bpl;
 		si = (bpl * pix_mp->height * fmt->depth[i]) / fmt->row_depth[i];
 
+		if (MDP_COLOR_IS_HYFBC_COMPRESS(fmt->mdp_color)) {
+			si = mdp_fmt_get_hyfbc_plane_size(pix_mp->width,
+							  pix_mp->height, fmt->mdp_color, i);
+		} else if (MDP_COLOR_IS_COMPRESS(fmt->mdp_color)) {
+			si = mdp_fmt_get_afbc_plane_size(pix_mp->width,
+							 pix_mp->height, fmt->mdp_color);
+		}
+
 		pix_mp->plane_fmt[i].bytesperline = bpl;
 		if (pix_mp->plane_fmt[i].sizeimage < si)
 			pix_mp->plane_fmt[i].sizeimage = si;
-		memset(pix_mp->plane_fmt[i].reserved, 0,
-		       sizeof(pix_mp->plane_fmt[i].reserved));
-		mdp_dbg(2, "[%d] p%u, bpl:%u (%u), sizeimage:%u (%u)", ctx_id,
-			i, bpl, min_bpl, pix_mp->plane_fmt[i].sizeimage, si);
 	}
 
 	return fmt;
@@ -466,15 +292,16 @@ static int mdp_clamp_end(s32 *x, int min, int max, unsigned int align,
 	return mdp_clamp_align(x, min, max, align);
 }
 
-int mdp_try_crop(struct v4l2_rect *r, const struct v4l2_selection *s,
-		 struct mdp_frame *frame, u32 ctx_id)
+int mdp_try_crop(struct mdp_m2m_ctx *ctx, struct v4l2_rect *r,
+		 const struct v4l2_selection *s, struct mdp_frame *frame)
 {
+	struct device *dev = &ctx->mdp_dev->pdev->dev;
 	s32 left, top, right, bottom;
 	u32 framew, frameh, walign, halign;
 	int ret;
 
-	mdp_dbg(2, "[%d] target:%d, set:(%d,%d) %ux%u", ctx_id, s->target,
-		s->r.left, s->r.top, s->r.width, s->r.height);
+	dev_dbg(dev, "%d target:%d, set:(%d,%d) %ux%u", ctx->id,
+		s->target, s->r.left, s->r.top, s->r.width, s->r.height);
 
 	left = s->r.left;
 	top = s->r.top;
@@ -491,7 +318,7 @@ int mdp_try_crop(struct v4l2_rect *r, const struct v4l2_selection *s,
 		halign = frame->mdp_fmt->halign;
 	}
 
-	mdp_dbg(2, "[%d] align:%u,%u, bound:%ux%u", ctx_id,
+	dev_dbg(dev, "%d align:%u,%u, bound:%ux%u", ctx->id,
 		walign, halign, framew, frameh);
 
 	ret = mdp_clamp_start(&left, 0, right, walign, s->flags);
@@ -512,7 +339,7 @@ int mdp_try_crop(struct v4l2_rect *r, const struct v4l2_selection *s,
 	r->width = right - left;
 	r->height = bottom - top;
 
-	mdp_dbg(2, "[%d] crop:(%d,%d) %ux%u", ctx_id,
+	dev_dbg(dev, "%d crop:(%d,%d) %ux%u", ctx->id,
 		r->left, r->top, r->width, r->height);
 	return 0;
 }
@@ -548,8 +375,14 @@ static u32 mdp_fmt_get_stride(const struct mdp_format *fmt,
 	enum mdp_color c = fmt->mdp_color;
 	u32 stride;
 
-	stride = (bytesperline * MDP_COLOR_BITS_PER_PIXEL(c))
-		/ fmt->row_depth[0];
+	if (MDP_COLOR_IS_COMPRESS(c)) {
+		bytesperline = ((bytesperline + 31) >> 5) << 5;
+		stride = (bytesperline * MDP_COLOR_BITS_PER_PIXEL(c))
+			/ fmt->row_depth[0];
+	} else {
+		stride = (bytesperline * MDP_COLOR_BITS_PER_PIXEL(c))
+			/ fmt->row_depth[0];
+	}
 	if (plane == 0)
 		return stride;
 	if (plane < MDP_COLOR_GET_PLANE_COUNT(c)) {
@@ -598,6 +431,41 @@ static u32 mdp_fmt_get_plane_size(const struct mdp_format *fmt,
 	return 0;
 }
 
+bool mdp_is_framechange(struct mdp_framechange_param *prev,
+			struct mdp_framechange_param *cur)
+{
+	if (cur->frame_count == 0 ||
+	    prev->scenario != cur->scenario ||
+	    prev->in.buffer.format.colorformat != cur->in.buffer.format.colorformat ||
+	    prev->in.buffer.format.width != cur->in.buffer.format.width ||
+	    prev->in.buffer.format.height != cur->in.buffer.format.height ||
+	    prev->out.buffer.format.width != cur->out.buffer.format.width ||
+	    prev->out.buffer.format.height != cur->out.buffer.format.height ||
+	    prev->out.crop.left != cur->out.crop.left ||
+	    prev->out.crop.top != cur->out.crop.top ||
+	    prev->out.crop.width != cur->out.crop.width ||
+	    prev->out.crop.height != cur->out.crop.height)
+		return true;
+
+	return false;
+}
+
+void mdp_set_scenario(struct mdp_dev *mdp,
+		      struct img_ipi_frameparam *param,
+		      struct mdp_frame *frame)
+{
+	u32 width = frame->format.fmt.pix_mp.width;
+	u32 height = frame->format.fmt.pix_mp.height;
+
+	if (!mdp)
+		return;
+
+	if (mdp->mdp_data->mdp_cfg->support_dual_pipe) {
+		if ((width * height) >= FHD)
+			param->type = MDP_STREAM_TYPE_DUAL_BITBLT;
+	}
+}
+
 static void mdp_prepare_buffer(struct img_image_buffer *b,
 			       struct mdp_frame *frame, struct vb2_buffer *vb)
 {
@@ -622,6 +490,19 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 			mdp_fmt_get_plane_size(frame->mdp_fmt, stride,
 					       pix_mp->height, i) -
 					       vb->planes[i].data_offset;
+
+		if (MDP_COLOR_IS_HYFBC_COMPRESS(b->format.colorformat)) {
+			b->format.plane_fmt[i].size =
+				mdp_fmt_get_hyfbc_plane_size(pix_mp->width,
+							     pix_mp->height,
+							     b->format.colorformat, i);
+		} else if (MDP_COLOR_IS_COMPRESS(b->format.colorformat)) {
+			b->format.plane_fmt[i].size =
+				mdp_fmt_get_afbc_plane_size(pix_mp->width,
+							    pix_mp->height,
+							    b->format.colorformat);
+		}
+
 		b->iova[i] = vb2_dma_contig_plane_dma_addr(vb, i) +
 			     vb->planes[i].data_offset;
 	}
@@ -633,6 +514,18 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 		b->format.plane_fmt[i].size =
 			mdp_fmt_get_plane_size(frame->mdp_fmt, stride,
 					       pix_mp->height, i);
+
+		if (MDP_COLOR_IS_HYFBC_COMPRESS(b->format.colorformat)) {
+			b->format.plane_fmt[i].size =
+				mdp_fmt_get_hyfbc_plane_size(pix_mp->width,
+							     pix_mp->height,
+							     b->format.colorformat, i);
+		} else if (MDP_COLOR_IS_COMPRESS(b->format.colorformat)) {
+			b->format.plane_fmt[i].size =
+				mdp_fmt_get_afbc_plane_size(pix_mp->width,
+							    pix_mp->height,
+							    b->format.colorformat);
+		}
 		b->iova[i] = b->iova[i - 1] + b->format.plane_fmt[i - 1].size;
 	}
 	b->usage = frame->usage;
@@ -704,8 +597,6 @@ void mdp_set_dst_config(struct img_output *out,
 	mdp_prepare_buffer(&out->buffer, frame, vb);
 	mdp_set_src_crop(&out->crop, &frame->crop);
 	mdp_set_orientation(out, frame->rotation, frame->hflip, frame->vflip);
-
-	/* out->flags |= ; */	/* sharpness, dither */
 }
 
 int mdp_frameparam_init(struct mdp_frameparam *param)
@@ -742,5 +633,11 @@ int mdp_frameparam_init(struct mdp_frameparam *param)
 	frame->compose.height = frame->format.fmt.pix_mp.height;
 
 	return 0;
+}
+
+void mdp_format_init(const struct mdp_format *format, u32 length)
+{
+	mdp_formats = format;
+	format_len = length;
 }
 

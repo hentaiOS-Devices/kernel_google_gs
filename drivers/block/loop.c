@@ -86,6 +86,16 @@
 static DEFINE_IDR(loop_index_idr);
 static DEFINE_MUTEX(loop_ctl_mutex);
 
+static const char kBlockOpenOnAutoclearPrefix[] = "__block_open_on_autoclear__";
+
+static bool should_block_open_on_autoclear(struct file *file)
+{
+	const size_t prefix_len = strlen(kBlockOpenOnAutoclearPrefix);
+	const char *fname = file->f_path.dentry->d_name.name;
+
+	return !strncmp(fname, kBlockOpenOnAutoclearPrefix, prefix_len);
+}
+
 static int max_part;
 static int part_shift;
 
@@ -226,19 +236,6 @@ static void __loop_update_dio(struct loop_device *lo, bool dio)
 	}
 	if (lo->lo_state == Lo_bound)
 		blk_mq_unfreeze_queue(lo->lo_queue);
-}
-
-/**
- * loop_validate_block_size() - validates the passed in block size
- * @bsize: size to validate
- */
-static int
-loop_validate_block_size(unsigned short bsize)
-{
-	if (bsize < 512 || bsize > PAGE_SIZE || !is_power_of_2(bsize))
-		return -EINVAL;
-
-	return 0;
 }
 
 /**
@@ -741,6 +738,8 @@ static int loop_change_fd(struct loop_device *lo, struct block_device *bdev,
 	blk_mq_freeze_queue(lo->lo_queue);
 	mapping_set_gfp_mask(old_file->f_mapping, lo->old_gfp_mask);
 	lo->lo_backing_file = file;
+	if (should_block_open_on_autoclear(file))
+		lo->block_open_on_autoclear = true;
 	lo->old_gfp_mask = mapping_gfp_mask(file->f_mapping);
 	mapping_set_gfp_mask(file->f_mapping,
 			     lo->old_gfp_mask & ~(__GFP_IO|__GFP_FS));
@@ -810,33 +809,33 @@ static ssize_t loop_attr_backing_file_show(struct loop_device *lo, char *buf)
 
 static ssize_t loop_attr_offset_show(struct loop_device *lo, char *buf)
 {
-	return sprintf(buf, "%llu\n", (unsigned long long)lo->lo_offset);
+	return sysfs_emit(buf, "%llu\n", (unsigned long long)lo->lo_offset);
 }
 
 static ssize_t loop_attr_sizelimit_show(struct loop_device *lo, char *buf)
 {
-	return sprintf(buf, "%llu\n", (unsigned long long)lo->lo_sizelimit);
+	return sysfs_emit(buf, "%llu\n", (unsigned long long)lo->lo_sizelimit);
 }
 
 static ssize_t loop_attr_autoclear_show(struct loop_device *lo, char *buf)
 {
 	int autoclear = (lo->lo_flags & LO_FLAGS_AUTOCLEAR);
 
-	return sprintf(buf, "%s\n", autoclear ? "1" : "0");
+	return sysfs_emit(buf, "%s\n", autoclear ? "1" : "0");
 }
 
 static ssize_t loop_attr_partscan_show(struct loop_device *lo, char *buf)
 {
 	int partscan = (lo->lo_flags & LO_FLAGS_PARTSCAN);
 
-	return sprintf(buf, "%s\n", partscan ? "1" : "0");
+	return sysfs_emit(buf, "%s\n", partscan ? "1" : "0");
 }
 
 static ssize_t loop_attr_dio_show(struct loop_device *lo, char *buf)
 {
 	int dio = (lo->lo_flags & LO_FLAGS_DIRECT_IO);
 
-	return sprintf(buf, "%s\n", dio ? "1" : "0");
+	return sysfs_emit(buf, "%s\n", dio ? "1" : "0");
 }
 
 LOOP_ATTR_RO(backing_file);
@@ -1121,7 +1120,7 @@ static int loop_configure(struct loop_device *lo, fmode_t mode,
 	}
 
 	if (config->block_size) {
-		error = loop_validate_block_size(config->block_size);
+		error = blk_validate_block_size(config->block_size);
 		if (error)
 			goto out_unlock;
 	}
@@ -1143,6 +1142,8 @@ static int loop_configure(struct loop_device *lo, fmode_t mode,
 	lo->use_dio = lo->lo_flags & LO_FLAGS_DIRECT_IO;
 	lo->lo_device = bdev;
 	lo->lo_backing_file = file;
+	if (should_block_open_on_autoclear(file))
+		lo->block_open_on_autoclear = true;
 	lo->old_gfp_mask = mapping_gfp_mask(mapping);
 	mapping_set_gfp_mask(mapping, lo->old_gfp_mask & ~(__GFP_IO|__GFP_FS));
 
@@ -1232,6 +1233,7 @@ static int __loop_clr_fd(struct loop_device *lo, bool release)
 
 	spin_lock_irq(&lo->lo_lock);
 	lo->lo_backing_file = NULL;
+	lo->block_open_on_autoclear = false;
 	spin_unlock_irq(&lo->lo_lock);
 
 	loop_release_xfer(lo);
@@ -1617,7 +1619,7 @@ static int loop_set_block_size(struct loop_device *lo, unsigned long arg)
 	if (lo->lo_state != Lo_bound)
 		return -ENXIO;
 
-	err = loop_validate_block_size(arg);
+	err = blk_validate_block_size(arg);
 	if (err)
 		return err;
 
@@ -1901,6 +1903,11 @@ static int lo_open(struct block_device *bdev, fmode_t mode)
 	lo = bdev->bd_disk->private_data;
 	if (!lo) {
 		err = -ENXIO;
+		goto out;
+	}
+
+	if (lo->lo_flags & LO_FLAGS_AUTOCLEAR && lo->block_open_on_autoclear) {
+		err = -EBUSY;
 		goto out;
 	}
 

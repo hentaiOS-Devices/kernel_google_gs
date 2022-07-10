@@ -11,7 +11,7 @@ config SND_SOC_AMD_CZ_DA7219MX98357_MACH
 	select SND_SOC_MAX98357A
 	select SND_SOC_ADAU7002
 	select REGULATOR
-	depends on SND_SOC_AMD_ACP && I2C && GPIOLIB
+	depends on SND_SOC_AMD_ACP && I2C && GPIOLIB && ACPI
 	help
 	 This option enables machine driver for DA7219, RT5682 and MAX9835.
 
@@ -41,15 +41,23 @@ config SND_SOC_AMD_RV_RT5682_MACH
 
 config SND_SOC_AMD_RENOIR
 	tristate "AMD Audio Coprocessor - Renoir support"
+	select SND_AMD_ACP_CONFIG
 	depends on X86 && PCI
 	help
 	 This option enables ACP support for Renoir platform
 
 config SND_SOC_AMD_RENOIR_MACH
-	tristate "AMD Renoir support for DMIC RT5682"
+	tristate "AMD Renoir support for DMIC"
 	select SND_SOC_DMIC
-	select SND_SOC_RT5682_I2C
-	select SND_SOC_RT1019
-	depends on SND_SOC_AMD_RENOIR && I2C
+	depends on SND_SOC_AMD_RENOIR
 	help
 	 This option enables machine driver for DMIC
+
+config SND_AMD_ACP_CONFIG
+	tristate "AMD ACP configuration selection"
+	select SND_SOC_ACPI if ACPI
+	help
+	 This option adds an auto detection to determine which ACP
+	 driver modules to use
+
+source "sound/soc/amd/acp/Kconfig"

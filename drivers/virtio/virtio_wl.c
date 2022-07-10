@@ -1195,7 +1195,7 @@ static struct virtwl_vfd *do_new(struct virtwl_info *vi,
 			       sizeof(ioctl_new->dmabuf));
 			break;
 		}
-		/* fall-through */
+		fallthrough;
 	default:
 		ret = -EINVAL;
 		goto remove_vfd;

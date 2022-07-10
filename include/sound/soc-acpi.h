@@ -129,6 +129,8 @@ struct snd_soc_acpi_link_adr {
  * all firmware/topology related fields.
  *
  * @id: ACPI ID (usually the codec's) used to find a matching machine driver.
+ * @comp_ids: list of compatible audio codecs using the same machine driver,
+ * firmware and topology
  * @link_mask: describes required board layout, e.g. for SoundWire.
  * @links: array of link _ADR descriptors, null terminated.
  * @drv_name: machine driver name
@@ -140,12 +142,12 @@ struct snd_soc_acpi_link_adr {
  * audio codecs whose presence if checked with ACPI
  * @pdata: intended for platform data or machine specific-ops. This structure
  *  is not constant since this field may be updated at run-time
- * @sof_fw_filename: Sound Open Firmware file name, if enabled
  * @sof_tplg_filename: Sound Open Firmware topology file name, if enabled
  */
 /* Descriptor for SST ASoC machine driver */
 struct snd_soc_acpi_mach {
 	const u8 id[ACPI_ID_LEN];
+	const struct snd_soc_acpi_codecs *comp_ids;
 	const u32 link_mask;
 	const struct snd_soc_acpi_link_adr *links;
 	const char *drv_name;
@@ -155,7 +157,6 @@ struct snd_soc_acpi_mach {
 	const void *quirk_data;
 	void *pdata;
 	struct snd_soc_acpi_mach_params mach_params;
-	const char *sof_fw_filename;
 	const char *sof_tplg_filename;
 };
 

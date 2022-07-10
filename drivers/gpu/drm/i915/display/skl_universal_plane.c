@@ -18,6 +18,7 @@
 #include "intel_sprite.h"
 #include "skl_scaler.h"
 #include "skl_universal_plane.h"
+#include "pxp/intel_pxp.h"
 
 static const u32 skl_plane_formats[] = {
 	DRM_FORMAT_C8,
@@ -463,9 +464,19 @@ static int icl_plane_min_width(const struct drm_framebuffer *fb,
 	}
 }
 
-static int icl_plane_max_width(const struct drm_framebuffer *fb,
-			       int color_plane,
-			       unsigned int rotation)
+static int icl_hdr_plane_max_width(const struct drm_framebuffer *fb,
+				   int color_plane,
+				   unsigned int rotation)
+{
+	if (intel_format_info_is_yuv_semiplanar(fb->format, fb->modifier))
+		return 4096;
+	else
+		return 5120;
+}
+
+static int icl_sdr_plane_max_width(const struct drm_framebuffer *fb,
+				   int color_plane,
+				   unsigned int rotation)
 {
 	return 5120;
 }
@@ -656,6 +667,7 @@ skl_disable_plane(struct intel_plane *plane,
 
 	skl_write_plane_wm(plane, crtc_state);
 
+	intel_psr2_disable_plane_sel_fetch(plane, crtc_state);
 	intel_de_write_fw(dev_priv, PLANE_CTL(pipe, plane_id), 0);
 	intel_de_write_fw(dev_priv, PLANE_SURF(pipe, plane_id), 0);
 
@@ -835,7 +847,7 @@ static u32 skl_plane_ctl_rotate(unsigned int rotate)
 	return 0;
 }
 
-static u32 cnl_plane_ctl_flip(unsigned int reflect)
+static u32 icl_plane_ctl_flip(unsigned int reflect)
 {
 	switch (reflect) {
 	case 0:
@@ -917,8 +929,8 @@ static u32 skl_plane_ctl(const struct intel_crtc_state *crtc_state,
 	plane_ctl |= skl_plane_ctl_tiling(fb->modifier);
 	plane_ctl |= skl_plane_ctl_rotate(rotation & DRM_MODE_ROTATE_MASK);
 
-	if (DISPLAY_VER(dev_priv) >= 11 || IS_CANNONLAKE(dev_priv))
-		plane_ctl |= cnl_plane_ctl_flip(rotation &
+	if (DISPLAY_VER(dev_priv) >= 11)
+		plane_ctl |= icl_plane_ctl_flip(rotation &
 						DRM_MODE_REFLECT_MASK);
 
 	if (key->flags & I915_SET_COLORKEY_DESTINATION)
@@ -926,7 +938,7 @@ static u32 skl_plane_ctl(const struct intel_crtc_state *crtc_state,
 	else if (key->flags & I915_SET_COLORKEY_SOURCE)
 		plane_ctl |= PLANE_CTL_KEY_ENABLE_SOURCE;
 
-	/* Wa_22012358565:adlp */
+	/* Wa_22012358565:adl-p */
 	if (DISPLAY_VER(dev_priv) == 13)
 		plane_ctl |= adlp_plane_ctl_arb_slots(plane_state);
 
@@ -983,6 +995,9 @@ static u32 glk_plane_color_ctl(const struct intel_crtc_state *crtc_state,
 			plane_color_ctl |= PLANE_COLOR_YUV_RANGE_CORRECTION_DISABLE;
 	}
 
+	if (plane_state->force_black)
+		plane_color_ctl |= PLANE_COLOR_PLANE_CSC_ENABLE;
+
 	return plane_color_ctl;
 }
 
@@ -999,6 +1014,30 @@ static u32 skl_surf_address(const struct intel_plane_state *plane_state,
 		WARN_ON(offset & 0xfff);
 		return offset;
 	}
+}
+
+static void icl_plane_csc_load_black(struct intel_plane *plane)
+{
+	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+	enum plane_id plane_id = plane->id;
+	enum pipe pipe = plane->pipe;
+
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 0), 0);
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 1), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 2), 0);
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 3), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 4), 0);
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 5), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_PREOFF(pipe, plane_id, 0), 0);
+	intel_de_write_fw(i915, PLANE_CSC_PREOFF(pipe, plane_id, 1), 0);
+	intel_de_write_fw(i915, PLANE_CSC_PREOFF(pipe, plane_id, 2), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_POSTOFF(pipe, plane_id, 0), 0);
+	intel_de_write_fw(i915, PLANE_CSC_POSTOFF(pipe, plane_id, 1), 0);
+	intel_de_write_fw(i915, PLANE_CSC_POSTOFF(pipe, plane_id, 2), 0);
 }
 
 static void
@@ -1024,7 +1063,7 @@ skl_program_plane(struct intel_plane *plane,
 	u8 alpha = plane_state->hw.alpha >> 8;
 	u32 plane_color_ctl = 0, aux_dist = 0;
 	unsigned long irqflags;
-	u32 keymsk, keymax;
+	u32 keymsk, keymax, plane_surf;
 	u32 plane_ctl = plane_state->ctl;
 
 	plane_ctl |= skl_plane_ctl_crtc(crtc_state);
@@ -1056,7 +1095,18 @@ skl_program_plane(struct intel_plane *plane,
 			aux_dist |= skl_plane_stride(plane_state, aux_plane);
 	}
 
+	plane_surf = intel_plane_ggtt_offset(plane_state) + surf_addr;
+	if (plane_state->decrypt)
+		plane_surf |= PLANE_SURF_DECRYPT;
+
 	spin_lock_irqsave(&dev_priv->uncore.lock, irqflags);
+
+	/*
+	 * FIXME: pxp session invalidation can hit any time even at time of commit
+	 * or after the commit, display content will be garbage.
+	 */
+	if (plane_state->force_black)
+		icl_plane_csc_load_black(plane);
 
 	intel_de_write_fw(dev_priv, PLANE_STRIDE(pipe, plane_id), stride);
 	intel_de_write_fw(dev_priv, PLANE_POS(pipe, plane_id),
@@ -1096,8 +1146,7 @@ skl_program_plane(struct intel_plane *plane,
 				  (plane_state->view.color_plane[1].y << 16) |
 				   plane_state->view.color_plane[1].x);
 
-	if (!drm_atomic_crtc_needs_modeset(&crtc_state->uapi))
-		intel_psr2_program_plane_sel_fetch(plane, crtc_state, plane_state, color_plane);
+	intel_psr2_program_plane_sel_fetch(plane, crtc_state, plane_state, color_plane);
 
 	/*
 	 * Enable the scaler before the plane so that we don't
@@ -1113,8 +1162,7 @@ skl_program_plane(struct intel_plane *plane,
 	 * the control register just before the surface register.
 	 */
 	intel_de_write_fw(dev_priv, PLANE_CTL(pipe, plane_id), plane_ctl);
-	intel_de_write_fw(dev_priv, PLANE_SURF(pipe, plane_id),
-			  intel_plane_ggtt_offset(plane_state) + surf_addr);
+	intel_de_write_fw(dev_priv, PLANE_SURF(pipe, plane_id), plane_surf);
 
 	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
 }
@@ -1270,7 +1318,7 @@ static int skl_plane_check_dst_coordinates(const struct intel_crtc_state *crtc_s
 	int pipe_src_w = crtc_state->pipe_src_w;
 
 	/*
-	 * Display WA #1175: cnl,glk
+	 * Display WA #1175: glk
 	 * Planes other than the cursor may cause FIFO underflow and display
 	 * corruption if starting less than 4 pixels from the right edge of
 	 * the screen.
@@ -1689,6 +1737,18 @@ static bool skl_fb_scalable(const struct drm_framebuffer *fb)
 	}
 }
 
+static bool bo_has_valid_encryption(struct drm_i915_gem_object *obj)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+
+	return intel_pxp_key_check(&i915->gt.pxp, obj, false) == 0;
+}
+
+static bool pxp_is_borked(struct drm_i915_gem_object *obj)
+{
+	return i915_gem_object_is_protected(obj) && !bo_has_valid_encryption(obj);
+}
+
 static int skl_plane_check(struct intel_crtc_state *crtc_state,
 			   struct intel_plane_state *plane_state)
 {
@@ -1732,6 +1792,11 @@ static int skl_plane_check(struct intel_crtc_state *crtc_state,
 	ret = skl_plane_check_nv12_rotation(plane_state);
 	if (ret)
 		return ret;
+
+	if (DISPLAY_VER(dev_priv) >= 11) {
+		plane_state->decrypt = bo_has_valid_encryption(intel_fb_obj(fb));
+		plane_state->force_black = pxp_is_borked(intel_fb_obj(fb));
+	}
 
 	/* HW only has 8 bits pixel precision, disable plane if invisible */
 	if (!(plane_state->hw.alpha >> 8))
@@ -1828,7 +1893,7 @@ static bool skl_plane_has_ccs(struct drm_i915_private *dev_priv,
 	if (plane_id == PLANE_CURSOR)
 		return false;
 
-	if (DISPLAY_VER(dev_priv) >= 11 || IS_CANNONLAKE(dev_priv))
+	if (DISPLAY_VER(dev_priv) >= 11)
 		return true;
 
 	if (IS_GEMINILAKE(dev_priv))
@@ -1910,11 +1975,11 @@ static bool gen12_plane_supports_mc_ccs(struct drm_i915_private *dev_priv,
 {
 	/* Wa_14010477008:tgl[a0..c0],rkl[all],dg1[all] */
 	if (IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv) ||
-	    IS_TGL_DISPLAY_STEP(dev_priv, STEP_A0, STEP_C0))
+	    IS_TGL_DISPLAY_STEP(dev_priv, STEP_A0, STEP_D0))
 		return false;
 
 	/* Wa_22011186057 */
-	if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_A0))
+	if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_B0))
 		return false;
 
 	return plane_id < PLANE_SPRITE4;
@@ -1938,7 +2003,7 @@ static bool gen12_plane_format_mod_supported(struct drm_plane *_plane,
 	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS:
 	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS_CC:
 		/* Wa_22011186057 */
-		if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_A0))
+		if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_B0))
 			return false;
 		break;
 	default:
@@ -1995,7 +2060,7 @@ static const u64 *gen12_get_plane_modifiers(struct drm_i915_private *dev_priv,
 					    enum plane_id plane_id)
 {
 	/* Wa_22011186057 */
-	if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_A0))
+	if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_B0))
 		return adlp_step_a_plane_format_modifiers;
 	else if (gen12_plane_supports_mc_ccs(dev_priv, plane_id))
 		return gen12_plane_format_modifiers_mc_ccs;
@@ -2074,7 +2139,10 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 
 	if (DISPLAY_VER(dev_priv) >= 11) {
 		plane->min_width = icl_plane_min_width;
-		plane->max_width = icl_plane_max_width;
+		if (icl_is_hdr_plane(dev_priv, plane_id))
+			plane->max_width = icl_hdr_plane_max_width;
+		else
+			plane->max_width = icl_sdr_plane_max_width;
 		plane->max_height = icl_plane_max_height;
 		plane->min_cdclk = icl_plane_min_cdclk;
 	} else if (DISPLAY_VER(dev_priv) >= 10) {
@@ -2144,7 +2212,7 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 			DRM_MODE_ROTATE_0 | DRM_MODE_ROTATE_90 |
 			DRM_MODE_ROTATE_180 | DRM_MODE_ROTATE_270;
 
-	if (DISPLAY_VER(dev_priv) >= 11 || IS_CANNONLAKE(dev_priv))
+	if (DISPLAY_VER(dev_priv) >= 11)
 		supported_rotations |= DRM_MODE_REFLECT_X;
 
 	drm_plane_create_rotation_property(&plane->base,
@@ -2174,12 +2242,12 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 	if (DISPLAY_VER(dev_priv) >= 12)
 		drm_plane_enable_fb_damage_clips(&plane->base);
 
-	if (DISPLAY_VER(dev_priv) >= 11 || IS_CANNONLAKE(dev_priv))
+	if (DISPLAY_VER(dev_priv) >= 11)
 		drm_plane_create_scaling_filter_property(&plane->base,
 						BIT(DRM_SCALING_FILTER_DEFAULT) |
 						BIT(DRM_SCALING_FILTER_NEAREST_NEIGHBOR));
 
-	drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
+	intel_plane_helper_add(plane);
 
 	return plane;
 
@@ -2295,7 +2363,7 @@ skl_get_initial_plane_config(struct intel_crtc *crtc,
 		break;
 	}
 
-	if ((DISPLAY_VER(dev_priv) >= 11 || IS_CANNONLAKE(dev_priv)) && val & PLANE_CTL_FLIP_HORIZONTAL)
+	if (DISPLAY_VER(dev_priv) >= 11 && val & PLANE_CTL_FLIP_HORIZONTAL)
 		plane_config->rotation |= DRM_MODE_REFLECT_X;
 
 	/* 90/270 degree rotation would require extra work */

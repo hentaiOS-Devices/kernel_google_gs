@@ -157,6 +157,9 @@ static int intel_check_cursor(struct intel_crtc_state *crtc_state,
 	/* Use the unclipped src/dst rectangles, which we program to hw */
 	plane_state->uapi.src = src;
 	plane_state->uapi.dst = dst;
+	if (crtc_state->bigjoiner_slave)
+		drm_rect_translate(&plane_state->uapi.dst,
+				   -crtc_state->pipe_src_w, 0);
 
 	ret = intel_cursor_check_surface(plane_state);
 	if (ret)
@@ -383,7 +386,7 @@ static u32 i9xx_cursor_ctl(const struct intel_crtc_state *crtc_state,
 	if (plane_state->hw.rotation & DRM_MODE_ROTATE_180)
 		cntl |= MCURSOR_ROTATE_180;
 
-	/* Wa_22012358565:adlp */
+	/* Wa_22012358565:adl-p */
 	if (DISPLAY_VER(dev_priv) == 13)
 		cntl |= MCURSOR_ARB_SLOTS(1);
 
@@ -536,8 +539,10 @@ static void i9xx_update_cursor(struct intel_plane *plane,
 	if (DISPLAY_VER(dev_priv) >= 9)
 		skl_write_cursor_wm(plane, crtc_state);
 
-	if (!intel_crtc_needs_modeset(crtc_state))
+	if (plane_state)
 		intel_psr2_program_plane_sel_fetch(plane, crtc_state, plane_state, 0);
+	else
+		intel_psr2_disable_plane_sel_fetch(plane, crtc_state);
 
 	if (plane->cursor.base != base ||
 	    plane->cursor.size != fbc_ctl ||
@@ -629,12 +634,16 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
 
 	/*
 	 * When crtc is inactive or there is a modeset pending,
-	 * wait for it to complete in the slowpath
+	 * wait for it to complete in the slowpath.
+	 * PSR2 selective fetch also requires the slow path as
+	 * PSR2 plane and transcoder registers can only be updated during
+	 * vblank.
 	 *
 	 * FIXME bigjoiner fastpath would be good
 	 */
 	if (!crtc_state->hw.active || intel_crtc_needs_modeset(crtc_state) ||
-	    crtc_state->update_pipe || crtc_state->bigjoiner)
+	    crtc_state->update_pipe || crtc_state->bigjoiner ||
+	    crtc_state->enable_psr2_sel_fetch)
 		goto slow;
 
 	/*
@@ -692,7 +701,7 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
 		goto out_free;
 
 	intel_frontbuffer_flush(to_intel_frontbuffer(new_plane_state->hw.fb),
-				ORIGIN_FLIP);
+				ORIGIN_CURSOR_UPDATE);
 	intel_frontbuffer_track(to_intel_frontbuffer(old_plane_state->hw.fb),
 				to_intel_frontbuffer(new_plane_state->hw.fb),
 				plane->frontbuffer_bit);
@@ -801,7 +810,7 @@ intel_cursor_plane_create(struct drm_i915_private *dev_priv,
 	if (DISPLAY_VER(dev_priv) >= 12)
 		drm_plane_enable_fb_damage_clips(&cursor->base);
 
-	drm_plane_helper_add(&cursor->base, &intel_plane_helper_funcs);
+	intel_plane_helper_add(cursor);
 
 	return cursor;
 

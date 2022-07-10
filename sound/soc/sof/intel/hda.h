@@ -517,6 +517,7 @@ int hda_dsp_resume(struct snd_sof_dev *sdev);
 int hda_dsp_runtime_suspend(struct snd_sof_dev *sdev);
 int hda_dsp_runtime_resume(struct snd_sof_dev *sdev);
 int hda_dsp_runtime_idle(struct snd_sof_dev *sdev);
+int hda_dsp_shutdown_dma_flush(struct snd_sof_dev *sdev);
 int hda_dsp_shutdown(struct snd_sof_dev *sdev);
 int hda_dsp_set_hw_params_upon_resume(struct snd_sof_dev *sdev);
 void hda_dsp_dump(struct snd_sof_dev *sdev, u32 flags);
@@ -573,9 +574,9 @@ int hda_dsp_stream_spib_config(struct snd_sof_dev *sdev,
 			       struct hdac_ext_stream *stream,
 			       int enable, u32 size);
 
-void hda_ipc_msg_data(struct snd_sof_dev *sdev,
-		      struct snd_pcm_substream *substream,
-		      void *p, size_t sz);
+int hda_ipc_msg_data(struct snd_sof_dev *sdev,
+		     struct snd_pcm_substream *substream,
+		     void *p, size_t sz);
 int hda_ipc_pcm_params(struct snd_sof_dev *sdev,
 		       struct snd_pcm_substream *substream,
 		       const struct sof_ipc_pcm_params_reply *reply);
@@ -761,11 +762,16 @@ extern const struct sof_intel_dsp_desc jsl_chip_info;
 extern const struct sof_intel_dsp_desc adls_chip_info;
 
 /* machine driver select */
-void hda_machine_select(struct snd_sof_dev *sdev);
-void hda_set_mach_params(const struct snd_soc_acpi_mach *mach,
+struct snd_soc_acpi_mach *hda_machine_select(struct snd_sof_dev *sdev);
+void hda_set_mach_params(struct snd_soc_acpi_mach *mach,
 			 struct snd_sof_dev *sdev);
 
 /* PCI driver selection and probe */
 int hda_pci_intel_probe(struct pci_dev *pci, const struct pci_device_id *pci_id);
+
+struct snd_sof_dai;
+struct sof_ipc_dai_config;
+int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w);
+int hda_ctrl_dai_widget_free(struct snd_soc_dapm_widget *w);
 
 #endif
