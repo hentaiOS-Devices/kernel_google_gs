@@ -534,8 +534,15 @@ static int mt8195_ipc_msg_data(struct snd_sof_dev *sdev,
 	if (!substream || !sdev->stream_box.size) {
 		sof_mailbox_read(sdev, sdev->dsp_box.offset, p, sz);
 	} else {
-		struct sof_mtk_adsp_stream *mstream = substream->runtime->private_data;
+		struct sof_mtk_adsp_stream *mstream = NULL;
 
+		/* The substream runtime might already be closed */
+		if (!substream->runtime) {
+			dev_err(sdev->dev, "substream runtime is NULL!\n");
+			return -ESTRPIPE;
+		}
+
+		mstream = substream->runtime->private_data;
 		/* The stream might already be closed */
 		if (!mstream)
 			return -ESTRPIPE;
