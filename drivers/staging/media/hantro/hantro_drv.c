@@ -607,7 +607,6 @@ static const struct hantro_ctrl controls[] = {
 			.min = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR,
 			.max = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR,
 			.menu_skip_mask = 0,
-			.step = 1,
 			.def = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR,
 		}
 	}, {
