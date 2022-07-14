@@ -46,6 +46,7 @@
 		compatible = "lg,lp120up1";
 		power-supply = <&pp3300_disp_x>;
 		backlight = <&backlight_lcd0>;
+		hpd-gpio = <&pio 7 GPIO_ACTIVE_HIGH>;
 
 		port {
 			panel_in: endpoint {
