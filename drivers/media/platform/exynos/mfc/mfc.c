@@ -789,6 +789,8 @@ static int __mfc_parse_dt(struct device_node *np, struct mfc_dev *mfc)
 			&pdata->hdr10_plus_full.support, 2);
 	of_property_read_u32_array(np, "enc_capability",
 			&pdata->enc_capability.support, 2);
+	of_property_read_u32_array(np, "enc_sub_gop",
+			&pdata->enc_sub_gop.support, 2);
 
 	/* Determine whether to enable AV1 decoder */
 	of_property_read_u32(np, "support_av1_dec", &pdata->support_av1_dec);

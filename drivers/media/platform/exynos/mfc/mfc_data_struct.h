@@ -843,6 +843,7 @@ struct mfc_platdata {
 	struct mfc_feature metadata_interface;
 	struct mfc_feature hdr10_plus_full;
 	struct mfc_feature enc_capability;
+	struct mfc_feature enc_sub_gop;
 
 	/* AV1 Decoder */
 	unsigned int support_av1_dec;
@@ -1549,6 +1550,7 @@ struct mfc_h264_enc_params {
 
 	u32 prepend_sps_pps_to_idr;
 	u32 vui_enable;
+	u8 sub_gop_enable;
 };
 
 /**
@@ -1672,6 +1674,7 @@ struct mfc_hevc_enc_params {
 	u8 user_ref;
 	u8 store_ref;
 	u8 prepend_sps_pps_to_idr;
+	u8 sub_gop_enable;
 };
 
 /**
