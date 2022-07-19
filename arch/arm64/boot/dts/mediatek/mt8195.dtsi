@@ -1647,10 +1647,7 @@
 				<GIC_SPI 395 IRQ_TYPE_LEVEL_HIGH 0>,
 				<GIC_SPI 396 IRQ_TYPE_LEVEL_HIGH 0>,
 				<GIC_SPI 397 IRQ_TYPE_LEVEL_HIGH 0>;
-			interrupt-names =
-				"GPU",
-				"MMU",
-				"JOB";
+			interrupt-names = "gpu", "mmu", "job";
 
 			/*
 			 * Note: the properties below are not part of the
