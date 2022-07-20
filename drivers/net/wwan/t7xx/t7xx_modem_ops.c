@@ -43,7 +43,6 @@
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
 #include "t7xx_pci_rescan.h"
-#include "t7xx_uevent.h"
 
 #define RT_ID_MD_PORT_ENUM	0
 #define RT_ID_SAP_PORT_ENUM 1
@@ -169,13 +168,6 @@ static int t7xx_acpi_reset(struct t7xx_pci_dev *t7xx_dev, char *fn_name)
 		return -EFAULT;
 	}
 
-	if (strncmp(fn_name,"_RST",4) == 0)
-		pr_info("warm reset");
-	else if (strncmp(fn_name, "MRST._RST",9) == 0)
-		pr_info("cold reset");
-	else
-		dev_err(dev, "Unspported acpi reset call");
-
 #endif
 	return 0;
 }
@@ -190,9 +182,6 @@ static void t7xx_reset_device_via_pmic(struct t7xx_pci_dev *t7xx_dev)
 	u32 val;
 
 	val = ioread32(IREG_BASE(t7xx_dev) + T7XX_PCIE_MISC_DEV_STATUS);
-	if (val == 0xffffffff)
-		return;
-
 	if (val & MISC_RESET_TYPE_PLDR)
 		t7xx_acpi_reset(t7xx_dev, "MRST._RST");
 	else if (val & MISC_RESET_TYPE_FLDR)
@@ -582,8 +571,6 @@ static void t7xx_md_hk_wq(struct work_struct *work)
 	t7xx_cldma_switch_cfg(md->md_ctrl[CLDMA_ID_MD], HIF_CFG1);
 	t7xx_cldma_start(md->md_ctrl[CLDMA_ID_MD]);
 	t7xx_fsm_broadcast_state(ctl, MD_STATE_WAITING_FOR_HS2);
-	t7xx_uevent_send(&md->t7xx_dev->pdev->dev,
-			 T7XX_UEVENT_MODEM_WAITING_HS2);
 	md->core_md.handshake_ongoing = true;
 	t7xx_core_hk_handler(md, &md->core_md, ctl, FSM_EVENT_MD_HS2, FSM_EVENT_MD_HS2_EXIT);
 }

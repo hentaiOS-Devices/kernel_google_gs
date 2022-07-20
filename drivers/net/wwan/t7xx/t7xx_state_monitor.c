@@ -41,9 +41,6 @@
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
 #include "t7xx_pci_rescan.h"
-#include "t7xx_netdev.h"
-#include "t7xx_port_devlink.h"
-#include "t7xx_uevent.h"
 
 #define FSM_DRM_DISABLE_DELAY_MS		200
 #define FSM_EVENT_POLL_INTERVAL_MS		20
@@ -57,15 +54,6 @@
 static int count;
 static int brom_dl_flag = 1;
 bool da_down_stage_flag = true;
-extern int fastboot_dl_mode;
-
-
-enum host_event_e {
-	HOST_EVENT_INIT = 0,
-	BROM_REBOOT_ACK = 0x1,
-	BROM_DLPT_NOTY = 0x2,
-	FASTBOOT_DL_NOTY = 0x3,
-};
 
 void t7xx_fsm_notifier_register(struct t7xx_modem *md, struct t7xx_fsm_notifier *notifier)
 {
@@ -203,14 +191,12 @@ static void fsm_routine_exception(struct t7xx_fsm_ctl *ctl, struct t7xx_fsm_comm
 	switch (reason) {
 	case EXCEPTION_HS_TIMEOUT:
 		dev_err(dev, "Boot Handshake failure\n");
-		t7xx_uevent_send(&ctl->md->t7xx_dev->pdev->dev, T7XX_UEVENT_MODEM_BOOT_HS_FAIL);
 		break;
 
 	case EXCEPTION_EVENT:
 		dev_err(dev, "Exception event\n");
 		port_ee_disable_wwan();
 		t7xx_fsm_broadcast_state(ctl, MD_STATE_EXCEPTION);
-		t7xx_uevent_send(&ctl->md->t7xx_dev->pdev->dev, T7XX_UEVENT_MODEM_EXCEPTION);
 		t7xx_pci_pm_exp_detected(ctl->md->t7xx_dev);
 		t7xx_md_exception_handshake(ctl->md);
 
@@ -368,31 +354,20 @@ static inline void lk_stage_event_handling(struct t7xx_fsm_ctl *ctl,
                 pr_info("Device enter next stage from LK stage/n");
                 break;
         case LK_EVENT_CREATE_PD_PORT:
-	case LK_EVENT_CREATE_POST_DL_PORT:
 		md_ctrl = ctl->md->md_ctrl[CLDMA_ID_AP];
+                //dump_status_before_mrdump(md->mtk_dev);
                 t7xx_cldma_hif_hw_init(md_ctrl);
                 t7xx_cldma_stop(md_ctrl);
 		t7xx_cldma_switch_cfg(md_ctrl, HIF_CFG2);
-		port_switch_cfg(ctl->md, PORT_CFG1);
+                //switch_port_cfg(ctl->md_id, PORT_CFG1);
 		pr_info("creating the ttyDUMP port.. \n");
                 pd_port = port_get_by_name("ttyDUMP");
-		if (pd_port != NULL) {
-			if (lk_event == LK_EVENT_CREATE_PD_PORT)
-				pd_port->dl->mode = T7XX_FB_DUMP_MODE;
-			else
-				pd_port->dl->mode = T7XX_FB_DL_MODE;
+                if (pd_port != NULL) {
 			pd_port_static = pd_port->port_static;
-			pd_port_static->ops->enable_chl(pd_port);
-			t7xx_cldma_start(md_ctrl);
+                        pd_port_static->ops->enable_chl(pd_port);
+                	t7xx_cldma_start(md_ctrl);
 		} else
-			dev_err(&ctl->md->t7xx_dev->pdev->dev,
-				"can't find PD port/n");
-		if (lk_event == LK_EVENT_CREATE_PD_PORT)
-			t7xx_uevent_send(&ctl->md->t7xx_dev->pdev->dev,
-					 T7XX_UEVENT_MODEM_FASTBOOT_DUMP_MODE);
-		else
-			t7xx_uevent_send(&ctl->md->t7xx_dev->pdev->dev,
-					 T7XX_UEVENT_MODEM_FASTBOOT_DL_MODE);
+                        pr_err("can't find PD port/n");
                 break;
         case LK_EVENT_RESET:
                 /*send r&r event to r&r thread*/
@@ -408,7 +383,6 @@ static int fsm_stopped_handler(struct t7xx_fsm_ctl *ctl)
 	ctl->curr_state = FSM_STATE_STOPPED;
 
 	t7xx_fsm_broadcast_state(ctl, MD_STATE_STOPPED);
-	pr_info("modem stopped");
 	return t7xx_md_reset(ctl->md->t7xx_dev);
 }
 
@@ -444,28 +418,13 @@ static void fsm_routine_stopping(struct t7xx_fsm_ctl *ctl, struct t7xx_fsm_comma
 	t7xx_cldma_stop(md_ctrl);
 
 	if (!ctl->md->rgu_irq_asserted) {
-
-		if (fastboot_dl_mode == 1) {
-			host_event_notify(ctl->md, FASTBOOT_DL_NOTY);
-		}
-
 		t7xx_mhccif_h2d_swint_trigger(t7xx_dev, H2D_CH_DRM_DISABLE_AP);
 		/* Wait for the DRM disable to take effect */
 		msleep(FSM_DRM_DISABLE_DELAY_MS);
 
-		if (fastboot_dl_mode == 1) {
-			/* not try fldr because device will always wait for
-			 * MHCCIF bit 13 in fastboot download flow
-			 */
-			t7xx_mhccif_h2d_swint_trigger(t7xx_dev,
-						      H2D_CH_DEVICE_RESET);
-			fastboot_dl_mode = 0;
-		} else {
-			err = t7xx_acpi_fldr_func(t7xx_dev);
-			if (err)
-				t7xx_mhccif_h2d_swint_trigger(t7xx_dev,
-							      H2D_CH_DEVICE_RESET);
-		}
+		err = t7xx_acpi_fldr_func(t7xx_dev);
+		if (err)
+			t7xx_mhccif_h2d_swint_trigger(t7xx_dev, H2D_CH_DEVICE_RESET);
 	}
 
 	fsm_finish_command(ctl, cmd, fsm_stopped_handler(ctl));
@@ -488,8 +447,6 @@ static void fsm_routine_ready(struct t7xx_fsm_ctl *ctl)
 
 	ctl->curr_state = FSM_STATE_READY;
 	t7xx_fsm_broadcast_ready_state(ctl);
-	t7xx_uevent_send(&ctl->md->t7xx_dev->pdev->dev,
-			 T7XX_UEVENT_MODEM_READY);
 	t7xx_md_event_notify(md, FSM_READY);
 }
 
@@ -502,13 +459,10 @@ static int fsm_routine_starting(struct t7xx_fsm_ctl *ctl)
 
 	port_switch_cfg(md, PORT_CFG0);
 	t7xx_fsm_broadcast_state(ctl, MD_STATE_WAITING_FOR_HS1);
-	t7xx_uevent_send(&ctl->md->t7xx_dev->pdev->dev,
-			 T7XX_UEVENT_MODEM_WAITING_HS1);
 	t7xx_md_event_notify(md, FSM_START);
 
-	wait_event_interruptible_timeout(ctl->async_hk_wq,
-					 (md->core_md.ready && md->core_sap.ready) ||
-					 ctl->exp_flg, HZ * 60);
+	wait_event_interruptible_timeout(ctl->async_hk_wq, md->core_md.ready || ctl->exp_flg,
+					 HZ * 60);
 	dev = &md->t7xx_dev->pdev->dev;
 
 	if (ctl->exp_flg)

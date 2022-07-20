@@ -37,7 +37,6 @@
 #define PORT_F_RX_EXCLUSIVE	BIT(3)	/* RX queue only has this one port */
 #define PORT_F_RX_ADJUST_HEADER	BIT(4)	/* Check whether need remove CCCI header while recv skb */
 #define PORT_F_RX_CH_TRAFFIC	BIT(5)	/* Enable port channel traffic */
-#define PORT_F_DUMP_RAW_DATA    BIT(6)  /* Dump raw data if CH_TRAFFIC set : Added for the devlink changes */
 #define PORT_F_RX_CHAR_NODE	BIT(7)	/* Requires exporting char dev node to userspace */
 #define PORT_F_RAW_DATA		BIT(9)
 #define PORT_F_CHAR_NODE_SHOW	BIT(10)	/* The char dev node is shown to userspace by default */
@@ -56,9 +55,6 @@
  * 0:reserved, 1: to sAP, 2: to MD
  */
 enum port_ch {
-	/* Added for the devlink coredump changes */
-	CCCI_FS_RX = 0xe,
-
 	/* to sAP */
 	CCCI_SAP_CONTROL_RX = 0X1000,
 	CCCI_SAP_CONTROL_TX = 0X1001,
@@ -169,8 +165,6 @@ struct t7xx_port {
 	struct dentry		*debugfs_dir;
 #endif
 	struct port_proxy	*port_proxy;
-	struct t7xx_devlink	*dl;
-	struct mutex		tx_mutex_lock;
 };
 
 int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb);

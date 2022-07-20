@@ -155,10 +155,9 @@ enum brom_event_id_e {
 };
 
 enum lk_event_id_e {
-	LK_EVENT_NORMAL = 0,
-	LK_EVENT_CREATE_PD_PORT = 1,
-	LK_EVENT_CREATE_POST_DL_PORT = 2,
-	LK_EVENT_RESET = 7,
+        LK_EVENT_NORMAL = 0,
+        LK_EVENT_CREATE_PD_PORT = 1,
+        LK_EVENT_RESET = 7,
 };
 
 /* DPMA definitions */

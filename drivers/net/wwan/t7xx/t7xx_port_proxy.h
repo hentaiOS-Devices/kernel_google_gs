@@ -109,7 +109,6 @@ extern struct port_ops ctl_port_ops;
 extern struct port_ops char_port_ops;
 extern struct port_ops tty_port_ops;
 extern struct tty_dev_ops tty_ops;
-extern struct port_ops devlink_port_ops;
 
 #ifdef CONFIG_WWAN_DEBUGFS
 extern struct dentry *wwan_get_debugfs_dir(struct device *parent);
