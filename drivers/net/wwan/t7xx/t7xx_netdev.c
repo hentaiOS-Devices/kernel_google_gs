@@ -448,7 +448,6 @@ static void t7xx_ccmni_recv_skb(struct t7xx_pci_dev *t7xx_dev, struct sk_buff *s
 	else
 		skb->protocol = htons(ETH_P_IP);
 
-	skb_len = skb->len;
 	if (t7xx_dev->ccmni_ctlb->capability & NIC_CAP_NAPI) {
 		bool is_gro = t7xx_is_skb_gro(skb);
 
@@ -460,6 +459,7 @@ static void t7xx_ccmni_recv_skb(struct t7xx_pci_dev *t7xx_dev, struct sk_buff *s
 			netif_rx_ni(skb);
 	}
 
+	skb_len = skb->len;
 	if (!napi)
 		netif_rx_any_context(skb);
 
