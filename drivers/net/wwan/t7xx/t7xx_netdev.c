@@ -543,14 +543,13 @@ void t7xx_ccmni_exit(struct t7xx_pci_dev *t7xx_dev)
 	struct t7xx_ccmni_ctrl *ctlb = t7xx_dev->ccmni_ctlb;
 
 	t7xx_fsm_notifier_unregister(t7xx_dev->md, &ctlb->md_status_notify);
+	if (ctlb->capability & NIC_CAP_NAPI)
+		t7xx_uninit_netdev_napi(ctlb);
 
 	if (ctlb->wwan_is_registered) {
 		wwan_unregister_ops(&t7xx_dev->pdev->dev);
 		ctlb->wwan_is_registered = false;
 	}
-
-	if (ctlb->capability & NIC_CAP_NAPI)
-		t7xx_uninit_netdev_napi(ctlb);
 
 	t7xx_dpmaif_hif_exit(ctlb->hif_ctrl);
 }
