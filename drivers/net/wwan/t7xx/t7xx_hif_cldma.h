@@ -44,18 +44,6 @@ enum cldma_id {
 	CLDMA_NUM
 };
 
-enum cldma_queue_type {
-	CLDMA_SHARED_Q,
-	CLDMA_DEDICATED_Q,
-};
-
-enum hif_cfg_type {
-	HIF_CFG_DEF = 0,
-	HIF_CFG1,
-	HIF_CFG2,
-	HIF_CFG_MAX,
-};
-
 struct cldma_request {
 	void *gpd;		/* Virtual address for CPU */
 	dma_addr_t gpd_addr;	/* Physical address for DMA */
@@ -72,14 +60,12 @@ struct cldma_ring {
 
 struct cldma_queue {
 	struct cldma_ctrl *md_ctrl;
-	enum cldma_id hif_id;
 	enum mtk_txrx dir;
 	unsigned char index;
 	struct cldma_ring *tr_ring;
 	struct cldma_request *tr_done;
 	struct cldma_request *rx_refill;
 	struct cldma_request *tx_next;
-	enum cldma_queue_type q_type;
 	int budget;			/* Same as ring buffer size by default */
 	spinlock_t ring_lock;
 	wait_queue_head_t req_wq;	/* Only for TX */
@@ -105,10 +91,6 @@ struct cldma_ctrl {
 	struct t7xx_cldma_hw hw_info;
 	bool is_late_init;
 	int (*recv_skb)(struct cldma_queue *queue, struct sk_buff *skb);
-	enum cldma_queue_type rxq_type[CLDMA_RXQ_NUM];
-	enum cldma_queue_type txq_type[CLDMA_TXQ_NUM];
-	int rxq_buff_size[CLDMA_RXQ_NUM];
-	int txq_buff_size[CLDMA_TXQ_NUM];
 };
 
 #define GPD_FLAGS_HWO		BIT(0)
@@ -147,7 +129,7 @@ int t7xx_cldma_alloc(enum cldma_id hif_id, struct t7xx_pci_dev *t7xx_dev);
 void t7xx_cldma_hif_hw_init(struct cldma_ctrl *md_ctrl);
 int t7xx_cldma_init(struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_exit(struct cldma_ctrl *md_ctrl);
-void t7xx_cldma_switch_cfg(struct cldma_ctrl *md_ctrl, unsigned int cfg_id);
+void t7xx_cldma_switch_cfg(struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_start(struct cldma_ctrl *md_ctrl);
 int t7xx_cldma_stop(struct cldma_ctrl *md_ctrl);
 void t7xx_cldma_reset(struct cldma_ctrl *md_ctrl);
@@ -156,8 +138,5 @@ void t7xx_cldma_set_recv_skb(struct cldma_ctrl *md_ctrl,
 int t7xx_cldma_send_skb(struct cldma_ctrl *md_ctrl, int qno, struct sk_buff *skb);
 void t7xx_cldma_stop_all_qs(struct cldma_ctrl *md_ctrl, enum mtk_txrx tx_rx);
 void t7xx_cldma_clear_all_qs(struct cldma_ctrl *md_ctrl, enum mtk_txrx tx_rx);
-int cldma_txq_mtu(struct cldma_ctrl *md_ctrl, unsigned char qno);
-int t7xx_cldma_write_room(struct cldma_ctrl *md_ctrl, unsigned char qno);
-extern bool da_down_stage_flag;
 
 #endif /* __T7XX_HIF_CLDMA_H__ */

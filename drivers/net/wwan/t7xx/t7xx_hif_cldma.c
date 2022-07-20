@@ -64,7 +64,6 @@ static void md_cd_queue_struct_reset(struct cldma_queue *queue, struct cldma_ctr
 {
 	queue->dir = tx_rx;
 	queue->index = index;
-	queue->hif_id = md_ctrl->hif_id;
 	queue->md_ctrl = md_ctrl;
 	queue->tr_ring = NULL;
 	queue->tr_done = NULL;
@@ -537,7 +536,6 @@ static void t7xx_cldma_rxq_init(struct cldma_queue *queue)
 
 	queue->dir = MTK_RX;
 	queue->tr_ring = &md_ctrl->rx_ring[queue->index];
-	queue->q_type = md_ctrl->rxq_type[queue->index];
 	t7xx_cldma_q_reset(queue);
 }
 
@@ -547,7 +545,6 @@ static void t7xx_cldma_txq_init(struct cldma_queue *queue)
 
 	queue->dir = MTK_TX;
 	queue->tr_ring = &md_ctrl->tx_ring[queue->index];
-	queue->q_type = md_ctrl->txq_type[queue->index];
 	t7xx_cldma_q_reset(queue);
 }
 
@@ -910,19 +907,6 @@ static void t7xx_cldma_hw_start_send(struct cldma_ctrl *md_ctrl, u8 qno,
 	}
 }
 
-int t7xx_cldma_write_room(struct cldma_ctrl *md_ctrl, unsigned char qno)
-{
-	struct cldma_queue *queue = &md_ctrl->txq[qno];
-
-	if (!queue)
-		return -EINVAL;
-
-	if (queue->budget >= MAX_TX_BUDGET)
-		return queue->budget;
-
-	return 0;
-}
-
 /**
  * t7xx_cldma_set_recv_skb() - Set the callback to handle RX packets.
  * @md_ctrl: CLDMA context structure.
@@ -1021,55 +1005,7 @@ allow_sleep:
 	return ret;
 }
 
-int cldma_txq_mtu(struct cldma_ctrl *md_ctrl, unsigned char qno)
-{
-	if (qno >= CLDMA_TXQ_NUM)
-		return -EINVAL;
-
-	return md_ctrl->txq_buff_size[qno];
-}
-
-static void ccci_cldma_adjust_config(struct cldma_ctrl *md_ctrl, unsigned char cfg_id)
-{
-	int qno;
-
-	/* set default config */
-	for (qno = 0; qno < CLDMA_RXQ_NUM; qno++) {
-		md_ctrl->rxq_buff_size[qno] = MTK_SKB_4K;
-		md_ctrl->rxq_type[qno] = CLDMA_SHARED_Q;
-	}
-
-	md_ctrl->rxq_buff_size[CLDMA_RXQ_NUM - 1] = MTK_SKB_64K;
-
-	for (qno = 0; qno < CLDMA_TXQ_NUM; qno++) {
-		md_ctrl->txq_buff_size[qno] = MTK_SKB_4K;
-		md_ctrl->txq_type[qno] = CLDMA_SHARED_Q;
-	}
-
-	switch (cfg_id) {
-	case HIF_CFG_DEF:
-		break;
-	case HIF_CFG1:
-		md_ctrl->rxq_buff_size[7] = MTK_SKB_64K;
-		break;
-	case HIF_CFG2:
-		/*Download Port Configuration*/
-		md_ctrl->rxq_type[0] = CLDMA_DEDICATED_Q;
-		md_ctrl->txq_type[0] = CLDMA_DEDICATED_Q;
-		md_ctrl->txq_buff_size[0] = MTK_SKB_2K;
-		md_ctrl->rxq_buff_size[0] = MTK_SKB_2K;
-		/*Postdump Port Configuration*/
-		md_ctrl->rxq_type[1] = CLDMA_DEDICATED_Q;
-		md_ctrl->txq_type[1] = CLDMA_DEDICATED_Q;
-		md_ctrl->txq_buff_size[1] = MTK_SKB_2K;
-		md_ctrl->rxq_buff_size[1] = MTK_SKB_2K;
-		break;
-	default:
-		break;
-	}
-}
-
-static int t7xx_cldma_late_init(struct cldma_ctrl *md_ctrl, unsigned int cfg_id)
+static int t7xx_cldma_late_init(struct cldma_ctrl *md_ctrl)
 {
 	char dma_pool_name[32];
 	int i, j, ret;
@@ -1079,7 +1015,6 @@ static int t7xx_cldma_late_init(struct cldma_ctrl *md_ctrl, unsigned int cfg_id)
 		return -EALREADY;
 	}
 
-	ccci_cldma_adjust_config(md_ctrl, cfg_id);
 	snprintf(dma_pool_name, sizeof(dma_pool_name), "cldma_req_hif%d", md_ctrl->hif_id);
 
 	md_ctrl->gpd_dmapool = dma_pool_create(dma_pool_name, md_ctrl->dev,
@@ -1098,7 +1033,7 @@ static int t7xx_cldma_late_init(struct cldma_ctrl *md_ctrl, unsigned int cfg_id)
 	}
 
 	for (j = 0; j < CLDMA_RXQ_NUM; j++) {
-		md_ctrl->rx_ring[j].pkt_size = md_ctrl->rxq_buff_size[j];
+		md_ctrl->rx_ring[j].pkt_size = CLDMA_MTU;
 
 		if (j == CLDMA_RXQ_NUM - 1)
 			md_ctrl->rx_ring[j].pkt_size = CLDMA_JUMBO_BUFFER;
@@ -1141,18 +1076,13 @@ static void t7xx_hw_info_init(struct cldma_ctrl *md_ctrl)
 	struct t7xx_cldma_hw *hw_info = &md_ctrl->hw_info;
 	u32 phy_ao_base, phy_pd_base;
 
+	if (md_ctrl->hif_id != CLDMA_ID_MD)
+		return;
+
+	phy_ao_base = CLDMA1_AO_BASE;
+	phy_pd_base = CLDMA1_PD_BASE;
+	hw_info->phy_interrupt_id = CLDMA1_INT;
 	hw_info->hw_mode = MODE_BIT_64;
-
-	if (md_ctrl->hif_id == CLDMA_ID_MD) {
-		phy_ao_base = CLDMA1_AO_BASE;
-		phy_pd_base = CLDMA1_PD_BASE;
-		hw_info->phy_interrupt_id = CLDMA1_INT;
-	} else {
-		phy_ao_base = CLDMA0_AO_BASE;
-		phy_pd_base = CLDMA0_PD_BASE;
-		hw_info->phy_interrupt_id = CLDMA0_INT;
-	}
-
 	hw_info->ap_ao_base = t7xx_pcie_addr_transfer(pbase->pcie_ext_reg_base,
 						      pbase->pcie_dev_reg_trsl_addr, phy_ao_base);
 	hw_info->ap_pdn_base = t7xx_pcie_addr_transfer(pbase->pcie_ext_reg_base,
@@ -1406,10 +1336,10 @@ err_workqueue:
 	return -ENOMEM;
 }
 
-void t7xx_cldma_switch_cfg(struct cldma_ctrl *md_ctrl, unsigned int cfg_id)
+void t7xx_cldma_switch_cfg(struct cldma_ctrl *md_ctrl)
 {
 	t7xx_cldma_late_release(md_ctrl);
-	t7xx_cldma_late_init(md_ctrl, cfg_id);
+	t7xx_cldma_late_init(md_ctrl);
 }
 
 void t7xx_cldma_exit(struct cldma_ctrl *md_ctrl)

@@ -29,26 +29,6 @@ struct ccci_header {
 	__le32 ex_msg;
 };
 
-enum mtk_txrx {
-	MTK_TX,
-	MTK_RX,
-};
-
-#define TX_DEFAULT_QUEUE	0
-
-#define MTK_SKB_64K		64528		/* 63kB + CCCI header */
-#define MTK_SKB_4K		3584		/* 3.5kB */
-#define MTK_SKB_2K		2048
-#define NET_RX_BUF		MTK_SKB_4K
-
-#define HDR_FLD_AST		((u32)BIT(31))
-#define HDR_FLD_SEQ		GENMASK(30, 16)
-#define HDR_FLD_CHN		GENMASK(15, 0)
-
-#define CCCI_H_LEN		16
-/* For exception flow use CCCI_H_LEN + reserved space */
-#define CCCI_H_ELEN		128
-
 /* Coupled with HW - indicates if there is data following the CCCI header or not */
 #define CCCI_HEADER_NO_DATA	0xffffffff
 
@@ -64,6 +44,11 @@ enum md_state {
 	MD_STATE_EXCEPTION,
 	MD_STATE_WAITING_TO_STOP,
 	MD_STATE_STOPPED,
+};
+
+enum mtk_txrx {
+	MTK_TX,
+	MTK_RX,
 };
 
 #ifdef NET_SKBUFF_DATA_USES_OFFSET

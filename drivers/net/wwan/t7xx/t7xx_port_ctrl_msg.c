@@ -103,10 +103,6 @@ static int control_msg_handler(struct t7xx_port *port, struct sk_buff *skb)
 				dev_err(port->dev, "Failed to append Handshake 2 event");
 		}
 
-		if (port_static->rx_ch == CCCI_SAP_CONTROL_RX)
-			t7xx_fsm_append_event(ctl, FSM_EVENT_AP_HS2,
-					      skb->data, le32_to_cpu(ctrl_msg_h->data_length));
-
 		dev_kfree_skb_any(skb);
 		break;
 

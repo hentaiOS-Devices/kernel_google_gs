@@ -38,7 +38,6 @@
 #define PORT_F_RX_ADJUST_HEADER	BIT(4)	/* Check whether need remove CCCI header while recv skb */
 #define PORT_F_RX_CH_TRAFFIC	BIT(5)	/* Enable port channel traffic */
 #define PORT_F_RX_CHAR_NODE	BIT(7)	/* Requires exporting char dev node to userspace */
-#define PORT_F_RAW_DATA		BIT(9)
 #define PORT_F_CHAR_NODE_SHOW	BIT(10)	/* The char dev node is shown to userspace by default */
 
 /* Reused for net TX, Data queue, same bit as RX_FULLED */
@@ -54,18 +53,6 @@
  * 0:reserved, 1: to sAP, 2: to MD
  */
 enum port_ch {
-	/* to sAP */
-	CCCI_SAP_CONTROL_RX = 0X1000,
-	CCCI_SAP_CONTROL_TX = 0X1001,
-	CCCI_SAP_GNSS_RX = 0x1004,
-	CCCI_SAP_GNSS_TX = 0x1005,
-	CCCI_SAP_META_RX = 0x1006,
-	CCCI_SAP_META_TX = 0x1007,
-	CCCI_SAP_LOG_RX = 0x1008,
-	CCCI_SAP_LOG_TX = 0x1009,
-	CCCI_SAP_ADB_RX = 0x100a,
-	CCCI_SAP_ADB_TX = 0x100b,
-
 	/* to MD */
 	PORT_CH_CONTROL_RX = 0x2000,
 	PORT_CH_CONTROL_TX = 0x2001,
@@ -124,9 +111,6 @@ struct t7xx_port_static {
 	struct port_ops		*ops;
 	char			*name;
 	enum wwan_port_type	port_type;
-	int			minor;
-	unsigned int		major;
-	unsigned int		minor_base;
 };
 
 struct t7xx_port {
@@ -155,17 +139,11 @@ struct t7xx_port {
 	int			rx_length_th;
 	port_skb_handler	skb_handler;
 	bool			chan_enable;
-	bool			chn_crt_stat;
 	struct task_struct	*thread;
 	unsigned int		flags;
-	struct cdev		*cdev;
-	struct port_proxy  *port_proxy;
 };
 
 int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb);
 int t7xx_port_send_skb_to_md(struct t7xx_port *port, struct sk_buff *skb);
-int port_register_device(const char *name, int major, int minor);
-void port_unregister_device(int major, int minor);
-int t7xx_port_write_room_to_md(struct t7xx_port *port);
 
 #endif /* __T7XX_PORT_H__ */

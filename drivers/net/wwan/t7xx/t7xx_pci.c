@@ -112,9 +112,7 @@ static int t7xx_pci_pm_init(struct t7xx_pci_dev *t7xx_dev)
 	pm_runtime_set_autosuspend_delay(&pdev->dev, PM_AUTOSUSPEND_MS);
 	pm_runtime_use_autosuspend(&pdev->dev);
 
-	udelay(1000);
-	return 0;
-	/*return mtk_wait_pm_config(mtk_dev); */
+	return t7xx_wait_pm_config(t7xx_dev);
 }
 
 void t7xx_pci_pm_init_late(struct t7xx_pci_dev *t7xx_dev)
