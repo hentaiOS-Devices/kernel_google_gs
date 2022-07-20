@@ -146,10 +146,9 @@ static void t7xx_port_wwan_uninit(struct t7xx_port *port)
 
 	spin_lock_irqsave(&port->rx_wq.lock, flags);
 	port->rx_length_th = 0;
-	spin_unlock_irqrestore(&port->rx_wq.lock, flags);
-
 	wwan_remove_port(port->wwan_port);
 	port->wwan_port = NULL;
+	spin_unlock_irqrestore(&port->rx_wq.lock, flags);
 }
 
 static int t7xx_port_wwan_recv_skb(struct t7xx_port *port, struct sk_buff *skb)

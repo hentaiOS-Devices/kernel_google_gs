@@ -128,6 +128,5 @@ struct t7xx_port *port_proxy_get_port(int major, int minor);
 int port_proxy_broadcast_state(struct t7xx_port *port, int state);
 struct t7xx_port *port_get_by_name(char *port_name);
 struct t7xx_port *port_get_by_minor(int minor);
-int port_ee_disable_wwan(void);
 
 #endif /* __T7XX_PORT_PROXY_H__ */

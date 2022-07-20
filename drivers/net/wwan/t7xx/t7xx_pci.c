@@ -41,7 +41,6 @@
 #include "t7xx_pcie_mac.h"
 #include "t7xx_reg.h"
 #include "t7xx_state_monitor.h"
-#include "t7xx_pci_rescan.h"
 
 #define T7XX_PCI_IREG_BASE		0
 #define T7XX_PCI_EREG_BASE		2
@@ -653,7 +652,7 @@ static int t7xx_interrupt_init(struct t7xx_pci_dev *t7xx_dev)
 
 	/* IPs enable interrupts when ready */
 	for (i = 0; i < EXT_INT_NUM; i++)
-		t7xx_pcie_mac_set_int(t7xx_dev, i);
+		t7xx_pcie_mac_clear_int(t7xx_dev, i);
 
 	return 0;
 }
@@ -702,8 +701,6 @@ static int t7xx_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return ret;
 	}
 
-	pdev->current_state = PCI_D0;
-
 	IREG_BASE(t7xx_dev) = pcim_iomap_table(pdev)[T7XX_PCI_IREG_BASE];
 	t7xx_dev->base_addr.pcie_ext_reg_base = pcim_iomap_table(pdev)[T7XX_PCI_EREG_BASE];
 
@@ -727,13 +724,8 @@ static int t7xx_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return ret;
 	}
 
-	mtk_rescan_done();
 	t7xx_pcie_mac_set_int(t7xx_dev, MHCCIF_INT);
 	t7xx_pcie_mac_interrupts_en(t7xx_dev);
-
-	pci_set_master(pdev);
-	if (!t7xx_dev->hp_enable)
-		pci_ignore_hotplug(pdev);
 
 	return 0;
 }
@@ -771,53 +763,7 @@ static struct pci_driver t7xx_pci_driver = {
 	.shutdown = t7xx_pci_shutdown,
 };
 
-static int __init t7xx_pci_init(void)
-{
-	int ret;
-
-	mtk_pci_dev_rescan();
-
-	ret = mtk_rescan_init();
-	if (ret) {
-		pr_err("Failed to init mtk rescan work\n");
-		return ret;
-	}
-
-	return pci_register_driver(&t7xx_pci_driver);
-}
-module_init(t7xx_pci_init);
-
-static int mtk_always_match(struct device *dev, const void *data)
-{
-	return 1;
-}
-
-static void __exit t7xx_pci_cleanup(void)
-{
-	struct device *dev;
-	int remove_flag=0;
-
-	dev = driver_find_device(&t7xx_pci_driver.driver,NULL,NULL,mtk_always_match);
-	if(dev != NULL)  /*dev pointer maybe modified by bus, so judge it first*/
-        {
-                pr_info("unregister MTK PCIe driver while device is still exist.\n");
-                put_device(dev);
-                remove_flag=1;
-        }
-        else
-                pr_info("unregister MTK PCIe driver with no device exist.\n");
-
-	pci_lock_rescan_remove();
-	pci_unregister_driver(&t7xx_pci_driver);
-	pci_unlock_rescan_remove();
-	mtk_rescan_deinit();
-
-	if (remove_flag) {
-                pr_info("start remove MTK PCI device\n");
-                pci_stop_and_remove_bus_device_locked(to_pci_dev(dev));
-        }
-}
-module_exit(t7xx_pci_cleanup);
+module_pci_driver(t7xx_pci_driver);
 
 MODULE_AUTHOR("MediaTek Inc");
 MODULE_DESCRIPTION("MediaTek PCIe 5G WWAN modem T7xx driver");

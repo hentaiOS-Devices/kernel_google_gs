@@ -1026,22 +1026,3 @@ int t7xx_port_proxy_node_control(struct t7xx_modem *md, struct port_msg *port_ms
 
 	return 0;
 }
-
-int port_ee_disable_wwan(void)
-{
-	struct t7xx_port *port;
-	int i;
-
-	if (!port_prox) {
-		pr_notice("port_status notify: proxy not initiated\n");
-		return -EFAULT;
-	}
-
-	/* port uninit */
-	for_each_proxy_port(i, port, port_prox) {
-		if (port->wwan_port)
-			wwan_port_txoff(port->wwan_port);
-	}
-
-	return 0;
-}

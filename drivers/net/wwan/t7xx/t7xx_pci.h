@@ -80,7 +80,6 @@ struct t7xx_pci_dev {
 
 	struct t7xx_ccmni_ctrl	*ccmni_ctlb;
 	bool			rgu_pci_irq_en;
-	bool			hp_enable;
 };
 
 enum t7xx_pm_id {
