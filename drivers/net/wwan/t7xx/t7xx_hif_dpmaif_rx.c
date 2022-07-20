@@ -45,7 +45,6 @@
 #include "t7xx_dpmaif.h"
 #include "t7xx_hif_dpmaif.h"
 #include "t7xx_hif_dpmaif_rx.h"
-#include "t7xx_netdev.h"
 #include "t7xx_pci.h"
 
 #define DPMAIF_BAT_COUNT		8192
@@ -107,7 +106,7 @@ static int t7xx_dpmaif_net_rx_push_thread(void *arg)
 		if (!skb)
 			continue;
 
-		cb->recv_skb(hif_ctrl->t7xx_dev, skb, NULL);
+		cb->recv_skb(hif_ctrl->t7xx_dev, skb);
 		cond_resched();
 	}
 
@@ -745,7 +744,6 @@ static void t7xx_dpmaif_rx_skb_enqueue(struct dpmaif_rx_queue *rxq, struct sk_bu
 static void t7xx_dpmaif_rx_skb(struct dpmaif_rx_queue *rxq,
 			       struct dpmaif_cur_rx_skb_info *skb_info)
 {
-	struct dpmaif_ctrl *dpmaif_ctrl = rxq->dpmaif_ctrl;
 	struct sk_buff *skb = skb_info->cur_skb;
 	struct t7xx_skb_cb *skb_cb;
 	u8 netif_id;
@@ -759,14 +757,6 @@ static void t7xx_dpmaif_rx_skb(struct dpmaif_rx_queue *rxq,
 
 	skb->ip_summed = skb_info->check_sum == DPMAIF_CS_RESULT_PASS ? CHECKSUM_UNNECESSARY :
 									CHECKSUM_NONE;
-
-	if (dpmaif_ctrl->napi_enable) {
-		struct dpmaif_callbacks *cb = dpmaif_ctrl->callbacks;
-
-		cb->recv_skb(dpmaif_ctrl->t7xx_dev, skb, &rxq->napi);
-		return;
-	}
-
 	netif_id = FIELD_GET(NETIF_MASK, skb_info->cur_chn_idx);
 	skb_cb = T7XX_SKB_CB(skb);
 	skb_cb->netif_idx = netif_id;
@@ -863,114 +853,6 @@ static int t7xx_dpmaif_rx_start(struct dpmaif_rx_queue *rxq, const unsigned int 
 	return rx_cnt;
 }
 
-static int t7xx_dpmaif_napi_rx_start(struct dpmaif_rx_queue *rxq,
-				     const unsigned short pit_cnt,
-				     const unsigned int budget, int *once_more)
-{
-	struct dpmaif_cur_rx_skb_info *cur_rx_skb_info;
-	unsigned int cur_pit, pit_len, packets_cnt = 0;
-	struct dpmaif_ctrl *dpmaif_ctrl;
-	int ret = 0, ret_hw = 0;
-	unsigned short rx_cnt;
-
-	if (!rxq || !rxq->dpmaif_ctrl || !rxq->pit_base) {
-		pr_err("NULL pointer!\n");
-		return -EINVAL;
-	}
-
-	pit_len = rxq->pit_size_cnt;
-	cur_rx_skb_info = &rxq->rx_data_info;
-
-	dpmaif_ctrl = rxq->dpmaif_ctrl;
-	cur_pit = rxq->pit_rd_idx;
-
-	for (rx_cnt = 0; rx_cnt < pit_cnt; rx_cnt++) {
-		struct dpmaif_normal_pit *pkt_info;
-		u32 val;
-
-		if (!cur_rx_skb_info->msg_pit_received) {
-			if (packets_cnt >= budget)
-				break;
-		}
-
-		pkt_info = (struct dpmaif_normal_pit *)rxq->pit_base + cur_pit;
-
-		if (t7xx_dpmaif_check_pit_seq(rxq, pkt_info)) {
-			pr_err_ratelimited("dlq%u checks PIT SEQ fail\n", rxq->index);
-			*once_more = 1;
-			return packets_cnt;
-		}
-
-		val = FIELD_GET(NORMAL_PIT_PACKET_TYPE, le32_to_cpu(pkt_info->pit_header));
-		if (val == DES_PT_MSG) {
-			if (cur_rx_skb_info->msg_pit_received)
-				dev_err(dpmaif_ctrl->dev, "dlq%u receive repeat msg_pit err\n",
-					rxq->index);
-			cur_rx_skb_info->msg_pit_received = true;
-			t7xx_dpmaif_parse_msg_pit(rxq, (struct dpmaif_msg_pit *)pkt_info,
-						  cur_rx_skb_info);
-		} else { /* DES_PT_PD */
-			val = FIELD_GET(NORMAL_PIT_BUFFER_TYPE, le32_to_cpu(pkt_info->pit_header));
-			if (val != PKT_BUF_FRAG) {
-				/* skb->data: add to skb ptr && record ptr.*/
-				ret = t7xx_dpmaif_get_rx_pkt(rxq, pkt_info, cur_rx_skb_info);
-			} else if (!cur_rx_skb_info->cur_skb) {
-				/* msg+frag pit, no data pkt received. */
-				dev_err(dpmaif_ctrl->dev, "msg + frag pit, no data pkt received ..\n");
-				ret = -EINVAL;
-			} else {
-				/* skb->frags[]: add to frags[]*/
-				ret = t7xx_dpmaif_get_frag(rxq, pkt_info, cur_rx_skb_info);
-			}
-
-			if (ret < 0) {
-				/* move on pit index to skip error data */
-				cur_rx_skb_info->err_payload = 1;
-				pr_err_ratelimited("rxq%d error payload!\n", rxq->index);
-			}
-
-			val = FIELD_GET(NORMAL_PIT_CONT, le32_to_cpu(pkt_info->pit_header));
-			if (!val) {
-				/* last one, not msg pit, && data had rx.*/
-				if (cur_rx_skb_info->err_payload == 0) {
-					t7xx_dpmaif_rx_skb(rxq, cur_rx_skb_info);
-				} else {
-					if (cur_rx_skb_info->cur_skb) {
-						dev_kfree_skb_any(cur_rx_skb_info->cur_skb);
-						cur_rx_skb_info->cur_skb = NULL;
-					}
-				}
-				/* reinit cur_rx_skb_info */
-				memset(cur_rx_skb_info, 0x00,
-				       sizeof(struct dpmaif_cur_rx_skb_info));
-				cur_rx_skb_info->msg_pit_received = false;
-				packets_cnt++;
-			}
-		}
-
-		/* get next pointer to get pkt data */
-		cur_pit = t7xx_ring_buf_get_next_wr_idx(pit_len, cur_pit);
-		rxq->pit_rd_idx = cur_pit;
-
-		/* notify HW++ */
-		rxq->pit_remain_release_cnt++;
-		if (rx_cnt > 0 && (rx_cnt % DPMAIF_NOTIFY_RELEASE_COUNT) == 0) {
-			ret_hw = t7xx_dpmaifq_rx_notify_hw(rxq);
-			if (ret_hw < 0)
-				break;
-		}
-	}
-
-	/* update to HW */
-	if (ret_hw == 0)
-		ret_hw = t7xx_dpmaifq_rx_notify_hw(rxq);
-
-	if (ret_hw < 0 && ret == 0)
-		ret = ret_hw;
-
-	return ret < 0 ? ret : packets_cnt;
-}
-
 static unsigned int t7xx_dpmaifq_poll_pit(struct dpmaif_rx_queue *rxq)
 {
 	unsigned int hw_wr_idx, pit_cnt;
@@ -983,78 +865,6 @@ static unsigned int t7xx_dpmaifq_poll_pit(struct dpmaif_rx_queue *rxq)
 					    DPMAIF_READ);
 	rxq->pit_wr_idx = hw_wr_idx;
 	return pit_cnt;
-}
-
-static int t7xx_dpmaif_napi_rx_data_collect(struct dpmaif_ctrl *hif_ctrl,
-					    const unsigned char q_num,
-					    const int budget, int *once_more)
-{
-	struct dpmaif_rx_queue *rxq = &hif_ctrl->rxq[q_num];
-	unsigned int cnt;
-	int ret = 0;
-
-	cnt = t7xx_dpmaifq_poll_pit(rxq);
-
-	if (cnt) {
-		ret = t7xx_dpmaif_napi_rx_start(rxq, cnt, budget, once_more);
-
-		if (ret < 0 && ret != -EAGAIN)
-			dev_err(hif_ctrl->dev, "dlq%u rx ERR:%d\n", rxq->index, ret);
-	}
-
-	return ret;
-}
-
-int t7xx_dpmaif_napi_rx_poll(struct napi_struct *napi, const int budget)
-{
-	struct dpmaif_rx_queue *rxq = container_of(napi, struct dpmaif_rx_queue, napi);
-	int ret, once_more = 0, work_done = 0;
-
-	atomic_set(&rxq->rx_processing, 1);
-	/* Ensure rx_processing is changed to 1 before actually begin RX flow */
-	smp_mb();
-
-	if (!rxq->que_started) {
-		atomic_set(&rxq->rx_processing, 0);
-		dev_err(rxq->dpmaif_ctrl->dev, "Work RXQ: %d has not been started\n", rxq->index);
-		return work_done;
-	}
-
-	ret = pm_runtime_resume_and_get(rxq->dpmaif_ctrl->dev);
-	if (ret < 0 && ret != -EACCES)
-		return work_done;
-
-	t7xx_pci_disable_sleep(rxq->dpmaif_ctrl->t7xx_dev);
-	while (work_done < budget) {
-		int each_budget = budget - work_done;
-		int rx_cnt = t7xx_dpmaif_napi_rx_data_collect(rxq->dpmaif_ctrl,
-								rxq->index, each_budget,
-								&once_more);
-		if (rx_cnt > 0)
-			work_done += rx_cnt;
-		else
-			break;
-	}
-
-	if (once_more) {
-		napi_gro_flush(napi, false);
-		work_done = budget;
-		t7xx_dpmaif_clr_ip_busy_sts(&rxq->dpmaif_ctrl->hw_info);
-	} else if (work_done < budget) {
-		napi_complete_done(napi, work_done);
-		t7xx_dpmaif_clr_ip_busy_sts(&rxq->dpmaif_ctrl->hw_info);
-		t7xx_dpmaif_dlq_unmask_rx_done(&rxq->dpmaif_ctrl->hw_info, rxq->index);
-	} else {
-		t7xx_dpmaif_clr_ip_busy_sts(&rxq->dpmaif_ctrl->hw_info);
-	}
-
-	t7xx_pci_enable_sleep(rxq->dpmaif_ctrl->t7xx_dev);
-	pm_runtime_mark_last_busy(rxq->dpmaif_ctrl->dev);
-	pm_runtime_put_autosuspend(rxq->dpmaif_ctrl->dev);
-
-	atomic_set(&rxq->rx_processing, 0);
-
-	return work_done;
 }
 
 static int t7xx_dpmaif_rx_data_collect(struct dpmaif_ctrl *dpmaif_ctrl,
@@ -1090,12 +900,9 @@ static void t7xx_dpmaif_do_rx(struct dpmaif_ctrl *dpmaif_ctrl, struct dpmaif_rx_
 
 	ret = t7xx_dpmaif_rx_data_collect(dpmaif_ctrl, rxq->index, rxq->budget);
 	if (ret < 0) {
-		if (dpmaif_ctrl->napi_enable)
-			napi_schedule(&rxq->napi);
-		else
-			queue_work(rxq->worker, &rxq->dpmaif_rxq_work);
-
-		t7xx_dpmaif_clr_ip_busy_sts(&dpmaif_ctrl->hw_info);
+		/* Try one more time */
+		queue_work(rxq->worker, &rxq->dpmaif_rxq_work);
+		t7xx_dpmaif_clr_ip_busy_sts(hw_info);
 	} else {
 		t7xx_dpmaif_clr_ip_busy_sts(hw_info);
 		t7xx_dpmaif_dlq_unmask_rx_done(hw_info, rxq->index);
@@ -1144,10 +951,7 @@ void t7xx_dpmaif_irq_rx_done(struct dpmaif_ctrl *dpmaif_ctrl, const unsigned int
 	}
 
 	rxq = &dpmaif_ctrl->rxq[qno];
-	if (dpmaif_ctrl->napi_enable)
-		napi_schedule(&rxq->napi);
-	else
-		queue_work(rxq->worker, &rxq->dpmaif_rxq_work);
+	queue_work(rxq->worker, &rxq->dpmaif_rxq_work);
 }
 
 static void t7xx_dpmaif_base_free(const struct dpmaif_ctrl *dpmaif_ctrl,

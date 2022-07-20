@@ -29,7 +29,6 @@
 #include "t7xx_hif_dpmaif.h"
 #include "t7xx_hif_dpmaif_rx.h"
 #include "t7xx_hif_dpmaif_tx.h"
-#include "t7xx_netdev.h"
 #include "t7xx_pci.h"
 #include "t7xx_pcie_mac.h"
 
@@ -544,8 +543,7 @@ struct dpmaif_ctrl *t7xx_dpmaif_hif_init(struct t7xx_pci_dev *t7xx_dev,
 	dpmaif_ctrl->dpmaif_sw_init_done = false;
 	dpmaif_ctrl->hw_info.dev = dev;
 	dpmaif_ctrl->hw_info.pcie_base = t7xx_dev->base_addr.pcie_ext_reg_base -
-					     t7xx_dev->base_addr.pcie_dev_reg_trsl_addr;
-	dpmaif_ctrl->napi_enable = !!(t7xx_dev->ccmni_ctlb->capability & NIC_CAP_NAPI);
+					 t7xx_dev->base_addr.pcie_dev_reg_trsl_addr;
 
 	ret = t7xx_dpmaif_pm_entity_init(dpmaif_ctrl);
 	if (ret)

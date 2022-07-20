@@ -19,7 +19,6 @@
 #define __T7XX_DPMA_TX_H__
 
 #include <linux/mm_types.h>
-#include <linux/netdevice.h>
 #include <linux/sched.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
@@ -125,7 +124,6 @@ struct dpmaif_rx_queue {
 	unsigned int		expect_pit_seq;
 	unsigned int		pit_remain_release_cnt;
 	struct dpmaif_cur_rx_skb_info rx_data_info;
-	struct napi_struct	napi;
 };
 
 struct dpmaif_tx_queue {
@@ -175,8 +173,7 @@ enum dpmaif_txq_state {
 struct dpmaif_callbacks {
 	void (*state_notify)(struct t7xx_pci_dev *t7xx_dev,
 			     enum dpmaif_txq_state state, int txq_number);
-	void (*recv_skb)(struct t7xx_pci_dev *t7xx_dev, struct sk_buff *skb,
-			 struct napi_struct *napi);
+	void (*recv_skb)(struct t7xx_pci_dev *t7xx_dev, struct sk_buff *skb);
 };
 
 struct dpmaif_ctrl {
@@ -201,7 +198,6 @@ struct dpmaif_ctrl {
 	struct task_struct		*tx_thread;
 
 	struct dpmaif_callbacks		*callbacks;
-	bool				napi_enable;
 };
 
 struct dpmaif_ctrl *t7xx_dpmaif_hif_init(struct t7xx_pci_dev *t7xx_dev,

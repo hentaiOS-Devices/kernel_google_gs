@@ -28,10 +28,9 @@
 #define RXQ_NUM				DPMAIF_RXQ_NUM
 #define NIC_DEV_MAX			21
 #define NIC_DEV_DEFAULT			2
-#define NIC_CAP_NAPI			BIT(4)
+
 #define CCMNI_NETDEV_WDT_TO		(1 * HZ)
 #define CCMNI_MTU_MAX			3000
-#define NIC_NAPI_POLL_BUDGET		128
 
 struct t7xx_ccmni {
 	u8				index;
@@ -49,11 +48,6 @@ struct t7xx_ccmni_ctrl {
 	unsigned int			md_sta;
 	struct t7xx_fsm_notifier	md_status_notify;
 	bool				wwan_is_registered;
-	struct net_device		dummy_dev;
-	struct napi_struct		*napi[RXQ_NUM];
-	atomic_t			napi_usr_refcnt;
-	bool				is_napi_en;
-	unsigned int			capability;
 };
 
 int t7xx_ccmni_init(struct t7xx_pci_dev *t7xx_dev);
