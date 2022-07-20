@@ -7,7 +7,6 @@
 #include <linux/debugfs.h>
 #include <linux/bitfield.h>
 #include <linux/firmware.h>
-#include <linux/vmalloc.h>
 
 #include "t7xx_hif_cldma.h"
 #include "t7xx_pci_rescan.h"
@@ -882,3 +881,4 @@ struct port_ops devlink_port_ops = {
 	.enable_chl = &t7xx_devlink_enable_chl,
 	.disable_chl = &t7xx_devlink_disable_chl,
 };
+
