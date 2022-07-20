@@ -40,7 +40,6 @@
 #define PORT_F_RX_CHAR_NODE	BIT(7)	/* Requires exporting char dev node to userspace */
 #define PORT_F_RAW_DATA		BIT(9)
 #define PORT_F_CHAR_NODE_SHOW	BIT(10)	/* The char dev node is shown to userspace by default */
-#define PORT_F_MAX		BIT(11)
 
 /* Reused for net TX, Data queue, same bit as RX_FULLED */
 #define PORT_F_TX_DATA_FULLED	BIT(1)

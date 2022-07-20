@@ -64,8 +64,7 @@ static int t7xx_port_ctrl_tx(struct wwan_port *port, struct sk_buff *skb)
 	enum md_state md_state;
 
 	len = skb->len;
-	if (!len || !port_private->rx_length_th || port_private->rx_length_th > RX_QUEUE_MAXLEN ||
-	    !port_private->chan_enable || port_private->flags > PORT_F_MAX)
+	if (!len || !port_private->rx_length_th || !port_private->chan_enable)
 		return -EINVAL;
 
 	port_static = port_private->port_static;

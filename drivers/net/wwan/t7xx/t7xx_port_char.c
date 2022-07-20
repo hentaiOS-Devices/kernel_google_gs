@@ -371,30 +371,28 @@ static int port_status_update(struct t7xx_port *port)
 	if (!(port_static->flags & PORT_F_RX_CHAR_NODE) || port->chn_crt_stat == port->chan_enable)
 		return 0;
 
-	/* Updating the channel status before the register to diverge the following calls */
-	spin_lock(&port->port_update_lock);
-	port->chn_crt_stat = !port->chn_crt_stat;
-	spin_unlock(&port->port_update_lock);
-
 	if (port->chan_enable == CCCI_CHAN_ENABLE) {
 		int ret;
 
 		port_static->flags &= ~PORT_F_RX_ALLOW_DROP;
 		ret = port_register_device(port_static->name, port_static->major,
 					   port_static->minor_base + port_static->minor);
-		if (ret) {
-			spin_lock(&port->port_update_lock);
-			port->chn_crt_stat = !port->chn_crt_stat;
-			spin_unlock(&port->port_update_lock);
+		if (ret)
 			return ret;
-		}
+
 		port_proxy_broadcast_state(port, MTK_PORT_STATE_ENABLE);
+		spin_lock(&port->port_update_lock);
+		port->chn_crt_stat = CCCI_CHAN_ENABLE;
+		spin_unlock(&port->port_update_lock);
 
 		return 0;
 	}
 
 	port_static->flags |= PORT_F_RX_ALLOW_DROP;
 	port_unregister_device(port_static->major, port_static->minor_base + port_static->minor);
+	spin_lock(&port->port_update_lock);
+	port->chn_crt_stat = CCCI_CHAN_DISABLE;
+	spin_unlock(&port->port_update_lock);
 	return port_proxy_broadcast_state(port, MTK_PORT_STATE_DISABLE);
 }
 
@@ -403,8 +401,10 @@ static int port_char_enable_chl(struct t7xx_port *port)
 	spin_lock(&port->port_update_lock);
 	port->chan_enable = CCCI_CHAN_ENABLE;
 	spin_unlock(&port->port_update_lock);
+	if (port->chn_crt_stat != port->chan_enable)
+		return port_status_update(port);
 
-	return port_status_update(port);
+	return 0;
 }
 
 static int port_char_disable_chl(struct t7xx_port *port)
@@ -412,8 +412,10 @@ static int port_char_disable_chl(struct t7xx_port *port)
 	spin_lock(&port->port_update_lock);
 	port->chan_enable = CCCI_CHAN_DISABLE;
 	spin_unlock(&port->port_update_lock);
+	if (port->chn_crt_stat != port->chan_enable)
+		return port_status_update(port);
 
-	return port_status_update(port);
+	return 0;
 }
 
 static void port_char_md_state_notify(struct t7xx_port *port, unsigned int state)
