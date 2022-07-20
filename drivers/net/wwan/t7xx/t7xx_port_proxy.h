@@ -110,11 +110,6 @@ extern struct port_ops char_port_ops;
 extern struct port_ops tty_port_ops;
 extern struct tty_dev_ops tty_ops;
 
-#ifdef CONFIG_WWAN_DEBUGFS
-extern struct dentry *wwan_get_debugfs_dir(struct device *parent);
-extern struct port_ops t7xx_trace_port_ops;
-#endif
-
 int t7xx_port_proxy_send_skb(struct t7xx_port *port, struct sk_buff *skb);
 void t7xx_port_proxy_set_tx_seq_num(struct t7xx_port *port, struct ccci_header *ccci_h);
 int t7xx_port_proxy_node_control(struct t7xx_modem *md, struct port_msg *port_msg);

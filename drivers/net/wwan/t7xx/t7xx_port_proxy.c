@@ -96,7 +96,6 @@ static struct t7xx_port_static t7xx_md_ports[] = {
 		.name = "MBIM",
 		.port_type = WWAN_PORT_MBIM,
 	}, {
-#ifdef CONFIG_WWAN_DEBUGFS
 		.tx_ch = PORT_CH_MD_LOG_TX,
 		.rx_ch = PORT_CH_MD_LOG_RX,
 		.txq_index = 7,
@@ -104,10 +103,12 @@ static struct t7xx_port_static t7xx_md_ports[] = {
 		.txq_exp_index = 7,
 		.rxq_exp_index = 7,
 		.path_id = CLDMA_ID_MD,
-		.ops = &t7xx_trace_port_ops,
-		.name = "mdlog",
+		.flags = PORT_F_RX_CHAR_NODE,
+		.ops = &char_port_ops,
+		.minor = 2,
+		.name = "ttyCMdLog",
+		.port_type = WWAN_PORT_AT,
 	}, {
-#endif
 		.tx_ch = CCCI_SAP_ADB_TX,
 		.rx_ch = CCCI_SAP_ADB_RX,
 		.txq_index = 3,
