@@ -6,7 +6,6 @@
 
 #include <linux/debugfs.h>
 #include <linux/bitfield.h>
-#include <linux/firmware.h>
 
 #include "t7xx_hif_cldma.h"
 #include "t7xx_pci_rescan.h"
@@ -542,8 +541,8 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 {
 	struct t7xx_devlink *dl = devlink_priv(devlink);
 	const char *component = params->component;
+	const struct firmware *fw = params->fw;
 	char flash_event[T7XX_FB_EVENT_SIZE];
-	const struct firmware *fw = NULL;
 	struct t7xx_port *port = NULL;
 	int ret = 0;
 
@@ -561,19 +560,12 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 		goto err_out;
 	}
 
-	if (!component) {
+	if (!component || !fw->data) {
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	set_bit(T7XX_FLASH_STATUS, &dl->status);
-	devlink_flash_update_begin_notify(devlink);
-	ret = request_firmware(&fw, params->file_name, devlink->dev);
-	if (ret) {
-		dev_dbg(port->dev, "requested firmware file not found");
-		return ret;
-	}
-
 	dev_dbg(port->dev, "flash partition name:%s binary size:%zu\n",
 		component, fw->size);
 
@@ -584,8 +576,7 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 
 	if (ret) {
 		devlink_flash_update_status_notify(devlink, "flashing failure!",
-						   params->component,
-						   1, fw->size);
+						   params->component, 0, 0);
 		snprintf(flash_event,
 			 sizeof(flash_event),
 			 "%s for [%s]",
@@ -593,15 +584,14 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 			 params->component);
 	} else {
 		devlink_flash_update_status_notify(devlink, "flashing success!",
-						   params->component,
-						   1, fw->size);
+						   params->component, 0, 0);
 		snprintf(flash_event,
 			 sizeof(flash_event),
 			 "%s for [%s]",
 			 T7XX_UEVENT_FLASHING_SUCCESS,
 			 params->component);
 	}
-	devlink_flash_update_end_notify(devlink);
+
 	t7xx_uevent_send(dl->dev, flash_event);
 err_out:
 	clear_bit(T7XX_FLASH_STATUS, &dl->status);
@@ -723,7 +713,8 @@ static struct t7xx_devlink
 	int rc, i;
 
 	dl_ctx = devlink_alloc(&devlink_flash_ops,
-			       sizeof(struct t7xx_devlink));
+			       sizeof(struct t7xx_devlink),
+				    &mtk_dev->pdev->dev);
 	if (!dl_ctx) {
 		dev_err(&mtk_dev->pdev->dev, "devlink_alloc failed");
 		goto devlink_alloc_fail;
@@ -745,13 +736,14 @@ static struct t7xx_devlink
 	dl->port = port;
 	port->dl = dl;
 
-	devlink_register(dl_ctx, &mtk_dev->pdev->dev);
 	rc = t7xx_devlink_create_region(dl);
 	if (rc) {
 		dev_err(dl->dev, "devlink region creation failed, rc %d",
 			rc);
 		goto region_create_fail;
 	}
+
+	devlink_register(dl_ctx);
 
 	return dl;
 
