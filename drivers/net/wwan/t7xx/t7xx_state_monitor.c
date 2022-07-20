@@ -326,7 +326,6 @@ static inline int brom_stage_event_handling(struct t7xx_fsm_ctl *ctl, unsigned i
 		start_brom_event_start_timer(ctl);
 		break;
 	case BROM_EVENT_RESET:
-		pr_info("BROM EVENT reset received ..\n");
 		host_event_notify(ctl->md, 1);
 		mtk_queue_rescan_work(ctl->md->t7xx_dev->pdev);
 		break;
@@ -337,45 +336,6 @@ static inline int brom_stage_event_handling(struct t7xx_fsm_ctl *ctl, unsigned i
 	}
 
 	return ret;
-}
-
-static inline void lk_stage_event_handling(struct t7xx_fsm_ctl *ctl,
-        unsigned int dummy_reg)
-{
-        unsigned char lk_event;
-        struct t7xx_port *pd_port;
-        struct t7xx_port_static *pd_port_static;
-	struct cldma_ctrl *md_ctrl;
-
-        /*get lk event id*/
-        lk_event = (dummy_reg & LK_EVENT_MASK)>>8;
-        switch (lk_event) {
-        case LK_EVENT_NORMAL:
-                pr_info("Device enter next stage from LK stage/n");
-                break;
-        case LK_EVENT_CREATE_PD_PORT:
-		md_ctrl = ctl->md->md_ctrl[CLDMA_ID_AP];
-                //dump_status_before_mrdump(md->mtk_dev);
-                t7xx_cldma_hif_hw_init(md_ctrl);
-                t7xx_cldma_stop(md_ctrl);
-		t7xx_cldma_switch_cfg(md_ctrl, HIF_CFG2);
-                //switch_port_cfg(ctl->md_id, PORT_CFG1);
-		pr_info("creating the ttyDUMP port.. \n");
-                pd_port = port_get_by_name("ttyDUMP");
-                if (pd_port != NULL) {
-			pd_port_static = pd_port->port_static;
-                        pd_port_static->ops->enable_chl(pd_port);
-                	t7xx_cldma_start(md_ctrl);
-		} else
-                        pr_err("can't find PD port/n");
-                break;
-        case LK_EVENT_RESET:
-                /*send r&r event to r&r thread*/
-                break;
-        default:
-                pr_err("Brom Event region content error\n");
-                break;
-        }
 }
 
 static int fsm_stopped_handler(struct t7xx_fsm_ctl *ctl)
@@ -525,11 +485,6 @@ static void fsm_routine_start(struct t7xx_fsm_ctl *ctl, struct t7xx_fsm_command 
 		case BROM_STAGE_POST:
 			cmd_ret = brom_stage_event_handling(ctl, dev_status);
 			break;
-		case LK_STAGE:
-                        da_down_stage_flag = false;
-                        stop_brom_event_start_timer(ctl);
-                        lk_stage_event_handling(ctl, dev_status);
-                        break;
 		case LINUX_STAGE:
 			da_down_stage_flag = false;
 			stop_brom_event_start_timer(ctl);

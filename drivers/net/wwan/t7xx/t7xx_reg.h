@@ -105,7 +105,6 @@ enum t7xx_pm_resume_state {
 #define MISC_DEV_STATUS_MASK			GENMASK(15, 0)
 #define MISC_STAGE_MASK				GENMASK(2, 0)
 #define BROM_EVENT_MASK				0x00000070
-#define LK_EVENT_MASK 				0x00000700
 #define MISC_RESET_TYPE_PLDR			BIT(26)
 #define MISC_RESET_TYPE_FLDR			BIT(27)
 #define INIT_STAGE				0
@@ -114,7 +113,6 @@ enum t7xx_pm_resume_state {
 #define BROM_STAGE_POST				2
 #define BROM_STAGE_PRE				1
 #define BROM_STAGE_POST				2
-#define LK_STAGE				3
 
 #define T7XX_PCIE_RESOURCE_STATUS		0x0d28
 #define T7XX_PCIE_RESOURCE_STS_MSK		GENMASK(4, 0)
@@ -152,12 +150,6 @@ enum brom_event_id_e {
 	BROM_EVENT_JUMP_DA = 3,
 	BROM_EVENT_CREATE_DL_PORT = 4,
 	BROM_EVENT_RESET = 7,
-};
-
-enum lk_event_id_e {
-        LK_EVENT_NORMAL = 0,
-        LK_EVENT_CREATE_PD_PORT = 1,
-        LK_EVENT_RESET = 7,
 };
 
 /* DPMA definitions */

@@ -362,7 +362,7 @@ int t7xx_port_recv_skb(struct t7xx_port *port, struct sk_buff *skb)
 	if (port->flags & PORT_F_RX_ADJUST_HEADER)
 		t7xx_port_adjust_skb(port, skb);
 	channel = FIELD_GET(CCCI_H_CHN_FLD, le32_to_cpu(ccci_h->status));
-	if (!(port->flags & PORT_F_RAW_DATA) && (channel == PORT_CH_STATUS_RX)) {
+	if (channel == PORT_CH_STATUS_RX) {
 		ret = port->skb_handler(port, skb);
 	} else {
 		if (port->wwan_port)

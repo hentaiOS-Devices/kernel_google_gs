@@ -52,8 +52,6 @@
 #define PM_RESOURCE_POLL_TIMEOUT_US	10000
 #define PM_RESOURCE_POLL_STEP_US	100
 
-static struct kobject *pcie_drv_info_kobj;
-
 enum t7xx_pm_state {
 	MTK_PM_EXCEPTION,
 	MTK_PM_INIT,		/* Device initialized, but handshake not completed */
@@ -667,54 +665,6 @@ static void t7xx_pci_infracfg_ao_calc(struct t7xx_pci_dev *t7xx_dev)
 					      t7xx_dev->base_addr.pcie_dev_reg_trsl_addr;
 }
 
-static ssize_t  post_dump_port_show(struct kobject *kobj,
-	struct kobj_attribute *attr, char *buf)
-{
-	int ret = 0;
-
-	ret = snprintf(buf, PAGE_SIZE, "/dev/%s", "ttyDUMP");
-
-	return ret;
-}
-
-static struct kobj_attribute post_dump_port_attr = {
-	.attr = {
-		.name = __stringify(post_dump_port),
-		.mode = 0444,
-	},
-	.show = post_dump_port_show,
-	.store = NULL,
-};
-
-static struct attribute *pcie_driver_cfg[] = {
-	&post_dump_port_attr.attr,
-	NULL,
-};
-
-static struct attribute_group pcie_driver_info_group = {
-	.attrs = pcie_driver_cfg,
-};
-
-static int mtk_pcie_driver_info_attr_init(void)
-{
-	char strdocname[64];
-	int retval = 0;
-
-	sprintf(strdocname, "mtk_wwan_%x_pcie", 0x4d70);
-	pcie_drv_info_kobj = kobject_create_and_add(strdocname, kernel_kobj);
-
-		/* Create the files associated with this kobject */
-	retval = sysfs_create_group(pcie_drv_info_kobj,
-		&pcie_driver_info_group);
-	if (retval) {
-		pr_err("sysfs_create_group fail (%d)\n", retval);
-		kobject_put(pcie_drv_info_kobj);
-		return -1;
-	}
-
-	return 0;
-}
-
 static int t7xx_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	struct t7xx_pci_dev *t7xx_dev;
@@ -778,12 +728,6 @@ static int t7xx_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	}
 
 	mtk_rescan_done();
-
-	ret = mtk_pcie_driver_info_attr_init();
-	if (ret < 0) {
-		pr_err("mtk_pcie_driver_info_attr_init fail (%d)\n", ret);
-	}
-
 	t7xx_pcie_mac_set_int(t7xx_dev, MHCCIF_INT);
 	t7xx_pcie_mac_interrupts_en(t7xx_dev);
 
@@ -809,7 +753,6 @@ static void t7xx_pci_remove(struct pci_dev *pdev)
 		free_irq(pci_irq_vector(pdev, i), t7xx_dev->callback_param[i]);
 	}
 
-	kobject_put(pcie_drv_info_kobj);
 	pci_free_irq_vectors(t7xx_dev->pdev);
 }
 
