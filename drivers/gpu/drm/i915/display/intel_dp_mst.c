@@ -57,11 +57,10 @@ static int intel_dp_mst_compute_link_config(struct intel_encoder *encoder,
 	struct drm_i915_private *i915 = to_i915(connector->base.dev);
 	const struct drm_display_mode *adjusted_mode =
 		&crtc_state->hw.adjusted_mode;
-	bool constant_n = drm_dp_has_quirk(&intel_dp->desc, DP_DPCD_QUIRK_CONSTANT_N);
 	int bpp, slots = -EINVAL;
 
 	crtc_state->lane_count = limits->max_lane_count;
-	crtc_state->port_clock = limits->max_clock;
+	crtc_state->port_clock = limits->max_rate;
 
 	for (bpp = limits->max_bpp; bpp >= limits->min_bpp; bpp -= 2 * 3) {
 		crtc_state->pipe_bpp = bpp;
@@ -93,7 +92,7 @@ static int intel_dp_mst_compute_link_config(struct intel_encoder *encoder,
 			       adjusted_mode->crtc_clock,
 			       crtc_state->port_clock,
 			       &crtc_state->dp_m_n,
-			       constant_n, crtc_state->fec_enable);
+			       crtc_state->fec_enable);
 	crtc_state->dp_m_n.tu = slots;
 
 	return 0;
@@ -131,8 +130,8 @@ static int intel_dp_mst_compute_config(struct intel_encoder *encoder,
 	 * for MST we always configure max link bw - the spec doesn't
 	 * seem to suggest we should do otherwise.
 	 */
-	limits.min_clock =
-	limits.max_clock = intel_dp_max_link_rate(intel_dp);
+	limits.min_rate =
+	limits.max_rate = intel_dp_max_link_rate(intel_dp);
 
 	limits.min_lane_count =
 	limits.max_lane_count = intel_dp_max_lane_count(intel_dp);
@@ -399,7 +398,7 @@ static void intel_mst_post_disable_dp(struct intel_atomic_state *state,
 
 	intel_crtc_vblank_off(old_crtc_state);
 
-	intel_disable_pipe(old_crtc_state);
+	intel_disable_transcoder(old_crtc_state);
 
 	drm_dp_update_payload_part2(&intel_dp->mst_mgr);
 
@@ -529,8 +528,6 @@ static void intel_mst_pre_enable_dp(struct intel_atomic_state *state,
 		intel_ddi_enable_pipe_clock(encoder, pipe_config);
 
 	intel_ddi_set_dp_msa(pipe_config, conn_state);
-
-	intel_dp_set_m_n(pipe_config, M1_N1);
 }
 
 static void intel_mst_enable_dp(struct intel_atomic_state *state,
@@ -564,7 +561,7 @@ static void intel_mst_enable_dp(struct intel_atomic_state *state,
 		intel_de_rmw(dev_priv, CHICKEN_TRANS(trans), 0,
 			     FECSTALL_DIS_DPTSTREAM_DPTTG);
 
-	intel_enable_pipe(pipe_config);
+	intel_enable_transcoder(pipe_config);
 
 	intel_crtc_vblank_on(pipe_config);
 

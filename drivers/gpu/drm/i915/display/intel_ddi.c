@@ -30,6 +30,7 @@
 
 #include "i915_drv.h"
 #include "intel_audio.h"
+#include "intel_backlight.h"
 #include "intel_combo_phy.h"
 #include "intel_connector.h"
 #include "intel_crtc.h"
@@ -41,7 +42,6 @@
 #include "intel_dp_link_training.h"
 #include "intel_dp_mst.h"
 #include "intel_dpio_phy.h"
-#include "intel_drrs.h"
 #include "intel_dsi.h"
 #include "intel_fdi.h"
 #include "intel_fifo_underrun.h"
@@ -50,7 +50,6 @@
 #include "intel_hdmi.h"
 #include "intel_hotplug.h"
 #include "intel_lspcon.h"
-#include "intel_panel.h"
 #include "intel_pps.h"
 #include "intel_psr.h"
 #include "intel_snps_phy.h"
@@ -75,22 +74,25 @@ static const u8 index_to_dp_signal_levels[] = {
 };
 
 static int intel_ddi_hdmi_level(struct intel_encoder *encoder,
-				const struct intel_crtc_state *crtc_state)
+				const struct intel_ddi_buf_trans *trans)
 {
-	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	int n_entries, level, default_entry;
+	int level;
 
-	n_entries = intel_ddi_hdmi_num_entries(encoder, crtc_state, &default_entry);
-	if (n_entries == 0)
-		return 0;
 	level = intel_bios_hdmi_level_shift(encoder);
 	if (level < 0)
-		level = default_entry;
-
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-		level = n_entries - 1;
+		level = trans->hdmi_default_entry;
 
 	return level;
+}
+
+static bool has_buf_trans_select(struct drm_i915_private *i915)
+{
+	return DISPLAY_VER(i915) < 10 && !IS_BROXTON(i915);
+}
+
+static bool has_iboost(struct drm_i915_private *i915)
+{
+	return DISPLAY_VER(i915) == 9 && !IS_BROXTON(i915);
 }
 
 /*
@@ -112,7 +114,7 @@ void hsw_prepare_dp_ddi_buffers(struct intel_encoder *encoder,
 		return;
 
 	/* If we're boosting the current, set bit 31 of trans1 */
-	if (DISPLAY_VER(dev_priv) == 9 && !IS_BROXTON(dev_priv) &&
+	if (has_iboost(dev_priv) &&
 	    intel_bios_encoder_dp_boost_level(encoder->devdata))
 		iboost_bit = DDI_BUF_BALANCE_LEG_ENABLE;
 
@@ -130,10 +132,10 @@ void hsw_prepare_dp_ddi_buffers(struct intel_encoder *encoder,
  * HDMI/DVI use cases.
  */
 static void hsw_prepare_hdmi_ddi_buffers(struct intel_encoder *encoder,
-					 const struct intel_crtc_state *crtc_state,
-					 int level)
+					 const struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
+	int level = intel_ddi_level(encoder, crtc_state, 0);
 	u32 iboost_bit = 0;
 	int n_entries;
 	enum port port = encoder->port;
@@ -142,11 +144,9 @@ static void hsw_prepare_hdmi_ddi_buffers(struct intel_encoder *encoder,
 	trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
 	if (drm_WARN_ON_ONCE(&dev_priv->drm, !trans))
 		return;
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-		level = n_entries - 1;
 
 	/* If we're boosting the current, set bit 31 of trans1 */
-	if (DISPLAY_VER(dev_priv) == 9 && !IS_BROXTON(dev_priv) &&
+	if (has_iboost(dev_priv) &&
 	    intel_bios_encoder_hdmi_boost_level(encoder->devdata))
 		iboost_bit = DDI_BUF_BALANCE_LEG_ENABLE;
 
@@ -318,27 +318,12 @@ static int icl_calc_tbt_pll_link(struct drm_i915_private *dev_priv,
 
 static void ddi_dotclock_get(struct intel_crtc_state *pipe_config)
 {
-	int dotclock;
-
+	/* CRT dotclock is determined via other means */
 	if (pipe_config->has_pch_encoder)
-		dotclock = intel_dotclock_calculate(pipe_config->port_clock,
-						    &pipe_config->fdi_m_n);
-	else if (intel_crtc_has_dp_encoder(pipe_config))
-		dotclock = intel_dotclock_calculate(pipe_config->port_clock,
-						    &pipe_config->dp_m_n);
-	else if (pipe_config->has_hdmi_sink && pipe_config->pipe_bpp > 24)
-		dotclock = pipe_config->port_clock * 24 / pipe_config->pipe_bpp;
-	else
-		dotclock = pipe_config->port_clock;
+		return;
 
-	if (pipe_config->output_format == INTEL_OUTPUT_FORMAT_YCBCR420 &&
-	    !intel_crtc_has_dp_encoder(pipe_config))
-		dotclock *= 2;
-
-	if (pipe_config->pixel_multiplier)
-		dotclock /= pipe_config->pixel_multiplier;
-
-	pipe_config->hw.adjusted_mode.crtc_clock = dotclock;
+	pipe_config->hw.adjusted_mode.crtc_clock =
+		intel_crtc_dotclock(pipe_config);
 }
 
 void intel_ddi_set_dp_msa(const struct intel_crtc_state *crtc_state,
@@ -434,6 +419,9 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
 		temp |= TRANS_DDI_SELECT_PORT(port);
 
 	switch (crtc_state->pipe_bpp) {
+	default:
+		MISSING_CASE(crtc_state->pipe_bpp);
+		fallthrough;
 	case 18:
 		temp |= TRANS_DDI_BPC_6;
 		break;
@@ -446,8 +434,6 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
 	case 36:
 		temp |= TRANS_DDI_BPC_12;
 		break;
-	default:
-		BUG();
 	}
 
 	if (crtc_state->hw.adjusted_mode.flags & DRM_MODE_FLAG_PVSYNC)
@@ -457,6 +443,9 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
 
 	if (cpu_transcoder == TRANSCODER_EDP) {
 		switch (pipe) {
+		default:
+			MISSING_CASE(pipe);
+			fallthrough;
 		case PIPE_A:
 			/* On Haswell, can only use the always-on power well for
 			 * eDP when not using the panel fitter, and when not
@@ -472,9 +461,6 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
 			break;
 		case PIPE_C:
 			temp |= TRANS_DDI_EDP_INPUT_C_ONOFF;
-			break;
-		default:
-			BUG();
 			break;
 		}
 	}
@@ -954,8 +940,6 @@ static void skl_ddi_set_iboost(struct intel_encoder *encoder,
 		trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
 		if (drm_WARN_ON_ONCE(&dev_priv->drm, !trans))
 			return;
-		if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-			level = n_entries - 1;
 
 		iboost = trans->entries[level].hsw.i_boost;
 	}
@@ -970,28 +954,6 @@ static void skl_ddi_set_iboost(struct intel_encoder *encoder,
 
 	if (encoder->port == PORT_A && dig_port->max_lanes == 4)
 		_skl_ddi_set_iboost(dev_priv, PORT_E, iboost);
-}
-
-static void bxt_ddi_vswing_sequence(struct intel_encoder *encoder,
-				    const struct intel_crtc_state *crtc_state,
-				    int level)
-{
-	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	const struct intel_ddi_buf_trans *trans;
-	enum port port = encoder->port;
-	int n_entries;
-
-	trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, !trans))
-		return;
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-		level = n_entries - 1;
-
-	bxt_ddi_phy_set_signal_level(dev_priv, port,
-				     trans->entries[level].bxt.margin,
-				     trans->entries[level].bxt.scale,
-				     trans->entries[level].bxt.enable,
-				     trans->entries[level].bxt.deemphasis);
 }
 
 static u8 intel_ddi_dp_voltage_max(struct intel_dp *intel_dp,
@@ -1024,10 +986,10 @@ static u8 intel_ddi_dp_preemph_max(struct intel_dp *intel_dp)
 }
 
 static void icl_ddi_combo_vswing_program(struct intel_encoder *encoder,
-					 const struct intel_crtc_state *crtc_state,
-					 int level)
+					 const struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
+	int level = intel_ddi_level(encoder, crtc_state, 0);
 	const struct intel_ddi_buf_trans *trans;
 	enum phy phy = intel_port_to_phy(dev_priv, encoder->port);
 	int n_entries, ln;
@@ -1036,8 +998,6 @@ static void icl_ddi_combo_vswing_program(struct intel_encoder *encoder,
 	trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
 	if (drm_WARN_ON_ONCE(&dev_priv->drm, !trans))
 		return;
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-		level = n_entries - 1;
 
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_EDP)) {
 		struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
@@ -1086,9 +1046,8 @@ static void icl_ddi_combo_vswing_program(struct intel_encoder *encoder,
 	intel_de_write(dev_priv, ICL_PORT_TX_DW7_GRP(phy), val);
 }
 
-static void icl_combo_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
-					      const struct intel_crtc_state *crtc_state,
-					      int level)
+static void icl_combo_phy_set_signal_levels(struct intel_encoder *encoder,
+					    const struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	enum phy phy = intel_port_to_phy(dev_priv, encoder->port);
@@ -1139,7 +1098,7 @@ static void icl_combo_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	intel_de_write(dev_priv, ICL_PORT_TX_DW5_GRP(phy), val);
 
 	/* 5. Program swing and de-emphasis */
-	icl_ddi_combo_vswing_program(encoder, crtc_state, level);
+	icl_ddi_combo_vswing_program(encoder, crtc_state);
 
 	/* 6. Set training enable to trigger update */
 	val = intel_de_read(dev_priv, ICL_PORT_TX_DW5_LN0(phy));
@@ -1147,12 +1106,12 @@ static void icl_combo_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	intel_de_write(dev_priv, ICL_PORT_TX_DW5_GRP(phy), val);
 }
 
-static void icl_mg_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
-					   const struct intel_crtc_state *crtc_state,
-					   int level)
+static void icl_mg_phy_set_signal_levels(struct intel_encoder *encoder,
+					 const struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	enum tc_port tc_port = intel_port_to_tc(dev_priv, encoder->port);
+	int level = intel_ddi_level(encoder, crtc_state, 0);
 	const struct intel_ddi_buf_trans *trans;
 	int n_entries, ln;
 	u32 val;
@@ -1163,8 +1122,6 @@ static void icl_mg_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
 	if (drm_WARN_ON_ONCE(&dev_priv->drm, !trans))
 		return;
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-		level = n_entries - 1;
 
 	/* Set MG_TX_LINK_PARAMS cri_use_fs32 to 0. */
 	for (ln = 0; ln < 2; ln++) {
@@ -1270,26 +1227,12 @@ static void icl_mg_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	}
 }
 
-static void icl_ddi_vswing_sequence(struct intel_encoder *encoder,
-				    const struct intel_crtc_state *crtc_state,
-				    int level)
-{
-	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	enum phy phy = intel_port_to_phy(dev_priv, encoder->port);
-
-	if (intel_phy_is_combo(dev_priv, phy))
-		icl_combo_phy_ddi_vswing_sequence(encoder, crtc_state, level);
-	else
-		icl_mg_phy_ddi_vswing_sequence(encoder, crtc_state, level);
-}
-
-static void
-tgl_dkl_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
-				const struct intel_crtc_state *crtc_state,
-				int level)
+static void tgl_dkl_phy_set_signal_levels(struct intel_encoder *encoder,
+					  const struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	enum tc_port tc_port = intel_port_to_tc(dev_priv, encoder->port);
+	int level = intel_ddi_level(encoder, crtc_state, 0);
 	const struct intel_ddi_buf_trans *trans;
 	u32 val, dpcnt_mask, dpcnt_val;
 	int n_entries, ln;
@@ -1300,8 +1243,6 @@ tgl_dkl_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
 	if (drm_WARN_ON_ONCE(&dev_priv->drm, !trans))
 		return;
-	if (drm_WARN_ON_ONCE(&dev_priv->drm, level >= n_entries))
-		level = n_entries - 1;
 
 	dpcnt_mask = (DKL_TX_PRESHOOT_COEFF_MASK |
 		      DKL_TX_DE_EMPAHSIS_COEFF_MASK |
@@ -1341,19 +1282,6 @@ tgl_dkl_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	}
 }
 
-static void tgl_ddi_vswing_sequence(struct intel_encoder *encoder,
-				    const struct intel_crtc_state *crtc_state,
-				    int level)
-{
-	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	enum phy phy = intel_port_to_phy(dev_priv, encoder->port);
-
-	if (intel_phy_is_combo(dev_priv, phy))
-		icl_combo_phy_ddi_vswing_sequence(encoder, crtc_state, level);
-	else
-		tgl_dkl_phy_ddi_vswing_sequence(encoder, crtc_state, level);
-}
-
 static int translate_signal_level(struct intel_dp *intel_dp,
 				  u8 signal_levels)
 {
@@ -1372,64 +1300,54 @@ static int translate_signal_level(struct intel_dp *intel_dp,
 	return 0;
 }
 
-static int intel_ddi_dp_level(struct intel_dp *intel_dp)
+static int intel_ddi_dp_level(struct intel_dp *intel_dp, int lane)
 {
-	u8 train_set = intel_dp->train_set[0];
+	u8 train_set = intel_dp->train_set[lane];
 	u8 signal_levels = train_set & (DP_TRAIN_VOLTAGE_SWING_MASK |
 					DP_TRAIN_PRE_EMPHASIS_MASK);
 
 	return translate_signal_level(intel_dp, signal_levels);
 }
 
-static void
-dg2_set_signal_levels(struct intel_dp *intel_dp,
-		      const struct intel_crtc_state *crtc_state)
+int intel_ddi_level(struct intel_encoder *encoder,
+		    const struct intel_crtc_state *crtc_state,
+		    int lane)
 {
-	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
-	int level = intel_ddi_dp_level(intel_dp);
+	struct drm_i915_private *i915 = to_i915(encoder->base.dev);
+	const struct intel_ddi_buf_trans *trans;
+	int level, n_entries;
 
-	intel_snps_phy_ddi_vswing_sequence(encoder, crtc_state, level);
+	trans = encoder->get_buf_trans(encoder, crtc_state, &n_entries);
+	if (drm_WARN_ON_ONCE(&i915->drm, !trans))
+		return 0;
+
+	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI))
+		level = intel_ddi_hdmi_level(encoder, trans);
+	else
+		level = intel_ddi_dp_level(enc_to_intel_dp(encoder), lane);
+
+	if (drm_WARN_ON_ONCE(&i915->drm, level >= n_entries))
+		level = n_entries - 1;
+
+	return level;
 }
 
 static void
-tgl_set_signal_levels(struct intel_dp *intel_dp,
+hsw_set_signal_levels(struct intel_encoder *encoder,
 		      const struct intel_crtc_state *crtc_state)
 {
-	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
-	int level = intel_ddi_dp_level(intel_dp);
-
-	tgl_ddi_vswing_sequence(encoder, crtc_state, level);
-}
-
-static void
-icl_set_signal_levels(struct intel_dp *intel_dp,
-		      const struct intel_crtc_state *crtc_state)
-{
-	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
-	int level = intel_ddi_dp_level(intel_dp);
-
-	icl_ddi_vswing_sequence(encoder, crtc_state, level);
-}
-
-static void
-bxt_set_signal_levels(struct intel_dp *intel_dp,
-		      const struct intel_crtc_state *crtc_state)
-{
-	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
-	int level = intel_ddi_dp_level(intel_dp);
-
-	bxt_ddi_vswing_sequence(encoder, crtc_state, level);
-}
-
-static void
-hsw_set_signal_levels(struct intel_dp *intel_dp,
-		      const struct intel_crtc_state *crtc_state)
-{
-	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	int level = intel_ddi_dp_level(intel_dp);
+	struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
+	int level = intel_ddi_level(encoder, crtc_state, 0);
 	enum port port = encoder->port;
 	u32 signal_levels;
+
+	if (has_iboost(dev_priv))
+		skl_ddi_set_iboost(encoder, crtc_state, level);
+
+	/* HDMI ignores the rest */
+	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI))
+		return;
 
 	signal_levels = DDI_BUF_TRANS_SELECT(level);
 
@@ -1438,9 +1356,6 @@ hsw_set_signal_levels(struct intel_dp *intel_dp,
 
 	intel_dp->DP &= ~DDI_BUF_EMP_MASK;
 	intel_dp->DP |= signal_levels;
-
-	if (DISPLAY_VER(dev_priv) == 9 && !IS_BROXTON(dev_priv))
-		skl_ddi_set_iboost(encoder, crtc_state, level);
 
 	intel_de_write(dev_priv, DDI_BUF_CTL(port), intel_dp->DP);
 	intel_de_posting_read(dev_priv, DDI_BUF_CTL(port));
@@ -1980,7 +1895,7 @@ void intel_ddi_enable_clock(struct intel_encoder *encoder,
 		encoder->enable_clock(encoder, crtc_state);
 }
 
-static void intel_ddi_disable_clock(struct intel_encoder *encoder)
+void intel_ddi_disable_clock(struct intel_encoder *encoder)
 {
 	if (encoder->disable_clock)
 		encoder->disable_clock(encoder);
@@ -2332,7 +2247,6 @@ static void dg2_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
 	bool is_mst = intel_crtc_has_type(crtc_state, INTEL_OUTPUT_DP_MST);
-	int level = intel_ddi_dp_level(intel_dp);
 
 	intel_dp_set_link_params(intel_dp, crtc_state->port_clock,
 				 crtc_state->lane_count);
@@ -2390,7 +2304,7 @@ static void dg2_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	 */
 
 	/* 5.e Configure voltage swing and related IO settings */
-	intel_snps_phy_ddi_vswing_sequence(encoder, crtc_state, level);
+	encoder->set_signal_levels(encoder, crtc_state);
 
 	/*
 	 * 5.f Configure and enable DDI_BUF_CTL
@@ -2428,7 +2342,10 @@ static void dg2_ddi_pre_enable_dp(struct intel_atomic_state *state,
 
 	/* 5.k Configure and enable FEC if needed */
 	intel_ddi_enable_fec(encoder, crtc_state);
-	intel_dsc_enable(encoder, crtc_state);
+
+	intel_dsc_dp_pps_write(encoder, crtc_state);
+
+	intel_dsc_enable(crtc_state);
 }
 
 static void tgl_ddi_pre_enable_dp(struct intel_atomic_state *state,
@@ -2440,7 +2357,6 @@ static void tgl_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
 	bool is_mst = intel_crtc_has_type(crtc_state, INTEL_OUTPUT_DP_MST);
-	int level = intel_ddi_dp_level(intel_dp);
 
 	intel_dp_set_link_params(intel_dp,
 				 crtc_state->port_clock,
@@ -2514,7 +2430,7 @@ static void tgl_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	 */
 
 	/* 7.e Configure voltage swing and related IO settings */
-	tgl_ddi_vswing_sequence(encoder, crtc_state, level);
+	encoder->set_signal_levels(encoder, crtc_state);
 
 	/*
 	 * 7.f Combo PHY: Configure PORT_CL_DW10 Static Power Down to power up
@@ -2567,8 +2483,8 @@ static void tgl_ddi_pre_enable_dp(struct intel_atomic_state *state,
 
 	/* 7.l Configure and enable FEC if needed */
 	intel_ddi_enable_fec(encoder, crtc_state);
-	if (!crtc_state->bigjoiner)
-		intel_dsc_enable(encoder, crtc_state);
+
+	intel_dsc_dp_pps_write(encoder, crtc_state);
 }
 
 static void hsw_ddi_pre_enable_dp(struct intel_atomic_state *state,
@@ -2581,7 +2497,6 @@ static void hsw_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	enum port port = encoder->port;
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
 	bool is_mst = intel_crtc_has_type(crtc_state, INTEL_OUTPUT_DP_MST);
-	int level = intel_ddi_dp_level(intel_dp);
 
 	if (DISPLAY_VER(dev_priv) < 11)
 		drm_WARN_ON(&dev_priv->drm,
@@ -2605,12 +2520,10 @@ static void hsw_ddi_pre_enable_dp(struct intel_atomic_state *state,
 
 	icl_program_mg_dp_mode(dig_port, crtc_state);
 
-	if (DISPLAY_VER(dev_priv) >= 11)
-		icl_ddi_vswing_sequence(encoder, crtc_state, level);
-	else if (IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv))
-		bxt_ddi_vswing_sequence(encoder, crtc_state, level);
-	else
+	if (has_buf_trans_select(dev_priv))
 		hsw_prepare_dp_ddi_buffers(encoder, crtc_state);
+
+	encoder->set_signal_levels(encoder, crtc_state);
 
 	intel_ddi_power_up_lanes(encoder, crtc_state);
 
@@ -2631,8 +2544,7 @@ static void hsw_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	if (!is_mst)
 		intel_ddi_enable_pipe_clock(encoder, crtc_state);
 
-	if (!crtc_state->bigjoiner)
-		intel_dsc_enable(encoder, crtc_state);
+	intel_dsc_dp_pps_write(encoder, crtc_state);
 }
 
 static void intel_ddi_pre_enable_dp(struct intel_atomic_state *state,
@@ -2652,11 +2564,8 @@ static void intel_ddi_pre_enable_dp(struct intel_atomic_state *state,
 	/* MST will call a setting of MSA after an allocating of Virtual Channel
 	 * from MST encoder pre_enable callback.
 	 */
-	if (!intel_crtc_has_type(crtc_state, INTEL_OUTPUT_DP_MST)) {
+	if (!intel_crtc_has_type(crtc_state, INTEL_OUTPUT_DP_MST))
 		intel_ddi_set_dp_msa(crtc_state, conn_state);
-
-		intel_dp_set_m_n(crtc_state, M1_N1);
-	}
 }
 
 static void intel_ddi_pre_enable_hdmi(struct intel_atomic_state *state,
@@ -2851,11 +2760,12 @@ static void intel_ddi_post_disable(struct intel_atomic_state *state,
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
 	enum phy phy = intel_port_to_phy(dev_priv, encoder->port);
 	bool is_tc_port = intel_phy_is_tc(dev_priv, phy);
+	struct intel_crtc *slave_crtc;
 
 	if (!intel_crtc_has_type(old_crtc_state, INTEL_OUTPUT_DP_MST)) {
 		intel_crtc_vblank_off(old_crtc_state);
 
-		intel_disable_pipe(old_crtc_state);
+		intel_disable_transcoder(old_crtc_state);
 
 		intel_vrr_disable(old_crtc_state);
 
@@ -2869,13 +2779,10 @@ static void intel_ddi_post_disable(struct intel_atomic_state *state,
 			ilk_pfit_disable(old_crtc_state);
 	}
 
-	if (old_crtc_state->bigjoiner_linked_crtc) {
-		struct intel_atomic_state *state =
-			to_intel_atomic_state(old_crtc_state->uapi.state);
-		struct intel_crtc *slave =
-			old_crtc_state->bigjoiner_linked_crtc;
+	for_each_intel_crtc_in_pipe_mask(&dev_priv->drm, slave_crtc,
+					 intel_crtc_bigjoiner_slave_pipes(old_crtc_state)) {
 		const struct intel_crtc_state *old_slave_crtc_state =
-			intel_atomic_get_old_crtc_state(state, slave);
+			intel_atomic_get_old_crtc_state(state, slave_crtc);
 
 		intel_crtc_vblank_off(old_slave_crtc_state);
 
@@ -2910,41 +2817,6 @@ static void intel_ddi_post_disable(struct intel_atomic_state *state,
 
 	if (is_tc_port)
 		intel_tc_port_put_link(dig_port);
-}
-
-void intel_ddi_fdi_post_disable(struct intel_atomic_state *state,
-				struct intel_encoder *encoder,
-				const struct intel_crtc_state *old_crtc_state,
-				const struct drm_connector_state *old_conn_state)
-{
-	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	u32 val;
-
-	/*
-	 * Bspec lists this as both step 13 (before DDI_BUF_CTL disable)
-	 * and step 18 (after clearing PORT_CLK_SEL). Based on a BUN,
-	 * step 13 is the correct place for it. Step 18 is where it was
-	 * originally before the BUN.
-	 */
-	val = intel_de_read(dev_priv, FDI_RX_CTL(PIPE_A));
-	val &= ~FDI_RX_ENABLE;
-	intel_de_write(dev_priv, FDI_RX_CTL(PIPE_A), val);
-
-	intel_disable_ddi_buf(encoder, old_crtc_state);
-	intel_ddi_disable_clock(encoder);
-
-	val = intel_de_read(dev_priv, FDI_RX_MISC(PIPE_A));
-	val &= ~(FDI_RX_PWRDN_LANE1_MASK | FDI_RX_PWRDN_LANE0_MASK);
-	val |= FDI_RX_PWRDN_LANE1_VAL(2) | FDI_RX_PWRDN_LANE0_VAL(2);
-	intel_de_write(dev_priv, FDI_RX_MISC(PIPE_A), val);
-
-	val = intel_de_read(dev_priv, FDI_RX_CTL(PIPE_A));
-	val &= ~FDI_PCDCLK;
-	intel_de_write(dev_priv, FDI_RX_CTL(PIPE_A), val);
-
-	val = intel_de_read(dev_priv, FDI_RX_CTL(PIPE_A));
-	val &= ~FDI_RX_PLL_ENABLE;
-	intel_de_write(dev_priv, FDI_RX_CTL(PIPE_A), val);
 }
 
 static void trans_port_sync_stop_link_train(struct intel_atomic_state *state,
@@ -3003,8 +2875,6 @@ static void intel_enable_ddi_dp(struct intel_atomic_state *state,
 	if (!dig_port->lspcon.active || dig_port->dp.has_hdmi_sink)
 		intel_dp_set_infoframes(encoder, true, crtc_state, conn_state);
 
-	intel_drrs_enable(intel_dp, crtc_state);
-
 	if (crtc_state->has_audio)
 		intel_audio_codec_enable(encoder, crtc_state, conn_state);
 
@@ -3039,7 +2909,6 @@ static void intel_enable_ddi_hdmi(struct intel_atomic_state *state,
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
 	struct drm_connector *connector = conn_state->connector;
-	int level = intel_ddi_hdmi_level(encoder, crtc_state);
 	enum port port = encoder->port;
 
 	if (!intel_hdmi_handle_sink_scrambling(encoder, connector,
@@ -3049,19 +2918,10 @@ static void intel_enable_ddi_hdmi(struct intel_atomic_state *state,
 			    "[CONNECTOR:%d:%s] Failed to configure sink scrambling/TMDS bit clock ratio\n",
 			    connector->base.id, connector->name);
 
-	if (IS_DG2(dev_priv))
-		intel_snps_phy_ddi_vswing_sequence(encoder, crtc_state, level);
-	else if (DISPLAY_VER(dev_priv) >= 12)
-		tgl_ddi_vswing_sequence(encoder, crtc_state, level);
-	else if (DISPLAY_VER(dev_priv) == 11)
-		icl_ddi_vswing_sequence(encoder, crtc_state, level);
-	else if (IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv))
-		bxt_ddi_vswing_sequence(encoder, crtc_state, level);
-	else
-		hsw_prepare_hdmi_ddi_buffers(encoder, crtc_state, level);
+	if (has_buf_trans_select(dev_priv))
+		hsw_prepare_hdmi_ddi_buffers(encoder, crtc_state);
 
-	if (DISPLAY_VER(dev_priv) == 9 && !IS_BROXTON(dev_priv))
-		skl_ddi_set_iboost(encoder, crtc_state, level);
+	encoder->set_signal_levels(encoder, crtc_state);
 
 	/* Display WA #1143: skl,kbl,cfl */
 	if (DISPLAY_VER(dev_priv) == 9 && !IS_BROXTON(dev_priv)) {
@@ -3121,12 +2981,12 @@ static void intel_enable_ddi(struct intel_atomic_state *state,
 {
 	drm_WARN_ON(state->base.dev, crtc_state->has_pch_encoder);
 
-	if (!crtc_state->bigjoiner_slave)
+	if (!intel_crtc_is_bigjoiner_slave(crtc_state))
 		intel_ddi_enable_transcoder_func(encoder, crtc_state);
 
 	intel_vrr_enable(encoder, crtc_state);
 
-	intel_enable_pipe(crtc_state);
+	intel_enable_transcoder(crtc_state);
 
 	intel_crtc_vblank_on(crtc_state);
 
@@ -3156,7 +3016,6 @@ static void intel_disable_ddi_dp(struct intel_atomic_state *state,
 		intel_audio_codec_disable(encoder,
 					  old_crtc_state, old_conn_state);
 
-	intel_drrs_disable(intel_dp, old_crtc_state);
 	intel_psr_disable(intel_dp, old_crtc_state);
 	intel_edp_backlight_off(old_conn_state);
 	/* Disable the decompression in DP Sink */
@@ -3206,14 +3065,11 @@ static void intel_ddi_update_pipe_dp(struct intel_atomic_state *state,
 				     const struct intel_crtc_state *crtc_state,
 				     const struct drm_connector_state *conn_state)
 {
-	struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
-
 	intel_ddi_set_dp_msa(crtc_state, conn_state);
 
 	intel_dp_set_infoframes(encoder, true, crtc_state, conn_state);
-	intel_drrs_update(intel_dp, crtc_state);
 
-	intel_panel_update_backlight(state, encoder, crtc_state, conn_state);
+	intel_backlight_update(state, encoder, crtc_state, conn_state);
 	drm_connector_update_privacy_screen(conn_state);
 }
 
@@ -3236,6 +3092,7 @@ intel_ddi_update_prepare(struct intel_atomic_state *state,
 			 struct intel_encoder *encoder,
 			 struct intel_crtc *crtc)
 {
+	struct drm_i915_private *i915 = to_i915(state->base.dev);
 	struct intel_crtc_state *crtc_state =
 		crtc ? intel_atomic_get_new_crtc_state(state, crtc) : NULL;
 	int required_lanes = crtc_state ? crtc_state->lane_count : 1;
@@ -3244,8 +3101,15 @@ intel_ddi_update_prepare(struct intel_atomic_state *state,
 
 	intel_tc_port_get_link(enc_to_dig_port(encoder),
 		               required_lanes);
-	if (crtc_state && crtc_state->hw.active)
+	if (crtc_state && crtc_state->hw.active) {
+		struct intel_crtc *slave_crtc;
+
 		intel_update_active_dpll(state, crtc, encoder);
+
+		for_each_intel_crtc_in_pipe_mask(&i915->drm, slave_crtc,
+						 intel_crtc_bigjoiner_slave_pipes(crtc_state))
+			intel_update_active_dpll(state, slave_crtc, encoder);
+	}
 }
 
 static void
@@ -3564,7 +3428,11 @@ static void intel_ddi_read_func_ctl(struct intel_encoder *encoder,
 			pipe_config->output_types |= BIT(INTEL_OUTPUT_DP);
 		pipe_config->lane_count =
 			((temp & DDI_PORT_WIDTH_MASK) >> DDI_PORT_WIDTH_SHIFT) + 1;
-		intel_dp_get_m_n(crtc, pipe_config);
+
+		intel_cpu_transcoder_get_m1_n1(crtc, cpu_transcoder,
+					       &pipe_config->dp_m_n);
+		intel_cpu_transcoder_get_m2_n2(crtc, cpu_transcoder,
+					       &pipe_config->dp_m2_n2);
 
 		if (DISPLAY_VER(dev_priv) >= 11) {
 			i915_reg_t dp_tp_ctl = dp_tp_ctl_reg(encoder, pipe_config);
@@ -3594,7 +3462,8 @@ static void intel_ddi_read_func_ctl(struct intel_encoder *encoder,
 			pipe_config->mst_master_transcoder =
 					REG_FIELD_GET(TRANS_DDI_MST_TRANSPORT_SELECT_MASK, temp);
 
-		intel_dp_get_m_n(crtc, pipe_config);
+		intel_cpu_transcoder_get_m1_n1(crtc, cpu_transcoder,
+					       &pipe_config->dp_m_n);
 
 		pipe_config->infoframes.enable |=
 			intel_hdmi_infoframes_enabled(encoder, pipe_config);
@@ -3614,47 +3483,17 @@ static void intel_ddi_get_config(struct intel_encoder *encoder,
 	if (drm_WARN_ON(&dev_priv->drm, transcoder_is_dsi(cpu_transcoder)))
 		return;
 
-	if (pipe_config->bigjoiner_slave) {
-		/* read out pipe settings from master */
-		enum transcoder save = pipe_config->cpu_transcoder;
-
-		/* Our own transcoder needs to be disabled when reading it in intel_ddi_read_func_ctl() */
-		WARN_ON(pipe_config->output_types);
-		pipe_config->cpu_transcoder = (enum transcoder)pipe_config->bigjoiner_linked_crtc->pipe;
-		intel_ddi_read_func_ctl(encoder, pipe_config);
-		pipe_config->cpu_transcoder = save;
-	} else {
-		intel_ddi_read_func_ctl(encoder, pipe_config);
-	}
+	intel_ddi_read_func_ctl(encoder, pipe_config);
 
 	intel_ddi_mso_get_config(encoder, pipe_config);
 
 	pipe_config->has_audio =
 		intel_ddi_is_audio_enabled(dev_priv, cpu_transcoder);
 
-	if (encoder->type == INTEL_OUTPUT_EDP && dev_priv->vbt.edp.bpp &&
-	    pipe_config->pipe_bpp > dev_priv->vbt.edp.bpp) {
-		/*
-		 * This is a big fat ugly hack.
-		 *
-		 * Some machines in UEFI boot mode provide us a VBT that has 18
-		 * bpp and 1.62 GHz link bandwidth for eDP, which for reasons
-		 * unknown we fail to light up. Yet the same BIOS boots up with
-		 * 24 bpp and 2.7 GHz link. Use the same bpp as the BIOS uses as
-		 * max, not what it tells us to use.
-		 *
-		 * Note: This will still be broken if the eDP panel is not lit
-		 * up by the BIOS, and thus we can't get the mode at module
-		 * load.
-		 */
-		drm_dbg_kms(&dev_priv->drm,
-			    "pipe has %d bpp for eDP panel, overriding BIOS-provided max %d bpp\n",
-			    pipe_config->pipe_bpp, dev_priv->vbt.edp.bpp);
-		dev_priv->vbt.edp.bpp = pipe_config->pipe_bpp;
-	}
+	if (encoder->type == INTEL_OUTPUT_EDP)
+		intel_edp_fixup_vbt_bpp(encoder, pipe_config->pipe_bpp);
 
-	if (!pipe_config->bigjoiner_slave)
-		ddi_dotclock_get(pipe_config);
+	ddi_dotclock_get(pipe_config);
 
 	if (IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv))
 		pipe_config->lane_lat_optim_mask =
@@ -3895,8 +3734,8 @@ static bool m_n_equal(const struct intel_link_m_n *m_n_1,
 		      const struct intel_link_m_n *m_n_2)
 {
 	return m_n_1->tu == m_n_2->tu &&
-		m_n_1->gmch_m == m_n_2->gmch_m &&
-		m_n_1->gmch_n == m_n_2->gmch_n &&
+		m_n_1->data_m == m_n_2->data_m &&
+		m_n_1->data_n == m_n_2->data_n &&
 		m_n_1->link_m == m_n_2->link_m &&
 		m_n_1->link_n == m_n_2->link_n;
 }
@@ -4025,7 +3864,6 @@ static const struct drm_encoder_funcs intel_ddi_funcs = {
 static struct intel_connector *
 intel_ddi_init_dp_connector(struct intel_digital_port *dig_port)
 {
-	struct drm_i915_private *dev_priv = to_i915(dig_port->base.base.dev);
 	struct intel_connector *connector;
 	enum port port = dig_port->base.port;
 
@@ -4037,17 +3875,6 @@ intel_ddi_init_dp_connector(struct intel_digital_port *dig_port)
 	dig_port->dp.prepare_link_retrain = intel_ddi_prepare_link_retrain;
 	dig_port->dp.set_link_train = intel_ddi_set_link_train;
 	dig_port->dp.set_idle_link_train = intel_ddi_set_idle_link_train;
-
-	if (IS_DG2(dev_priv))
-		dig_port->dp.set_signal_levels = dg2_set_signal_levels;
-	else if (DISPLAY_VER(dev_priv) >= 12)
-		dig_port->dp.set_signal_levels = tgl_set_signal_levels;
-	else if (DISPLAY_VER(dev_priv) >= 11)
-		dig_port->dp.set_signal_levels = icl_set_signal_levels;
-	else if (IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv))
-		dig_port->dp.set_signal_levels = bxt_set_signal_levels;
-	else
-		dig_port->dp.set_signal_levels = hsw_set_signal_levels;
 
 	dig_port->dp.voltage_max = intel_ddi_dp_voltage_max;
 	dig_port->dp.preemph_max = intel_ddi_dp_preemph_max;
@@ -4631,6 +4458,24 @@ void intel_ddi_init(struct drm_i915_private *dev_priv, enum port port)
 		encoder->disable_clock = hsw_ddi_disable_clock;
 		encoder->is_clock_enabled = hsw_ddi_is_clock_enabled;
 		encoder->get_config = hsw_ddi_get_config;
+	}
+
+	if (IS_DG2(dev_priv)) {
+		encoder->set_signal_levels = intel_snps_phy_set_signal_levels;
+	} else if (DISPLAY_VER(dev_priv) >= 12) {
+		if (intel_phy_is_combo(dev_priv, phy))
+			encoder->set_signal_levels = icl_combo_phy_set_signal_levels;
+		else
+			encoder->set_signal_levels = tgl_dkl_phy_set_signal_levels;
+	} else if (DISPLAY_VER(dev_priv) >= 11) {
+		if (intel_phy_is_combo(dev_priv, phy))
+			encoder->set_signal_levels = icl_combo_phy_set_signal_levels;
+		else
+			encoder->set_signal_levels = icl_mg_phy_set_signal_levels;
+	} else if (IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv)) {
+		encoder->set_signal_levels = bxt_ddi_phy_set_signal_levels;
+	} else {
+		encoder->set_signal_levels = hsw_set_signal_levels;
 	}
 
 	intel_ddi_buf_trans_init(encoder);

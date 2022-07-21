@@ -162,6 +162,14 @@ struct bdb_general_features {
 	u8 dp_ssc_freq:1;	/* SSC freq for PCH attached eDP */
 	u8 dp_ssc_dongle_supported:1;
 	u8 rsvd11:2; /* finish byte */
+
+	/* bits 6 */
+	u8 tc_hpd_retry_timeout:7; /* 242 */
+	u8 rsvd12:1;
+
+	/* bits 7 */
+	u8 afc_startup_config:2;/* 249 */
+	u8 rsvd13:6;
 } __packed;
 
 /*
@@ -737,20 +745,22 @@ struct bdb_lvds_options {
 /*
  * Block 41 - LFP Data Table Pointers
  */
+struct lvds_lfp_data_ptr_table {
+	u16 offset; /* offsets are from start of bdb */
+	u8 table_size;
+} __packed;
 
 /* LFP pointer table contains entries to the struct below */
 struct lvds_lfp_data_ptr {
-	u16 fp_timing_offset; /* offsets are from start of bdb */
-	u8 fp_table_size;
-	u16 dvo_timing_offset;
-	u8 dvo_table_size;
-	u16 panel_pnp_id_offset;
-	u8 pnp_table_size;
+	struct lvds_lfp_data_ptr_table fp_timing;
+	struct lvds_lfp_data_ptr_table dvo_timing;
+	struct lvds_lfp_data_ptr_table panel_pnp_id;
 } __packed;
 
 struct bdb_lvds_lfp_data_ptrs {
-	u8 lvds_entries; /* followed by one or more lvds_data_ptr structs */
+	u8 lvds_entries;
 	struct lvds_lfp_data_ptr ptr[16];
+	struct lvds_lfp_data_ptr_table panel_name; /* 156-163? */
 } __packed;
 
 /*
@@ -782,6 +792,11 @@ struct lvds_pnp_id {
 	u8 mfg_year;
 } __packed;
 
+/*
+ * For reference only. fp_timing has variable size so
+ * the data must be accessed using the data table pointers.
+ * Do not use this directly!
+ */
 struct lvds_lfp_data_entry {
 	struct lvds_fp_timing fp_timing;
 	struct lvds_dvo_timing dvo_timing;
@@ -790,6 +805,27 @@ struct lvds_lfp_data_entry {
 
 struct bdb_lvds_lfp_data {
 	struct lvds_lfp_data_entry data[16];
+} __packed;
+
+struct lvds_lfp_panel_name {
+	u8 name[13];
+} __packed;
+
+struct lvds_lfp_black_border {
+	u8 top; /* 227 */
+	u8 bottom; /* 227 */
+	u8 left; /* 238 */
+	u8 right; /* 238 */
+} __packed;
+
+struct bdb_lvds_lfp_data_tail {
+	struct lvds_lfp_panel_name panel_name[16]; /* 156-163? */
+	u16 scaling_enable; /* 187 */
+	u8 seamless_drrs_min_refresh_rate[16]; /* 188 */
+	u8 pixel_overlap_count[16]; /* 208 */
+	struct lvds_lfp_black_border black_border[16]; /* 227 */
+	u16 dual_lfp_port_sync_enable; /* 231 */
+	u16 gpu_dithering_for_banding_artifacts; /* 245 */
 } __packed;
 
 /*

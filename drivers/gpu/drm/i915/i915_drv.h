@@ -66,11 +66,13 @@
 #include "i915_utils.h"
 
 #include "display/intel_bios.h"
+#include "display/intel_cdclk.h"
 #include "display/intel_display.h"
 #include "display/intel_display_power.h"
 #include "display/intel_dmc.h"
 #include "display/intel_dpll_mgr.h"
 #include "display/intel_dsb.h"
+#include "display/intel_fbc.h"
 #include "display/intel_frontbuffer.h"
 #include "display/intel_global_state.h"
 #include "display/intel_gmbus.h"
@@ -90,6 +92,7 @@
 #include "intel_device_info.h"
 #include "intel_memory_region.h"
 #include "intel_pch.h"
+#include "intel_pm_types.h"
 #include "intel_runtime_pm.h"
 #include "intel_step.h"
 #include "intel_uncore.h"
@@ -107,6 +110,30 @@
 #include "i915_vma.h"
 #include "i915_irq.h"
 
+struct dpll;
+struct drm_i915_clock_gating_funcs;
+struct drm_i915_gem_object;
+struct drm_i915_private;
+struct intel_atomic_state;
+struct intel_audio_funcs;
+struct intel_cdclk_config;
+struct intel_cdclk_funcs;
+struct intel_cdclk_state;
+struct intel_cdclk_vals;
+struct intel_color_funcs;
+struct intel_connector;
+struct intel_crtc;
+struct intel_dp;
+struct intel_dpll_funcs;
+struct intel_encoder;
+struct intel_fbdev;
+struct intel_fdi_funcs;
+struct intel_hotplug_funcs;
+struct intel_initial_plane_config;
+struct intel_limit;
+struct intel_overlay;
+struct intel_overlay_error_state;
+struct vlv_s0ix_state;
 
 /* General customization:
  */
@@ -115,32 +142,6 @@
 #define DRIVER_DESC		"Intel Graphics"
 #define DRIVER_DATE		"20201103"
 #define DRIVER_TIMESTAMP	1604406085
-
-struct drm_i915_gem_object;
-
-enum hpd_pin {
-	HPD_NONE = 0,
-	HPD_TV = HPD_NONE,     /* TV is known to be unreliable */
-	HPD_CRT,
-	HPD_SDVO_B,
-	HPD_SDVO_C,
-	HPD_PORT_A,
-	HPD_PORT_B,
-	HPD_PORT_C,
-	HPD_PORT_D,
-	HPD_PORT_E,
-	HPD_PORT_TC1,
-	HPD_PORT_TC2,
-	HPD_PORT_TC3,
-	HPD_PORT_TC4,
-	HPD_PORT_TC5,
-	HPD_PORT_TC6,
-
-	HPD_NUM_PINS
-};
-
-#define for_each_hpd_pin(__pin) \
-	for ((__pin) = (HPD_NONE + 1); (__pin) < HPD_NUM_PINS; (__pin)++)
 
 /* Threshold == 5 for long IRQs, 50 for short */
 #define HPD_STORM_DEFAULT_THRESHOLD 50
@@ -190,10 +191,6 @@ struct i915_hotplug {
 	 I915_GEM_DOMAIN_COMMAND | \
 	 I915_GEM_DOMAIN_INSTRUCTION | \
 	 I915_GEM_DOMAIN_VERTEX)
-
-struct drm_i915_private;
-struct i915_mm_struct;
-struct i915_mmu_object;
 
 struct drm_i915_file_private {
 	struct drm_i915_private *dev_priv;
@@ -303,9 +300,6 @@ struct drm_i915_file_private {
 #define DRIVER_MINOR		6
 #define DRIVER_PATCHLEVEL	0
 
-struct intel_overlay;
-struct intel_overlay_error_state;
-
 struct sdvo_device_mapping {
 	u8 initialized;
 	u8 dvo_port;
@@ -315,26 +309,10 @@ struct sdvo_device_mapping {
 	u8 ddc_pin;
 };
 
-struct intel_connector;
-struct intel_encoder;
-struct intel_atomic_state;
-struct intel_cdclk_config;
-struct intel_cdclk_state;
-struct intel_cdclk_vals;
-struct intel_initial_plane_config;
-struct intel_crtc;
-struct intel_limit;
-struct dpll;
-
-struct drm_i915_display_funcs {
-	void (*get_cdclk)(struct drm_i915_private *dev_priv,
-			  struct intel_cdclk_config *cdclk_config);
-	void (*set_cdclk)(struct drm_i915_private *dev_priv,
-			  const struct intel_cdclk_config *cdclk_config,
-			  enum pipe pipe);
-	int (*bw_calc_min_cdclk)(struct intel_atomic_state *state);
-	int (*get_fifo_size)(struct drm_i915_private *dev_priv,
-			     enum i9xx_plane_id i9xx_plane);
+/* functions used for watermark calcs for display. */
+struct drm_i915_wm_disp_funcs {
+	/* update_wm is for legacy wm management */
+	void (*update_wm)(struct drm_i915_private *dev_priv);
 	int (*compute_pipe_wm)(struct intel_atomic_state *state,
 			       struct intel_crtc *crtc);
 	int (*compute_intermediate_wm)(struct intel_atomic_state *state,
@@ -346,179 +324,23 @@ struct drm_i915_display_funcs {
 	void (*optimize_watermarks)(struct intel_atomic_state *state,
 				    struct intel_crtc *crtc);
 	int (*compute_global_watermarks)(struct intel_atomic_state *state);
-	void (*update_wm)(struct intel_crtc *crtc);
-	int (*modeset_calc_cdclk)(struct intel_cdclk_state *state);
-	u8 (*calc_voltage_level)(int cdclk);
+};
+
+struct drm_i915_display_funcs {
 	/* Returns the active state of the crtc, and if the crtc is active,
 	 * fills out the pipe-config with the hw state. */
 	bool (*get_pipe_config)(struct intel_crtc *,
 				struct intel_crtc_state *);
 	void (*get_initial_plane_config)(struct intel_crtc *,
 					 struct intel_initial_plane_config *);
-	int (*crtc_compute_clock)(struct intel_crtc *crtc,
-				  struct intel_crtc_state *crtc_state);
 	void (*crtc_enable)(struct intel_atomic_state *state,
 			    struct intel_crtc *crtc);
 	void (*crtc_disable)(struct intel_atomic_state *state,
 			     struct intel_crtc *crtc);
 	void (*commit_modeset_enables)(struct intel_atomic_state *state);
-	void (*commit_modeset_disables)(struct intel_atomic_state *state);
-	void (*audio_codec_enable)(struct intel_encoder *encoder,
-				   const struct intel_crtc_state *crtc_state,
-				   const struct drm_connector_state *conn_state);
-	void (*audio_codec_disable)(struct intel_encoder *encoder,
-				    const struct intel_crtc_state *old_crtc_state,
-				    const struct drm_connector_state *old_conn_state);
-	void (*fdi_link_train)(struct intel_crtc *crtc,
-			       const struct intel_crtc_state *crtc_state);
-	void (*init_clock_gating)(struct drm_i915_private *dev_priv);
-	void (*hpd_irq_setup)(struct drm_i915_private *dev_priv);
-	/* clock updates for mode set */
-	/* cursor updates */
-	/* render clock increase/decrease */
-	/* display clock increase/decrease */
-	/* pll clock increase/decrease */
-
-	int (*color_check)(struct intel_crtc_state *crtc_state);
-	/*
-	 * Program double buffered color management registers during
-	 * vblank evasion. The registers should then latch during the
-	 * next vblank start, alongside any other double buffered registers
-	 * involved with the same commit.
-	 */
-	void (*color_commit)(const struct intel_crtc_state *crtc_state);
-	/*
-	 * Load LUTs (and other single buffered color management
-	 * registers). Will (hopefully) be called during the vblank
-	 * following the latching of any double buffered registers
-	 * involved with the same commit.
-	 */
-	void (*load_luts)(const struct intel_crtc_state *crtc_state);
-	void (*read_luts)(struct intel_crtc_state *crtc_state);
 };
-
 
 #define I915_COLOR_UNEVICTABLE (-1) /* a non-vma sharing the address space */
-
-struct intel_fbc {
-	/* This is always the inner lock when overlapping with struct_mutex and
-	 * it's the outer lock when overlapping with stolen_lock. */
-	struct mutex lock;
-	unsigned int possible_framebuffer_bits;
-	unsigned int busy_bits;
-	struct intel_crtc *crtc;
-
-	struct drm_mm_node compressed_fb;
-	struct drm_mm_node compressed_llb;
-
-	u8 limit;
-
-	bool false_color;
-
-	bool active;
-	bool activated;
-	bool flip_pending;
-
-	bool underrun_detected;
-	struct work_struct underrun_work;
-
-	/*
-	 * Due to the atomic rules we can't access some structures without the
-	 * appropriate locking, so we cache information here in order to avoid
-	 * these problems.
-	 */
-	struct intel_fbc_state_cache {
-		struct {
-			unsigned int mode_flags;
-			u32 hsw_bdw_pixel_rate;
-		} crtc;
-
-		struct {
-			unsigned int rotation;
-			int src_w;
-			int src_h;
-			bool visible;
-			/*
-			 * Display surface base address adjustement for
-			 * pageflips. Note that on gen4+ this only adjusts up
-			 * to a tile, offsets within a tile are handled in
-			 * the hw itself (with the TILEOFF register).
-			 */
-			int adjusted_x;
-			int adjusted_y;
-
-			u16 pixel_blend_mode;
-		} plane;
-
-		struct {
-			const struct drm_format_info *format;
-			unsigned int stride;
-			u64 modifier;
-		} fb;
-
-		unsigned int fence_y_offset;
-		u16 gen9_wa_cfb_stride;
-		u16 interval;
-		s8 fence_id;
-		bool psr2_active;
-	} state_cache;
-
-	/*
-	 * This structure contains everything that's relevant to program the
-	 * hardware registers. When we want to figure out if we need to disable
-	 * and re-enable FBC for a new configuration we just check if there's
-	 * something different in the struct. The genx_fbc_activate functions
-	 * are supposed to read from it in order to program the registers.
-	 */
-	struct intel_fbc_reg_params {
-		struct {
-			enum pipe pipe;
-			enum i9xx_plane_id i9xx_plane;
-		} crtc;
-
-		struct {
-			const struct drm_format_info *format;
-			unsigned int stride;
-			u64 modifier;
-		} fb;
-
-		int cfb_size;
-		unsigned int fence_y_offset;
-		u16 gen9_wa_cfb_stride;
-		u16 interval;
-		s8 fence_id;
-		bool plane_visible;
-	} params;
-
-	const char *no_fbc_reason;
-};
-
-/*
- * HIGH_RR is the highest eDP panel refresh rate read from EDID
- * LOW_RR is the lowest eDP panel refresh rate found from EDID
- * parsing for same resolution.
- */
-enum drrs_refresh_rate_type {
-	DRRS_HIGH_RR,
-	DRRS_LOW_RR,
-	DRRS_MAX_RR, /* RR count */
-};
-
-enum drrs_support_type {
-	DRRS_NOT_SUPPORTED = 0,
-	STATIC_DRRS_SUPPORT = 1,
-	SEAMLESS_DRRS_SUPPORT = 2
-};
-
-struct intel_dp;
-struct i915_drrs {
-	struct mutex mutex;
-	struct delayed_work work;
-	struct intel_dp *dp;
-	unsigned busy_frontbuffer_bits;
-	enum drrs_refresh_rate_type refresh_rate_type;
-	enum drrs_support_type type;
-};
 
 #define QUIRK_LVDS_SSC_DISABLE (1<<1)
 #define QUIRK_INVERT_BRIGHTNESS (1<<2)
@@ -527,9 +349,6 @@ struct i915_drrs {
 #define QUIRK_INCREASE_T12_DELAY (1<<6)
 #define QUIRK_INCREASE_DDI_DISABLED_TIME (1<<7)
 #define QUIRK_NO_PPS_BACKLIGHT_POWER_HOOK (1<<8)
-
-struct intel_fbdev;
-struct intel_fbc_work;
 
 struct intel_gmbus {
 	struct i2c_adapter adapter;
@@ -548,8 +367,6 @@ struct i915_suspend_saved_registers {
 	u32 saveSWF3[3];
 	u16 saveGCDGMBUS;
 };
-
-struct vlv_s0ix_state;
 
 #define MAX_L3_SLICES 2
 struct intel_l3_parity {
@@ -639,168 +456,31 @@ i915_fence_timeout(const struct drm_i915_private *i915)
 /* Amount of PSF GV points, BSpec precisely defines this */
 #define I915_NUM_PSF_GV_POINTS 3
 
-struct ddi_vbt_port_info {
-	/* Non-NULL if port present. */
-	struct intel_bios_encoder_data *devdata;
-
-	int max_tmds_clock;
-
-	/* This is an index in the HDMI/DVI DDI buffer translation table. */
-	u8 hdmi_level_shift;
-	u8 hdmi_level_shift_set:1;
-
-	u8 alternate_aux_channel;
-	u8 alternate_ddc_pin;
-
-	int dp_max_link_rate;		/* 0 for not limited by VBT */
-};
-
-enum psr_lines_to_wait {
-	PSR_0_LINES_TO_WAIT = 0,
-	PSR_1_LINE_TO_WAIT,
-	PSR_4_LINES_TO_WAIT,
-	PSR_8_LINES_TO_WAIT
-};
-
 struct intel_vbt_data {
 	/* bdb version */
 	u16 version;
 
-	struct drm_display_mode *lfp_lvds_vbt_mode; /* if any */
-	struct drm_display_mode *sdvo_lvds_vbt_mode; /* if any */
-
 	/* Feature bits */
 	unsigned int int_tv_support:1;
-	unsigned int lvds_dither:1;
 	unsigned int int_crt_support:1;
 	unsigned int lvds_use_ssc:1;
 	unsigned int int_lvds_support:1;
 	unsigned int display_clock_mode:1;
 	unsigned int fdi_rx_polarity_inverted:1;
-	unsigned int panel_type:4;
 	int lvds_ssc_freq;
-	unsigned int bios_lvds_val; /* initial [PCH_]LVDS reg val in VBIOS */
 	enum drm_panel_orientation orientation;
 
-	enum drrs_support_type drrs_type;
-
-	struct {
-		int rate;
-		int lanes;
-		int preemphasis;
-		int vswing;
-		bool low_vswing;
-		bool initialized;
-		int bpp;
-		struct edp_power_seq pps;
-		bool hobl;
-	} edp;
-
-	struct {
-		bool enable;
-		bool full_link;
-		bool require_aux_wakeup;
-		int idle_frames;
-		enum psr_lines_to_wait lines_to_wait;
-		int tp1_wakeup_time_us;
-		int tp2_tp3_wakeup_time_us;
-		int psr2_tp2_tp3_wakeup_time_us;
-	} psr;
-
-	struct {
-		u16 pwm_freq_hz;
-		bool present;
-		bool active_low_pwm;
-		u8 min_brightness;	/* min_brightness/255 of max */
-		u8 controller;		/* brightness controller number */
-		enum intel_backlight_type type;
-	} backlight;
-
-	/* MIPI DSI */
-	struct {
-		u16 panel_id;
-		struct mipi_config *config;
-		struct mipi_pps_data *pps;
-		u16 bl_ports;
-		u16 cabc_ports;
-		u8 seq_version;
-		u32 size;
-		u8 *data;
-		const u8 *sequence[MIPI_SEQ_MAX];
-		u8 *deassert_seq; /* Used by fixup_mipi_sequences() */
-		enum drm_panel_orientation orientation;
-	} dsi;
+	bool override_afc_startup;
+	u8 override_afc_startup_val;
 
 	int crt_ddc_pin;
 
 	struct list_head display_devices;
+	struct list_head bdb_blocks;
 
-	struct ddi_vbt_port_info ddi_port_info[I915_MAX_PORTS];
+	struct intel_bios_encoder_data *ports[I915_MAX_PORTS]; /* Non-NULL if port present. */
 	struct sdvo_device_mapping sdvo_mappings[2];
 };
-
-enum intel_ddb_partitioning {
-	INTEL_DDB_PART_1_2,
-	INTEL_DDB_PART_5_6, /* IVB+ */
-};
-
-struct ilk_wm_values {
-	u32 wm_pipe[3];
-	u32 wm_lp[3];
-	u32 wm_lp_spr[3];
-	bool enable_fbc_wm;
-	enum intel_ddb_partitioning partitioning;
-};
-
-struct g4x_pipe_wm {
-	u16 plane[I915_MAX_PLANES];
-	u16 fbc;
-};
-
-struct g4x_sr_wm {
-	u16 plane;
-	u16 cursor;
-	u16 fbc;
-};
-
-struct vlv_wm_ddl_values {
-	u8 plane[I915_MAX_PLANES];
-};
-
-struct vlv_wm_values {
-	struct g4x_pipe_wm pipe[3];
-	struct g4x_sr_wm sr;
-	struct vlv_wm_ddl_values ddl[3];
-	u8 level;
-	bool cxsr;
-};
-
-struct g4x_wm_values {
-	struct g4x_pipe_wm pipe[2];
-	struct g4x_sr_wm sr;
-	struct g4x_sr_wm hpll;
-	bool cxsr;
-	bool hpll_en;
-	bool fbc_en;
-};
-
-struct skl_ddb_entry {
-	u16 start, end;	/* in number of blocks, 'end' is exclusive */
-};
-
-static inline u16 skl_ddb_entry_size(const struct skl_ddb_entry *entry)
-{
-	return entry->end - entry->start;
-}
-
-static inline bool skl_ddb_entry_equal(const struct skl_ddb_entry *e1,
-				       const struct skl_ddb_entry *e2)
-{
-	if (e1->start == e2->start && e1->end == e2->end)
-		return true;
-
-	return false;
-}
 
 struct i915_frontbuffer_tracking {
 	spinlock_t lock;
@@ -819,14 +499,32 @@ struct i915_virtual_gpu {
 	u32 caps;
 };
 
-struct intel_cdclk_config {
-	unsigned int cdclk, vco, ref, bypass;
-	u8 voltage_level;
-};
-
 struct i915_selftest_stash {
 	atomic_t counter;
 	struct ida mock_region_instances;
+};
+
+/* intel_audio.c private */
+struct intel_audio_private {
+	/* Display internal audio functions */
+	const struct intel_audio_funcs *funcs;
+
+	/* hda/i915 audio component */
+	struct i915_audio_component *component;
+	bool component_registered;
+	/* mutex for audio/video sync */
+	struct mutex mutex;
+	int power_refcount;
+	u32 freq_cntrl;
+
+	/* Used to save the pipe-to-encoder mapping for audio */
+	struct intel_encoder *encoder_map[I915_MAX_PIPES];
+
+	/* necessary resource sharing with HDMI LPE audio driver. */
+	struct {
+		struct platform_device *platdev;
+		int irq;
+	} lpe;
 };
 
 struct drm_i915_private {
@@ -919,8 +617,7 @@ struct drm_i915_private {
 	u32 pipestat_irq_mask[I915_MAX_PIPES];
 
 	struct i915_hotplug hotplug;
-	struct intel_fbc fbc;
-	struct i915_drrs drrs;
+	struct intel_fbc *fbc[I915_MAX_FBCS];
 	struct intel_opregion opregion;
 	struct intel_vbt_data vbt;
 
@@ -975,8 +672,29 @@ struct drm_i915_private {
 	/* unbound hipri wq for page flips/plane updates */
 	struct workqueue_struct *flip_wq;
 
+	/* pm private clock gating functions */
+	const struct drm_i915_clock_gating_funcs *clock_gating_funcs;
+
+	/* pm display functions */
+	const struct drm_i915_wm_disp_funcs *wm_disp;
+
+	/* irq display functions */
+	const struct intel_hotplug_funcs *hotplug_funcs;
+
+	/* fdi display functions */
+	const struct intel_fdi_funcs *fdi_funcs;
+
+	/* display pll funcs */
+	const struct intel_dpll_funcs *dpll_funcs;
+
 	/* Display functions */
-	struct drm_i915_display_funcs display;
+	const struct drm_i915_display_funcs *display;
+
+	/* Display internal color functions */
+	const struct intel_color_funcs *color_funcs;
+
+	/* Display CDCLK functions */
+	const struct intel_cdclk_funcs *cdclk_funcs;
 
 	/* PCH chipset type */
 	enum intel_pch pch_type;
@@ -992,9 +710,6 @@ struct drm_i915_private {
 	struct i915_gem_mm mm;
 
 	/* Kernel Modesetting */
-
-	struct intel_crtc *plane_to_crtc_mapping[I915_MAX_PIPES];
-	struct intel_crtc *pipe_to_crtc_mapping[I915_MAX_PIPES];
 
 	/**
 	 * dpll and cdclk state is protected by connection_mutex
@@ -1062,17 +777,6 @@ struct drm_i915_private {
 
 	struct drm_property *broadcast_rgb_property;
 	struct drm_property *force_audio_property;
-
-	/* hda/i915 audio component */
-	struct i915_audio_component *audio_component;
-	bool audio_component_registered;
-	/**
-	 * av_mutex - mutex for audio/video sync
-	 *
-	 */
-	struct mutex av_mutex;
-	int audio_power_refcount;
-	u32 audio_freq_cntrl;
 
 	u32 fdi_rx_config;
 
@@ -1189,8 +893,6 @@ struct drm_i915_private {
 		struct file *mmap_singleton;
 	} gem;
 
-	u8 framestart_delay;
-
 	/* Window2 specifies time required to program DSB (Window2) in number of scan lines */
 	u8 window2_delay;
 
@@ -1206,14 +908,7 @@ struct drm_i915_private {
 
 	bool ipc_enabled;
 
-	/* Used to save the pipe-to-encoder mapping for audio */
-	struct intel_encoder *av_enc_map[I915_MAX_PIPES];
-
-	/* necessary resource sharing with HDMI LPE audio driver. */
-	struct {
-		struct platform_device *platdev;
-		int	irq;
-	} lpe_audio;
+	struct intel_audio_private audio;
 
 	struct i915_pmu pmu;
 
@@ -1654,8 +1349,8 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define NEEDS_WaRsDisableCoarsePowerGating(dev_priv)			\
 	(IS_SKL_GT3(dev_priv) || IS_SKL_GT4(dev_priv))
 
-#define HAS_GMBUS_IRQ(dev_priv) (GRAPHICS_VER(dev_priv) >= 4)
-#define HAS_GMBUS_BURST_READ(dev_priv) (GRAPHICS_VER(dev_priv) >= 11 || \
+#define HAS_GMBUS_IRQ(dev_priv) (DISPLAY_VER(dev_priv) >= 4)
+#define HAS_GMBUS_BURST_READ(dev_priv) (DISPLAY_VER(dev_priv) >= 11 || \
 					IS_GEMINILAKE(dev_priv) || \
 					IS_KABYLAKE(dev_priv))
 
@@ -1667,13 +1362,15 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define SUPPORTS_TV(dev_priv)		(INTEL_INFO(dev_priv)->display.supports_tv)
 #define I915_HAS_HOTPLUG(dev_priv)	(INTEL_INFO(dev_priv)->display.has_hotplug)
 
-#define HAS_FW_BLC(dev_priv)	(GRAPHICS_VER(dev_priv) > 2)
-#define HAS_FBC(dev_priv)	(INTEL_INFO(dev_priv)->display.has_fbc)
-#define HAS_CUR_FBC(dev_priv)	(!HAS_GMCH(dev_priv) && GRAPHICS_VER(dev_priv) >= 7)
+#define HAS_FW_BLC(dev_priv)	(DISPLAY_VER(dev_priv) > 2)
+#define HAS_FBC(dev_priv)	(INTEL_INFO(dev_priv)->display.fbc_mask != 0)
+#define HAS_CUR_FBC(dev_priv)	(!HAS_GMCH(dev_priv) && DISPLAY_VER(dev_priv) >= 7)
 
 #define HAS_IPS(dev_priv)	(IS_HSW_ULT(dev_priv) || IS_BROADWELL(dev_priv))
 
 #define HAS_DP_MST(dev_priv)	(INTEL_INFO(dev_priv)->display.has_dp_mst)
+
+#define HAS_DOUBLE_BUFFERED_M_N(dev_priv)	(DISPLAY_VER(dev_priv) >= 9 || IS_BROADWELL(dev_priv))
 
 #define HAS_CDCLK_CRAWL(dev_priv)	 (INTEL_INFO(dev_priv)->display.has_cdclk_crawl)
 #define HAS_DDI(dev_priv)		 (INTEL_INFO(dev_priv)->display.has_ddi)
@@ -1681,8 +1378,8 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define HAS_PSR(dev_priv)		 (INTEL_INFO(dev_priv)->display.has_psr)
 #define HAS_PSR_HW_TRACKING(dev_priv) \
 	(INTEL_INFO(dev_priv)->display.has_psr_hw_tracking)
-#define HAS_PSR2_SEL_FETCH(dev_priv)	 (GRAPHICS_VER(dev_priv) >= 12)
-#define HAS_TRANSCODER(dev_priv, trans)	 ((INTEL_INFO(dev_priv)->cpu_transcoder_mask & BIT(trans)) != 0)
+#define HAS_PSR2_SEL_FETCH(dev_priv)	 (DISPLAY_VER(dev_priv) >= 12)
+#define HAS_TRANSCODER(dev_priv, trans)	 ((INTEL_INFO(dev_priv)->display.cpu_transcoder_mask & BIT(trans)) != 0)
 
 #define HAS_RC6(dev_priv)		 (INTEL_INFO(dev_priv)->has_rc6)
 #define HAS_RC6p(dev_priv)		 (INTEL_INFO(dev_priv)->has_rc6p)
@@ -1692,7 +1389,7 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 
 #define HAS_DMC(dev_priv)	(INTEL_INFO(dev_priv)->display.has_dmc)
 
-#define HAS_MSO(i915)		(GRAPHICS_VER(i915) >= 12)
+#define HAS_MSO(i915)		(DISPLAY_VER(i915) >= 12)
 
 #define HAS_RUNTIME_PM(dev_priv) (INTEL_INFO(dev_priv)->has_runtime_pm)
 #define HAS_64BIT_RELOC(dev_priv) (INTEL_INFO(dev_priv)->has_64bit_reloc)
@@ -1723,7 +1420,7 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 
 #define HAS_GMCH(dev_priv) (INTEL_INFO(dev_priv)->display.has_gmch)
 
-#define HAS_LSPCON(dev_priv) (IS_GRAPHICS_VER(dev_priv, 9, 10))
+#define HAS_LSPCON(dev_priv) (IS_DISPLAY_VER(dev_priv, 9, 10))
 
 /* DPF == dynamic parity feature */
 #define HAS_L3_DPF(dev_priv) (INTEL_INFO(dev_priv)->has_l3_dpf)
@@ -1733,11 +1430,13 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define GT_FREQUENCY_MULTIPLIER 50
 #define GEN9_FREQ_SCALER 3
 
-#define INTEL_NUM_PIPES(dev_priv) (hweight8(INTEL_INFO(dev_priv)->pipe_mask))
+#define INTEL_NUM_PIPES(dev_priv) (hweight8(INTEL_INFO(dev_priv)->display.pipe_mask))
 
-#define HAS_DISPLAY(dev_priv) (INTEL_INFO(dev_priv)->pipe_mask != 0)
+#define HAS_DISPLAY(dev_priv) (INTEL_INFO(dev_priv)->display.pipe_mask != 0)
 
-#define HAS_VRR(i915)	(GRAPHICS_VER(i915) >= 12)
+#define HAS_VRR(i915)	(DISPLAY_VER(i915) >= 11)
+
+#define HAS_ASYNC_FLIPS(i915)		(DISPLAY_VER(i915) >= 5)
 
 /* Only valid when HAS_DISPLAY() is true */
 #define INTEL_DISPLAY_ENABLED(dev_priv) \
@@ -1764,7 +1463,7 @@ static inline bool intel_vtd_active(void)
 
 static inline bool intel_scanout_needs_vtd_wa(struct drm_i915_private *dev_priv)
 {
-	return GRAPHICS_VER(dev_priv) >= 6 && intel_vtd_active();
+	return DISPLAY_VER(dev_priv) >= 6 && intel_vtd_active();
 }
 
 static inline bool
