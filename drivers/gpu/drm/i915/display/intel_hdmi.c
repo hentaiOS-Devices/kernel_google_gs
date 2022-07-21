@@ -1869,7 +1869,7 @@ hdmi_port_clock_valid(struct intel_hdmi *hdmi,
 	return MODE_OK;
 }
 
-static int intel_hdmi_tmds_clock(int clock, int bpc, bool ycbcr420_output)
+int intel_hdmi_tmds_clock(int clock, int bpc, bool ycbcr420_output)
 {
 	/* YCBCR420 TMDS rate requirement is half the pixel clock */
 	if (ycbcr420_output)
@@ -1880,7 +1880,7 @@ static int intel_hdmi_tmds_clock(int clock, int bpc, bool ycbcr420_output)
 	 *  1.5x for 12bpc
 	 *  1.25x for 10bpc
 	 */
-	return clock * bpc / 8;
+	return DIV_ROUND_CLOSEST(clock * bpc, 8);
 }
 
 static bool intel_hdmi_source_bpc_possible(struct drm_i915_private *i915, int bpc)
@@ -2257,7 +2257,7 @@ int intel_hdmi_compute_config(struct intel_encoder *encoder,
 	}
 
 	if (intel_hdmi_is_ycbcr420(pipe_config)) {
-		ret = intel_pch_panel_fitting(pipe_config, conn_state);
+		ret = intel_panel_fitting(pipe_config, conn_state);
 		if (ret)
 			return ret;
 	}

@@ -3,24 +3,26 @@
  * Copyright © 2019 Intel Corporation
  */
 
-#include "display/intel_crt.h"
-
 #include "i915_drv.h"
 #include "i915_irq.h"
 #include "intel_cdclk.h"
 #include "intel_combo_phy.h"
-#include "intel_display_power.h"
+#include "intel_crt.h"
 #include "intel_de.h"
+#include "intel_display_power.h"
 #include "intel_display_types.h"
 #include "intel_dmc.h"
 #include "intel_dpio_phy.h"
+#include "intel_dpll.h"
 #include "intel_hotplug.h"
+#include "intel_pch_refclk.h"
+#include "intel_pcode.h"
 #include "intel_pm.h"
 #include "intel_pps.h"
-#include "intel_sideband.h"
 #include "intel_snps_phy.h"
 #include "intel_tc.h"
 #include "intel_vga.h"
+#include "vlv_sideband.h"
 
 bool intel_display_power_well_is_enabled(struct drm_i915_private *dev_priv,
 					 enum i915_power_well_id power_well_id);
@@ -583,9 +585,8 @@ static void icl_tc_cold_exit(struct drm_i915_private *i915)
 	int ret, tries = 0;
 
 	while (1) {
-		ret = sandybridge_pcode_write_timeout(i915,
-						      ICL_PCODE_EXIT_TCCOLD,
-						      0, 250, 1);
+		ret = snb_pcode_write_timeout(i915, ICL_PCODE_EXIT_TCCOLD, 0,
+					      250, 1);
 		if (ret != -EAGAIN || ++tries == 3)
 			break;
 		msleep(1);
@@ -1195,7 +1196,7 @@ static void gen9_disable_dc_states(struct drm_i915_private *dev_priv)
 	if (!HAS_DISPLAY(dev_priv))
 		return;
 
-	dev_priv->display.get_cdclk(dev_priv, &cdclk_config);
+	intel_cdclk_get_cdclk(dev_priv, &cdclk_config);
 	/* Can't read out voltage_level so can't use intel_cdclk_changed() */
 	drm_WARN_ON(&dev_priv->drm,
 		    intel_cdclk_needs_modeset(&dev_priv->cdclk.hw,
@@ -3952,8 +3953,7 @@ tgl_tc_cold_request(struct drm_i915_private *i915, bool block)
 		 * Spec states that we should timeout the request after 200us
 		 * but the function below will timeout after 500us
 		 */
-		ret = sandybridge_pcode_read(i915, TGL_PCODE_TCCOLD, &low_val,
-					     &high_val);
+		ret = snb_pcode_read(i915, TGL_PCODE_TCCOLD, &low_val, &high_val);
 		if (ret == 0) {
 			if (block &&
 			    (low_val & TGL_PCODE_EXIT_TCCOLD_DATA_L_EXIT_FAILED))
@@ -5270,7 +5270,7 @@ static void gen12_dbuf_slices_config(struct drm_i915_private *dev_priv)
 
 static void icl_mbus_init(struct drm_i915_private *dev_priv)
 {
-	unsigned long abox_regs = INTEL_INFO(dev_priv)->abox_mask;
+	unsigned long abox_regs = INTEL_INFO(dev_priv)->display.abox_mask;
 	u32 mask, val, i;
 
 	if (IS_ALDERLAKE_P(dev_priv))
@@ -5368,8 +5368,7 @@ static u32 hsw_read_dcomp(struct drm_i915_private *dev_priv)
 static void hsw_write_dcomp(struct drm_i915_private *dev_priv, u32 val)
 {
 	if (IS_HASWELL(dev_priv)) {
-		if (sandybridge_pcode_write(dev_priv,
-					    GEN6_PCODE_WRITE_D_COMP, val))
+		if (snb_pcode_write(dev_priv, GEN6_PCODE_WRITE_D_COMP, val))
 			drm_dbg_kms(&dev_priv->drm,
 				    "Failed to write to D_COMP\n");
 	} else {
@@ -5730,7 +5729,7 @@ static void tgl_bw_buddy_init(struct drm_i915_private *dev_priv)
 	enum intel_dram_type type = dev_priv->dram_info.type;
 	u8 num_channels = dev_priv->dram_info.num_channels;
 	const struct buddy_page_mask *table;
-	unsigned long abox_mask = INTEL_INFO(dev_priv)->abox_mask;
+	unsigned long abox_mask = INTEL_INFO(dev_priv)->display.abox_mask;
 	int config, i;
 
 	/* BW_BUDDY registers are not used on dgpu's beyond DG1 */

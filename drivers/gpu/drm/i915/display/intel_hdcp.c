@@ -17,12 +17,12 @@
 
 #include "i915_drv.h"
 #include "i915_reg.h"
-#include "intel_display_power.h"
+#include "intel_connector.h"
 #include "intel_de.h"
+#include "intel_display_power.h"
 #include "intel_display_types.h"
 #include "intel_hdcp.h"
-#include "intel_sideband.h"
-#include "intel_connector.h"
+#include "intel_pcode.h"
 
 #define KEY_LOAD_TRIES	5
 #define HDCP2_LC_RETRY_CNT			3
@@ -297,8 +297,7 @@ static int intel_hdcp_load_keys(struct drm_i915_private *dev_priv)
 	 * Mailbox interface.
 	 */
 	if (DISPLAY_VER(dev_priv) == 9 && !IS_BROXTON(dev_priv)) {
-		ret = sandybridge_pcode_write(dev_priv,
-					      SKL_PCODE_LOAD_HDCP_KEYS, 1);
+		ret = snb_pcode_write(dev_priv, SKL_PCODE_LOAD_HDCP_KEYS, 1);
 		if (ret) {
 			drm_err(&dev_priv->drm,
 				"Failed to initiate HDCP key load (%d)\n",
