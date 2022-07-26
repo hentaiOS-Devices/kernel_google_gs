@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Authors: Cezary Rojewski <cezary.rojewski@intel.com>
 //          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -27,6 +27,18 @@
 #include "avs.h"
 #include "cldma.h"
 
+static u32 pgctl_mask = AZX_PGCTL_LSRMD_MASK;
+module_param(pgctl_mask, uint, 0444);
+MODULE_PARM_DESC(pgctl_mask, "PCI PGCTL policy override");
+
+static u32 cgctl_mask = AZX_CGCTL_MISCBDCGE_MASK;
+module_param(cgctl_mask, uint, 0444);
+MODULE_PARM_DESC(cgctl_mask, "PCI CGCTL policy override");
+
+static bool allow_dmil1 = true;
+module_param(allow_dmil1, bool, 0444);
+MODULE_PARM_DESC(allow_dmil1, "Allow for DMI L1-support manipulation");
+
 static void
 avs_hda_update_config_dword(struct hdac_bus *bus, u32 reg, u32 mask, u32 value)
 {
@@ -39,51 +51,50 @@ avs_hda_update_config_dword(struct hdac_bus *bus, u32 reg, u32 mask, u32 value)
 	pci_write_config_dword(pci, reg, data);
 }
 
-static void avs_hdac_clock_gating_enable(struct hdac_bus *bus, bool enable)
-{
-	u32 value;
-
-	value = enable ? AZX_CGCTL_MISCBDCGE_MASK : 0;
-	avs_hda_update_config_dword(bus, AZX_PCIREG_CGCTL,
-				    AZX_CGCTL_MISCBDCGE_MASK, value);
-}
-
-void avs_hda_clock_gating_enable(struct avs_dev *adev, bool enable)
-{
-	avs_hdac_clock_gating_enable(&adev->bus.core, enable);
-}
-
 void avs_hda_power_gating_enable(struct avs_dev *adev, bool enable)
 {
 	u32 value;
 
-	value = enable ? 0 : AZX_PGCTL_LSRMD_MASK;
-	avs_hda_update_config_dword(&adev->bus.core, AZX_PCIREG_PGCTL,
-				    AZX_PGCTL_LSRMD_MASK, value);
+	value = enable ? 0 : pgctl_mask;
+	avs_hda_update_config_dword(&adev->base.core, AZX_PCIREG_PGCTL,
+				    pgctl_mask, value);
+}
+
+static void avs_hdac_clock_gating_enable(struct hdac_bus *bus, bool enable)
+{
+	u32 value;
+
+	value = enable ? cgctl_mask : 0;
+	avs_hda_update_config_dword(bus, AZX_PCIREG_CGCTL, cgctl_mask, value);
+}
+
+void avs_hda_clock_gating_enable(struct avs_dev *adev, bool enable)
+{
+	avs_hdac_clock_gating_enable(&adev->base.core, enable);
 }
 
 void avs_hda_l1sen_enable(struct avs_dev *adev, bool enable)
 {
 	u32 value;
 
-	value = enable ? AZX_VS_EM2_L1SEN : 0;
-	snd_hdac_chip_updatel(&adev->bus.core, VS_EM2, AZX_VS_EM2_L1SEN, value);
+	if (allow_dmil1) {
+		value = enable ? AZX_VS_EM2_L1SEN : 0;
+		snd_hdac_chip_updatel(&adev->base.core, VS_EM2, AZX_VS_EM2_L1SEN, value);
+	}
 }
 
 static int avs_hdac_bus_init_streams(struct hdac_bus *bus)
 {
-	unsigned int gcap;
 	unsigned int cp_streams, pb_streams;
+	unsigned int gcap;
 
 	gcap = snd_hdac_chip_readw(bus, GCAP);
 	cp_streams = (gcap >> 8) & 0x0F;
 	pb_streams = (gcap >> 12) & 0x0F;
 	bus->num_streams = cp_streams + pb_streams;
 
-	snd_hdac_ext_stream_init_all(bus, 0, cp_streams,
-				     SNDRV_PCM_STREAM_CAPTURE);
-	snd_hdac_ext_stream_init_all(bus, cp_streams, pb_streams,
-				     SNDRV_PCM_STREAM_PLAYBACK);
+	snd_hdac_ext_stream_init_all(bus, 0, cp_streams, SNDRV_PCM_STREAM_CAPTURE);
+	snd_hdac_ext_stream_init_all(bus, cp_streams, pb_streams, SNDRV_PCM_STREAM_PLAYBACK);
 
 	return snd_hdac_bus_alloc_stream_pages(bus);
 }
@@ -114,7 +125,7 @@ static int probe_codec(struct hdac_bus *bus, int addr)
 {
 	struct hda_codec *codec;
 	unsigned int cmd = (addr << 28) | (AC_NODE_ROOT << 20) |
-		(AC_VERB_PARAMETERS << 8) | AC_PAR_VENDOR_ID;
+			   (AC_VERB_PARAMETERS << 8) | AC_PAR_VENDOR_ID;
 	unsigned int res = -1;
 	int ret;
 
@@ -127,8 +138,7 @@ static int probe_codec(struct hdac_bus *bus, int addr)
 
 	dev_dbg(bus->dev, "codec #%d probed OK: 0x%x\n", addr, res);
 
-	codec = snd_hda_codec_device_init(to_hda_bus(bus), addr, "hdaudioB%dD%d",
-					  bus->idx, addr);
+	codec = snd_hda_codec_device_init(to_hda_bus(bus), addr, "hdaudioB%dD%d", bus->idx, addr);
 	if (IS_ERR(codec)) {
 		dev_err(bus->dev, "init codec failed: %ld\n", PTR_ERR(codec));
 		return PTR_ERR(codec);
@@ -167,8 +177,7 @@ static void avs_hdac_bus_probe_codecs(struct hdac_bus *bus)
 		 * Some BIOSen give you wrong codec addresses
 		 * that don't exist
 		 */
-		dev_warn(bus->dev,
-			 "Codec #%d probe error; disabling it...\n", c);
+		dev_warn(bus->dev, "Codec #%d probe error; disabling it...\n", c);
 		bus->codec_mask &= ~BIT(c);
 		/*
 		 * More badly, accessing to a non-existing
@@ -185,11 +194,12 @@ static void avs_hdac_bus_probe_codecs(struct hdac_bus *bus)
 
 static void avs_hda_probe_work(struct work_struct *work)
 {
-	struct avs_dev *adev =
-		container_of(work, struct avs_dev, probe_work);
-	struct hdac_bus *bus = &adev->bus.core;
+	struct avs_dev *adev = container_of(work, struct avs_dev, probe_work);
+	struct hdac_bus *bus = &adev->base.core;
 	struct hdac_ext_link *hlink;
 	int ret;
+
+	pm_runtime_set_active(bus->dev); /* clear runtime_error flag */
 
 	ret = snd_hdac_i915_init(bus);
 	if (ret < 0)
@@ -214,11 +224,6 @@ static void avs_hda_probe_work(struct work_struct *work)
 	adev->nhlt = intel_nhlt_init(adev->dev);
 	if (!adev->nhlt)
 		dev_info(bus->dev, "platform has no NHLT\n");
-
-	avs_notify_subscribe(&adev->notify_sub_list, AVS_NOTIFY_EXCEPTION_CAUGHT,
-			     avs_dsp_exception_caught, adev);
-	avs_notify_subscribe(&adev->notify_sub_list, AVS_NOTIFY_LOG_BUFFER_STATUS,
-			     avs_dsp_log_buffer_status, adev);
 
 	avs_register_all_boards(adev);
 
@@ -261,8 +266,8 @@ static void hdac_update_stream(struct hdac_bus *bus, struct hdac_stream *stream)
 static irqreturn_t hdac_bus_irq_handler(int irq, void *context)
 {
 	struct hdac_bus *bus = context;
-	u32 status;
 	u32 mask, int_enable;
+	u32 status;
 	int ret = IRQ_NONE;
 
 	if (!pm_runtime_active(bus->dev))
@@ -293,8 +298,9 @@ static irqreturn_t hdac_bus_irq_handler(int irq, void *context)
 		int_enable = snd_hdac_chip_readl(bus, INTCTL);
 		snd_hdac_chip_writel(bus, INTCTL, (int_enable & (~mask)));
 		ret = IRQ_WAKE_THREAD;
-	} else
+	} else {
 		ret = IRQ_HANDLED;
+	}
 
 	spin_unlock(&bus->reg_lock);
 	return ret;
@@ -324,7 +330,7 @@ static irqreturn_t hdac_bus_irq_thread(int irq, void *context)
 
 static int avs_hdac_acquire_irq(struct avs_dev *adev)
 {
-	struct hdac_bus *bus = &adev->bus.core;
+	struct hdac_bus *bus = &adev->base.core;
 	struct pci_dev *pci = to_pci_dev(bus->dev);
 	int ret;
 
@@ -335,15 +341,15 @@ static int avs_hdac_acquire_irq(struct avs_dev *adev)
 		return ret;
 	}
 
-	ret = pci_request_irq(pci, 0, hdac_bus_irq_handler, hdac_bus_irq_thread,
-			      bus, KBUILD_MODNAME);
+	ret = pci_request_irq(pci, 0, hdac_bus_irq_handler, hdac_bus_irq_thread, bus,
+			      KBUILD_MODNAME);
 	if (ret < 0) {
 		dev_err(adev->dev, "Failed to request stream IRQ handler: %d\n", ret);
 		goto free_vector;
 	}
 
-	ret = pci_request_irq(pci, 0, avs_dsp_irq_handler, avs_dsp_irq_thread,
-			      adev, KBUILD_MODNAME);
+	ret = pci_request_irq(pci, 0, avs_dsp_irq_handler, avs_dsp_irq_thread, adev,
+			      KBUILD_MODNAME);
 	if (ret < 0) {
 		dev_err(adev->dev, "Failed to request IPC IRQ handler: %d\n", ret);
 		goto free_stream_irq;
@@ -358,10 +364,9 @@ free_vector:
 	return ret;
 }
 
-static int avs_bus_init(struct avs_dev *adev, struct pci_dev *pci,
-			const struct pci_device_id *id)
+static int avs_bus_init(struct avs_dev *adev, struct pci_dev *pci, const struct pci_device_id *id)
 {
-	struct hda_bus *bus = &adev->bus;
+	struct hda_bus *bus = &adev->base;
 	struct avs_ipc *ipc;
 	struct device *dev = &pci->dev;
 	int ret;
@@ -387,16 +392,15 @@ static int avs_bus_init(struct avs_dev *adev, struct pci_dev *pci,
 	adev->dev = dev;
 	adev->spec = (const struct avs_spec *)id->driver_data;
 	adev->ipc = ipc;
+	adev->hw_cfg.dsp_cores = hweight_long(AVS_MAIN_CORE_MASK);
 	INIT_WORK(&adev->probe_work, avs_hda_probe_work);
-	INIT_WORK(&adev->recovery_work, avs_dsp_recovery_work);
 	INIT_LIST_HEAD(&adev->comp_list);
 	INIT_LIST_HEAD(&adev->path_list);
-	INIT_LIST_HEAD(&adev->notify_sub_list);
 	INIT_LIST_HEAD(&adev->fw_list);
 	init_completion(&adev->fw_ready);
-	spin_lock_init(&adev->comp_list_lock);
 	spin_lock_init(&adev->path_list_lock);
 	mutex_init(&adev->modres_mutex);
+	mutex_init(&adev->comp_list_mutex);
 	mutex_init(&adev->path_mutex);
 
 	return 0;
@@ -410,7 +414,7 @@ static int avs_pci_probe(struct pci_dev *pci, const struct pci_device_id *id)
 	int ret;
 
 	ret = snd_intel_dsp_driver_probe(pci);
-	if (ret != SND_INTEL_DSP_DRIVER_ANY && ret != SND_INTEL_DSP_DRIVER_SST)
+	if (ret != SND_INTEL_DSP_DRIVER_ANY && ret != SND_INTEL_DSP_DRIVER_AVS)
 		return -ENODEV;
 
 	ret = pcim_enable_device(pci);
@@ -430,7 +434,7 @@ static int avs_pci_probe(struct pci_dev *pci, const struct pci_device_id *id)
 	if (ret < 0)
 		return ret;
 
-	bus = &adev->bus.core;
+	bus = &adev->base.core;
 	bus->addr = pci_resource_start(pci, 0);
 	bus->remap_addr = pci_ioremap_bar(pci, 0);
 	if (!bus->remap_addr) {
@@ -439,8 +443,8 @@ static int avs_pci_probe(struct pci_dev *pci, const struct pci_device_id *id)
 		goto err_remap_bar0;
 	}
 
-	adev->adsp_ba = pci_ioremap_bar(pci, 4);
-	if (!adev->adsp_ba) {
+	adev->dsp_ba = pci_ioremap_bar(pci, 4);
+	if (!adev->dsp_ba) {
 		dev_err(bus->dev, "ioremap error\n");
 		ret = -ENXIO;
 		goto err_remap_bar4;
@@ -481,7 +485,7 @@ err_acquire_irq:
 	snd_hdac_bus_free_stream_pages(bus);
 	snd_hdac_stream_free_all(bus);
 err_init_streams:
-	iounmap(adev->adsp_ba);
+	iounmap(adev->dsp_ba);
 err_remap_bar4:
 	iounmap(bus->remap_addr);
 err_remap_bar0:
@@ -496,20 +500,17 @@ static void avs_pci_remove(struct pci_dev *pci)
 	struct avs_dev *adev = hdac_to_avs(bus);
 
 	cancel_work_sync(&adev->probe_work);
-	cancel_work_sync(&adev->recovery_work);
 	avs_ipc_block(adev->ipc);
 
 	avs_unregister_all_boards(adev);
 
-	avs_notify_unsubscribe(&adev->notify_sub_list, AVS_NOTIFY_LOG_BUFFER_STATUS, adev);
-	avs_notify_unsubscribe(&adev->notify_sub_list, AVS_NOTIFY_EXCEPTION_CAUGHT, adev);
 	if (adev->nhlt)
 		intel_nhlt_free(adev->nhlt);
 
 	if (avs_platattr_test(adev, CLDMA))
 		hda_cldma_free(&code_loader);
 
-	snd_hdac_ext_stop_streams(bus);
+	snd_hdac_stop_streams_and_chip(bus);
 	avs_dsp_op(adev, int_control, false);
 	snd_hdac_ext_bus_ppcap_int_enable(bus, false);
 
@@ -523,11 +524,10 @@ static void avs_pci_remove(struct pci_dev *pci)
 	snd_hdac_link_free_all(bus);
 	snd_hdac_ext_bus_exit(bus);
 
-	if (adev->hw_cfg.dsp_cores)
-		avs_dsp_core_disable(adev, GENMASK(adev->hw_cfg.dsp_cores - 1, 0));
+	avs_dsp_core_disable(adev, GENMASK(adev->hw_cfg.dsp_cores - 1, 0));
 	snd_hdac_ext_bus_ppcap_enable(bus, false);
 
-	/* snd_hdac_ext_stop_streams does that already? */
+	/* snd_hdac_stop_streams_and_chip does that already? */
 	snd_hdac_bus_stop_chip(bus);
 	snd_hdac_display_power(bus, HDA_CODEC_IDX_CONTROLLER, false);
 	if (bus->audio_component)
@@ -538,30 +538,29 @@ static void avs_pci_remove(struct pci_dev *pci)
 	pci_free_irq(pci, 0, bus);
 	pci_free_irq_vectors(pci);
 	iounmap(bus->remap_addr);
-	iounmap(adev->adsp_ba);
+	iounmap(adev->dsp_ba);
 	pci_release_regions(pci);
 
-	/* should not need FW anymore */
+	/* Firmware is not needed anymore */
 	avs_release_firmwares(adev);
 
-#ifdef CONFIG_PM
-	/* pm_runtime_forbid() can rpm_resume() which we don't want */
-	if (pci->dev.power.runtime_auto)
-		pm_runtime_get_noresume(&pci->dev);
-#endif
+	/* pm_runtime_forbid() can rpm_resume() which we do not want */
+	pm_runtime_disable(&pci->dev);
+	pm_runtime_forbid(&pci->dev);
+	pm_runtime_enable(&pci->dev);
+	pm_runtime_get_noresume(&pci->dev);
 }
 
-static int __maybe_unused avs_suspend_common(struct avs_dev *adev, bool low_power)
+static int __maybe_unused avs_suspend_common(struct avs_dev *adev)
 {
-	struct hdac_bus *bus = &adev->bus.core;
-	const struct avs_spec *const spec = adev->spec;
+	struct hdac_bus *bus = &adev->base.core;
 	int ret;
 
 	flush_work(&adev->probe_work);
 
 	snd_hdac_ext_bus_link_power_down_all(bus);
 
-	ret = avs_ipc_set_dx(adev, spec->master_mask, false);
+	ret = avs_ipc_set_dx(adev, AVS_MAIN_CORE_MASK, false);
 	/*
 	 * pm_runtime is blocked on DSP failure but system-wide suspend is not.
 	 * Do not block entire system from suspending if that's the case.
@@ -574,10 +573,9 @@ static int __maybe_unused avs_suspend_common(struct avs_dev *adev, bool low_powe
 	avs_dsp_op(adev, int_control, false);
 	snd_hdac_ext_bus_ppcap_int_enable(bus, false);
 
-	ret = avs_dsp_core_disable(adev, spec->master_mask);
+	ret = avs_dsp_core_disable(adev, AVS_MAIN_CORE_MASK);
 	if (ret < 0) {
-		dev_err(adev->dev, "core_mask %d disable failed: %d\n",
-			spec->master_mask, ret);
+		dev_err(adev->dev, "core_mask %ld disable failed: %d\n", AVS_MAIN_CORE_MASK, ret);
 		return ret;
 	}
 
@@ -595,9 +593,9 @@ static int __maybe_unused avs_suspend_common(struct avs_dev *adev, bool low_powe
 	return 0;
 }
 
-static int __maybe_unused avs_resume_common(struct avs_dev *adev, bool low_power, bool purge)
+static int __maybe_unused avs_resume_common(struct avs_dev *adev, bool purge)
 {
-	struct hdac_bus *bus = &adev->bus.core;
+	struct hdac_bus *bus = &adev->base.core;
 	struct hdac_ext_link *hlink;
 	int ret;
 
@@ -628,50 +626,26 @@ static int __maybe_unused avs_resume_common(struct avs_dev *adev, bool low_power
 
 static int __maybe_unused avs_suspend(struct device *dev)
 {
-	return avs_suspend_common(to_avs_dev(dev), true);
+	return avs_suspend_common(to_avs_dev(dev));
 }
 
 static int __maybe_unused avs_resume(struct device *dev)
 {
-	return avs_resume_common(to_avs_dev(dev), true, true);
+	return avs_resume_common(to_avs_dev(dev), true);
 }
 
 static int __maybe_unused avs_runtime_suspend(struct device *dev)
 {
-	return avs_suspend_common(to_avs_dev(dev), true);
+	return avs_suspend_common(to_avs_dev(dev));
 }
 
 static int __maybe_unused avs_runtime_resume(struct device *dev)
 {
-	return avs_resume_common(to_avs_dev(dev), true, false);
-}
-
-static int __maybe_unused avs_freeze(struct device *dev)
-{
-	return avs_suspend_common(to_avs_dev(dev), false);
-}
-static int __maybe_unused avs_thaw(struct device *dev)
-{
-	return avs_resume_common(to_avs_dev(dev), false, true);
-}
-
-static int __maybe_unused avs_poweroff(struct device *dev)
-{
-	return avs_suspend_common(to_avs_dev(dev), false);
-}
-
-static int __maybe_unused avs_restore(struct device *dev)
-{
-	return avs_resume_common(to_avs_dev(dev), false, true);
+	return avs_resume_common(to_avs_dev(dev), true);
 }
 
 static const struct dev_pm_ops avs_dev_pm = {
-	.suspend = avs_suspend,
-	.resume = avs_resume,
-	.freeze = avs_freeze,
-	.thaw = avs_thaw,
-	.poweroff = avs_poweroff,
-	.restore = avs_restore,
+	SET_SYSTEM_SLEEP_PM_OPS(avs_suspend, avs_resume)
 	SET_RUNTIME_PM_OPS(avs_runtime_suspend, avs_runtime_resume, NULL)
 };
 
@@ -683,21 +657,12 @@ static const struct avs_spec skl_desc = {
 		.hotfix = 0,
 		.build = 4732,
 	},
-	.dops = &skl_dsp_ops,
-	.master_mask = 1,
-	.init_mask = 1,
+	.dsp_ops = &skl_dsp_ops,
+	.core_init_mask = 1,
 	.attributes = AVS_PLATATTR_CLDMA,
 	.sram_base_offset = SKL_ADSP_SRAM_BASE_OFFSET,
 	.sram_window_size = SKL_ADSP_SRAM_WINDOW_SIZE,
 	.rom_status = SKL_ADSP_SRAM_BASE_OFFSET,
-	.hipc_req = SKL_ADSP_REG_HIPCI,
-	.hipc_req_ext = SKL_ADSP_REG_HIPCIE,
-	.hipc_req_busy = SKL_ADSP_HIPCI_BUSY,
-	.hipc_ack = SKL_ADSP_REG_HIPCIE,
-	.hipc_ack_done = SKL_ADSP_HIPCIE_DONE,
-	.hipc_rsp = SKL_ADSP_REG_HIPCT,
-	.hipc_rsp_busy = SKL_ADSP_HIPCT_BUSY,
-	.hipc_ctl = SKL_ADSP_REG_HIPCCTL,
 };
 
 static const struct avs_spec apl_desc = {
@@ -708,21 +673,12 @@ static const struct avs_spec apl_desc = {
 		.hotfix = 1,
 		.build = 4323,
 	},
-	.dops = &apl_dsp_ops,
-	.master_mask = 1,
-	.init_mask = 3,
+	.dsp_ops = &apl_dsp_ops,
+	.core_init_mask = 3,
 	.attributes = AVS_PLATATTR_IMR,
 	.sram_base_offset = APL_ADSP_SRAM_BASE_OFFSET,
 	.sram_window_size = APL_ADSP_SRAM_WINDOW_SIZE,
 	.rom_status = APL_ADSP_SRAM_BASE_OFFSET,
-	.hipc_req = SKL_ADSP_REG_HIPCI,
-	.hipc_req_ext = SKL_ADSP_REG_HIPCIE,
-	.hipc_req_busy = SKL_ADSP_HIPCI_BUSY,
-	.hipc_ack = SKL_ADSP_REG_HIPCIE,
-	.hipc_ack_done = SKL_ADSP_HIPCIE_DONE,
-	.hipc_rsp = SKL_ADSP_REG_HIPCT,
-	.hipc_rsp_busy = SKL_ADSP_HIPCT_BUSY,
-	.hipc_ctl = SKL_ADSP_REG_HIPCCTL,
 };
 
 static const struct pci_device_id avs_ids[] = {
@@ -748,4 +704,4 @@ module_pci_driver(avs_pci_driver);
 MODULE_AUTHOR("Cezary Rojewski <cezary.rojewski@intel.com>");
 MODULE_AUTHOR("Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>");
 MODULE_DESCRIPTION("Intel cAVS sound driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");

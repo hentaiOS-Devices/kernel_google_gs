@@ -9,6 +9,7 @@
 #ifndef __SOUND_SOC_INTEL_AVS_PATH_H
 #define __SOUND_SOC_INTEL_AVS_PATH_H
 
+#include <linux/list.h>
 #include "avs.h"
 #include "topology.h"
 
@@ -73,11 +74,11 @@ struct avs_path_binding {
 	struct list_head node;
 };
 
+void avs_path_free(struct avs_path *path);
 struct avs_path *avs_path_create(struct avs_dev *adev, u32 dma_id,
 				 struct avs_tplg_path_template *template,
 				 struct snd_pcm_hw_params *fe_params,
 				 struct snd_pcm_hw_params *be_params);
-void avs_path_free(struct avs_path *path);
 int avs_path_bind(struct avs_path *path);
 int avs_path_unbind(struct avs_path *path);
 int avs_path_reset(struct avs_path *path);

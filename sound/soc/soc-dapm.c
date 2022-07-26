@@ -4217,7 +4217,7 @@ param_fail:
 }
 
 /**
- * snd_soc_dapm_new_dai_widget - Create new DAPM widgets
+ * snd_soc_dapm_new_dai_widgets - Create new DAPM widgets
  * @dapm: DAPM context
  * @dai: parent DAI
  *
@@ -4268,7 +4268,7 @@ int snd_soc_dapm_new_dai_widgets(struct snd_soc_dapm_context *dapm,
 
 	return 0;
 }
-EXPORT_SYMBOL(snd_soc_dapm_new_dai_widgets);
+EXPORT_SYMBOL_GPL(snd_soc_dapm_new_dai_widgets);
 
 int snd_soc_dapm_link_dai_widgets(struct snd_soc_card *card)
 {

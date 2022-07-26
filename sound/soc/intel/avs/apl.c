@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Authors: Cezary Rojewski <cezary.rojewski@intel.com>
 //          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -13,9 +13,8 @@
 #include "path.h"
 #include "topology.h"
 
-int apl_enable_logs(struct avs_dev *adev, enum avs_log_enable enable,
-		    u32 aging_period, u32 fifo_full_period,
-		    unsigned long resource_mask, u32 *priorities)
+static int apl_enable_logs(struct avs_dev *adev, enum avs_log_enable enable, u32 aging_period,
+			   u32 fifo_full_period, unsigned long resource_mask, u32 *priorities)
 {
 	struct apl_log_state_info *info;
 	u32 size, num_cores = adev->hw_cfg.dsp_cores;
@@ -48,13 +47,16 @@ int apl_enable_logs(struct avs_dev *adev, enum avs_log_enable enable,
 	return 0;
 }
 
-int apl_log_buffer_status(struct avs_dev *adev, union avs_notify_msg msg)
+static int apl_log_buffer_status(struct avs_dev *adev, union avs_notify_msg *msg)
 {
 	struct apl_log_buffer_layout layout;
 	unsigned long flags;
 	void __iomem *addr, *buf;
 
-	addr = avs_log_buffer_addr(adev, msg.log.core);
+	addr = avs_log_buffer_addr(adev, msg->log.core);
+	if (!addr)
+		return -ENXIO;
+
 	memcpy_fromio(&layout, addr, sizeof(layout));
 
 	spin_lock_irqsave(&adev->dbg.trace_lock, flags);
@@ -65,16 +67,13 @@ int apl_log_buffer_status(struct avs_dev *adev, union avs_notify_msg msg)
 	buf = apl_log_payload_addr(addr);
 
 	if (layout.read_ptr > layout.write_ptr) {
-		__kfifo_fromio_locked(&adev->dbg.trace_fifo,
-			buf + layout.read_ptr,
-			apl_log_payload_size(adev) - layout.read_ptr,
-			&adev->dbg.fifo_lock);
+		__kfifo_fromio_locked(&adev->dbg.trace_fifo, buf + layout.read_ptr,
+				      apl_log_payload_size(adev) - layout.read_ptr,
+				      &adev->dbg.fifo_lock);
 		layout.read_ptr = 0;
 	}
-	__kfifo_fromio_locked(&adev->dbg.trace_fifo,
-		buf + layout.read_ptr,
-		layout.write_ptr - layout.read_ptr,
-		&adev->dbg.fifo_lock);
+	__kfifo_fromio_locked(&adev->dbg.trace_fifo, buf + layout.read_ptr,
+			      layout.write_ptr - layout.read_ptr, &adev->dbg.fifo_lock);
 
 	wake_up(&adev->dbg.trace_waitq);
 
@@ -84,13 +83,15 @@ update_read_ptr:
 	return 0;
 }
 
-static int apl_wait_log_entry(struct avs_dev *adev, u32 core,
-			      struct apl_log_buffer_layout *layout)
+static int apl_wait_log_entry(struct avs_dev *adev, u32 core, struct apl_log_buffer_layout *layout)
 {
 	unsigned long timeout;
 	void __iomem *addr;
 
 	addr = avs_log_buffer_addr(adev, core);
+	if (!addr)
+		return -ENXIO;
+
 	timeout = jiffies + msecs_to_jiffies(10);
 
 	do {
@@ -106,7 +107,7 @@ static int apl_wait_log_entry(struct avs_dev *adev, u32 core,
 /* reads log header and tests its type */
 #define apl_is_entry_stackdump(addr) ((readl(addr) >> 30) & 0x1)
 
-int apl_coredump(struct avs_dev *adev, union avs_notify_msg msg)
+static int apl_coredump(struct avs_dev *adev, union avs_notify_msg *msg)
 {
 	struct apl_log_buffer_layout layout;
 	void __iomem *addr, *buf;
@@ -114,24 +115,29 @@ int apl_coredump(struct avs_dev *adev, union avs_notify_msg msg)
 	u16 offset = 0;
 	u8 *dump, *pos;
 
-	dump_size = AVS_FW_REGS_SIZE + msg.ext.coredump.stack_dump_size;
+	dump_size = AVS_FW_REGS_SIZE + msg->ext.coredump.stack_dump_size;
 	dump = vzalloc(dump_size);
 	if (!dump)
 		return -ENOMEM;
 
 	memcpy_fromio(dump, avs_sram_addr(adev, AVS_FW_REGS_WINDOW), AVS_FW_REGS_SIZE);
 
-	if (!msg.ext.coredump.stack_dump_size)
+	if (!msg->ext.coredump.stack_dump_size)
 		goto exit;
 
-	addr = avs_log_buffer_addr(adev, msg.ext.coredump.core_id);
+	/* Dump the registers even if an external error prevents gathering the stack. */
+	addr = avs_log_buffer_addr(adev, msg->ext.coredump.core_id);
+	if (!addr)
+		goto exit;
+
 	buf = apl_log_payload_addr(addr);
 	memcpy_fromio(&layout, addr, sizeof(layout));
 	if (!apl_is_entry_stackdump(buf + layout.read_ptr)) {
-		/* DSP awaits remaining logs to be
+		/*
+		 * DSP awaits the remaining logs to be
 		 * gathered before dumping stack
 		 */
-		msg.log.core = msg.ext.coredump.core_id;
+		msg->log.core = msg->ext.coredump.core_id;
 		avs_dsp_op(adev, log_buffer_status, msg);
 	}
 
@@ -140,7 +146,7 @@ int apl_coredump(struct avs_dev *adev, union avs_notify_msg msg)
 	do {
 		u32 count;
 
-		if (apl_wait_log_entry(adev, msg.ext.coredump.core_id, &layout))
+		if (apl_wait_log_entry(adev, msg->ext.coredump.core_id, &layout))
 			break;
 
 		if (layout.read_ptr > layout.write_ptr) {
@@ -155,7 +161,7 @@ int apl_coredump(struct avs_dev *adev, union avs_notify_msg msg)
 
 		/* update read pointer */
 		writel(layout.write_ptr, addr);
-	} while (offset < msg.ext.coredump.stack_dump_size);
+	} while (offset < msg->ext.coredump.stack_dump_size);
 
 exit:
 	dev_coredumpv(adev->dev, dump, dump_size, GFP_KERNEL);
@@ -195,34 +201,30 @@ static bool apl_lp_streaming(struct avs_dev *adev)
 	return true;
 }
 
-bool apl_d0ix_toggle(struct avs_dev *adev, struct avs_ipc_msg *tx, bool wake)
+static bool apl_d0ix_toggle(struct avs_dev *adev, struct avs_ipc_msg *tx, bool wake)
 {
-	bool lp_streaming;
-
 	/* wake in all cases */
 	if (wake)
 		return true;
 
 	/*
-	 * For cAVS 1.5+ and 1.8 D0IX is LP-firmware transition,
-	 * not the power-gating mechanism known from cAVS 2.0.
+	 * If no pipelines are running, allow for d0ix schedule.
+	 * If all gateways have lp=1, allow for d0ix schedule.
+	 * If any gateway with lp=0 is allocated, abort scheduling d0ix.
 	 *
-	 * If no pipelines are running, allow for the request and
-	 * streaming=0 (idle).  If any gateway with lp=0 is allocated,
-	 * abort the request.  If all gateways have lp=1, allow for the
-	 * request and streaming=1.
+	 * Note: for cAVS 1.5+ and 1.8, D0IX is LP-firmware transition,
+	 * not the power-gating mechanism known from cAVS 2.0.
 	 */
-	lp_streaming = apl_lp_streaming(adev);
-
-	return lp_streaming;
+	return apl_lp_streaming(adev);
 }
 
-int apl_set_d0ix(struct avs_dev *adev, bool enable)
+static int apl_set_d0ix(struct avs_dev *adev, bool enable)
 {
 	bool streaming = false;
 	int ret;
 
 	if (enable)
+		/* Either idle or all gateways with lp=1. */
 		streaming = !list_empty(&adev->path_list);
 
 	ret = avs_ipc_set_d0ix(adev, enable, streaming);
@@ -233,10 +235,10 @@ const struct avs_dsp_ops apl_dsp_ops = {
 	.power = avs_dsp_core_power,
 	.reset = avs_dsp_core_reset,
 	.stall = avs_dsp_core_stall,
-	.irq_handler = avs_ipc_irq_handler,
-	.irq_thread = skl_dsp_irq_thread,
-	.int_control = avs_dsp_int_control,
-	.load_fw = avs_hda_load_basefw,
+	.irq_handler = avs_dsp_irq_handler,
+	.irq_thread = avs_dsp_irq_thread,
+	.int_control = avs_dsp_interrupt_control,
+	.load_basefw = avs_hda_load_basefw,
 	.load_lib = avs_hda_load_library,
 	.transfer_mods = avs_hda_transfer_modules,
 	.enable_logs = apl_enable_logs,

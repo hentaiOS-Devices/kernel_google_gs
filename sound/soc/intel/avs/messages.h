@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright(c) 2021 Intel Corporation. All rights reserved.
+ * Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
  *
  * Authors: Cezary Rojewski <cezary.rojewski@intel.com>
  *          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -84,14 +84,10 @@ union avs_global_msg {
 			u32 val;
 			/* pipeline management */
 			struct {
-				u32 lp:1;
+				u32 lp:1; /* low power flag */
 				u32 rsvd:3;
-				u32 attributes:16;
+				u32 attributes:16; /* additional scheduling flags */
 			} create_ppl;
-			struct {
-				u32 multi_ppl:1;
-				u32 sync_stop_start:1;
-			} set_ppl_state;
 		} ext;
 	};
 } __packed;
@@ -147,7 +143,6 @@ union avs_module_msg {
 				u32 src_queue:3;
 			} bind_unbind;
 			struct {
-				/* cAVS < 2.0 */
 				u32 wake:1;
 				u32 streaming:1;
 			} set_d0ix;
@@ -240,6 +235,14 @@ union avs_notify_msg {
 	.msg_target = AVS_MOD_MSG,		\
 }
 
+#define AVS_NOTIFICATION(msg_type)		\
+{						\
+	.notify_msg_type = AVS_NOTIFY_##msg_type,\
+	.global_msg_type = AVS_GLB_NOTIFICATION,\
+	.msg_direction = AVS_MSG_REPLY,		\
+	.msg_target = AVS_FW_GEN_MSG,		\
+}
+
 #define avs_msg_is_reply(hdr) \
 ({ \
 	union avs_reply_msg __msg = AVS_MSG(hdr); \
@@ -306,8 +309,7 @@ int avs_ipc_get_pipeline_state(struct avs_dev *adev, u8 instance_id,
 int avs_ipc_init_instance(struct avs_dev *adev, u16 module_id, u8 instance_id,
 			  u8 ppl_id, u8 core_id, u8 domain,
 			  void *param, u32 param_size);
-int avs_ipc_delete_instance(struct avs_dev *adev, u16 module_id,
-			    u8 instance_id);
+int avs_ipc_delete_instance(struct avs_dev *adev, u16 module_id, u8 instance_id);
 int avs_ipc_bind(struct avs_dev *adev, u16 module_id, u8 instance_id,
 		 u16 dst_module_id, u8 dst_instance_id,
 		 u8 dst_queue, u8 src_queue);
@@ -319,16 +321,16 @@ int avs_ipc_set_large_config(struct avs_dev *adev, u16 module_id,
 			     u8 *request, size_t request_size);
 int avs_ipc_get_large_config(struct avs_dev *adev, u16 module_id, u8 instance_id,
 			     u8 param_id, u8 *request_data, size_t request_size,
-			     u8 **reply, size_t *reply_size);
+			     u8 **reply_data, size_t *reply_size);
 
-/* Power management messages */
+/* DSP cores and domains power management messages */
 struct avs_dxstate_info {
-	u32 core_mask;
-	u32 dx_mask;
+	u32 core_mask;	/* which cores are subject for power transition */
+	u32 dx_mask;	/* bit[n]=1 core n goes to D0, bit[n]=0 it goes to D3 */
 } __packed;
 
 int avs_ipc_set_dx(struct avs_dev *adev, u32 core_mask, bool powerup);
-int avs_ipc_set_d0ix(struct avs_dev *adev, bool enable_pg, bool flag);
+int avs_ipc_set_d0ix(struct avs_dev *adev, bool enable_pg, bool streaming);
 
 /* Base-firmware runtime parameters */
 
@@ -408,11 +410,6 @@ enum avs_fw_cfg_params {
 	AVS_FW_CFG_RESERVED,
 	AVS_FW_CFG_POWER_GATING_POLICY,
 	AVS_FW_CFG_ASSERT_MODE,
-};
-
-enum avs_alh_support_level {
-	ALH_NO_SUPPORT = 0x00000,
-	ALH_AVS_1_8_CNL = 0x10000,
 };
 
 struct avs_fw_cfg {

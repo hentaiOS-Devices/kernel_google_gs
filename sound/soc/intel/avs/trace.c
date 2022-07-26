@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Author: Cezary Rojewski <cezary.rojewski@intel.com>
 //         Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -12,7 +12,6 @@
 #include "trace.h"
 
 #define BYTES_PER_LINE 16
-
 #define MAX_CHUNK_SIZE ((PAGE_SIZE - 150) /* Place for trace header */	\
 			/ (2 * BYTES_PER_LINE + 4) /* chars per line */	\
 			* BYTES_PER_LINE)
@@ -25,7 +24,7 @@ void trace_avs_msg_payload(const void *data, size_t size)
 	while (remaining > 0) {
 		u32 chunk;
 
-		chunk = min(remaining, MAX_CHUNK_SIZE);
+		chunk = min(remaining, (size_t)MAX_CHUNK_SIZE);
 		trace_avs_ipc_msg_payload(data, chunk, offset, size);
 
 		remaining -= chunk;

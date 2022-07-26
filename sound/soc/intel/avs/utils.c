@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Authors: Cezary Rojewski <cezary.rojewski@intel.com>
 //          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -51,7 +51,7 @@ int avs_get_module_entry(struct avs_dev *adev, const guid_t *uuid, struct avs_mo
 	mutex_lock(&adev->modres_mutex);
 
 	idx = avs_module_entry_index(adev, uuid);
-	if (idx != -ENOENT)
+	if (idx >= 0)
 		memcpy(entry, &adev->mods_info->entries[idx], sizeof(*entry));
 
 	mutex_unlock(&adev->modres_mutex);
@@ -65,7 +65,7 @@ int avs_get_module_id_entry(struct avs_dev *adev, u32 module_id, struct avs_modu
 	mutex_lock(&adev->modres_mutex);
 
 	idx = avs_module_id_entry_index(adev, module_id);
-	if (idx != -ENOENT)
+	if (idx >= 0)
 		memcpy(entry, &adev->mods_info->entries[idx], sizeof(*entry));
 
 	mutex_unlock(&adev->modres_mutex);
@@ -81,14 +81,15 @@ int avs_get_module_id(struct avs_dev *adev, const guid_t *uuid)
 	return !ret ? module.module_id : -ENOENT;
 }
 
-int avs_is_module_ida_empty(struct avs_dev *adev, u32 module_id)
+bool avs_is_module_ida_empty(struct avs_dev *adev, u32 module_id)
 {
-	int idx, ret = false;
+	bool ret = false;
+	int idx;
 
 	mutex_lock(&adev->modres_mutex);
 
 	idx = avs_module_id_entry_index(adev, module_id);
-	if (idx != -ENOENT)
+	if (idx >= 0)
 		ret = ida_is_empty(adev->mod_idas[idx]);
 
 	mutex_unlock(&adev->modres_mutex);
@@ -96,7 +97,7 @@ int avs_is_module_ida_empty(struct avs_dev *adev, u32 module_id)
 }
 
 /* Caller responsible for holding adev->modres_mutex. */
-static void avs_module_id_destroy(struct avs_dev *adev)
+static void avs_module_ida_destroy(struct avs_dev *adev)
 {
 	int i = adev->mods_info ? adev->mods_info->count : 0;
 
@@ -132,8 +133,14 @@ avs_module_ida_alloc(struct avs_dev *adev, struct avs_mods_info *newinfo, bool p
 
 	for (i = tocopy_count; i < newinfo->count; i++) {
 		ida_ptrs[i] = kzalloc(sizeof(**ida_ptrs), GFP_KERNEL);
-		if (!ida_ptrs[i])
+		if (!ida_ptrs[i]) {
+			while (i--)
+				kfree(ida_ptrs[i]);
+
+			kfree(ida_ptrs);
 			return -ENOMEM;
+		}
+
 		ida_init(ida_ptrs[i]);
 	}
 
@@ -141,7 +148,7 @@ avs_module_ida_alloc(struct avs_dev *adev, struct avs_mods_info *newinfo, bool p
 	if (tocopy_count)
 		kfree(adev->mod_idas);
 	else
-		avs_module_id_destroy(adev);
+		avs_module_ida_destroy(adev);
 
 	adev->mod_idas = ida_ptrs;
 	return 0;
@@ -164,6 +171,7 @@ int avs_module_info_init(struct avs_dev *adev, bool purge)
 		goto exit;
 	}
 
+	/* Refresh current information with newly received table. */
 	kfree(adev->mods_info);
 	adev->mods_info = info;
 
@@ -176,7 +184,7 @@ void avs_module_info_free(struct avs_dev *adev)
 {
 	mutex_lock(&adev->modres_mutex);
 
-	avs_module_id_destroy(adev);
+	avs_module_ida_destroy(adev);
 	kfree(adev->mods_info);
 	adev->mods_info = NULL;
 
@@ -191,7 +199,7 @@ int avs_module_id_alloc(struct avs_dev *adev, u16 module_id)
 
 	idx = avs_module_id_entry_index(adev, module_id);
 	if (idx == -ENOENT) {
-		WARN(1, "invalid module id: %d", module_id);
+		dev_err(adev->dev, "invalid module id: %d", module_id);
 		ret = -EINVAL;
 		goto exit;
 	}
@@ -210,7 +218,7 @@ void avs_module_id_free(struct avs_dev *adev, u16 module_id, u8 instance_id)
 
 	idx = avs_module_id_entry_index(adev, module_id);
 	if (idx == -ENOENT) {
-		WARN(1, "invalid module id: %d", module_id);
+		dev_err(adev->dev, "invalid module id: %d", module_id);
 		goto exit;
 	}
 
@@ -262,6 +270,25 @@ int avs_request_firmware(struct avs_dev *adev, const struct firmware **fw_p, con
 	return 0;
 }
 
+/*
+ * Release single FW entry, used to handle errors in functions calling
+ * avs_request_firmware()
+ */
+void avs_release_last_firmware(struct avs_dev *adev)
+{
+	struct avs_fw_entry *entry;
+
+	entry = list_last_entry(&adev->fw_list, typeof(*entry), node);
+
+	list_del(&entry->node);
+	release_firmware(entry->fw);
+	kfree(entry->name);
+	kfree(entry);
+}
+
+/*
+ * Release all FW entries, used on driver removal
+ */
 void avs_release_firmwares(struct avs_dev *adev)
 {
 	struct avs_fw_entry *entry, *tmp;
@@ -274,8 +301,8 @@ void avs_release_firmwares(struct avs_dev *adev)
 	}
 }
 
-unsigned int __kfifo_fromio_locked(struct kfifo *fifo, const void __iomem *src,
-				   unsigned int len, spinlock_t *lock)
+unsigned int __kfifo_fromio_locked(struct kfifo *fifo, const void __iomem *src, unsigned int len,
+				   spinlock_t *lock)
 {
 	struct __kfifo *__fifo = &fifo->kfifo;
 	unsigned long flags;
@@ -288,6 +315,7 @@ unsigned int __kfifo_fromio_locked(struct kfifo *fifo, const void __iomem *src,
 
 	memcpy_fromio(__fifo->data + off, src, l);
 	memcpy_fromio(__fifo->data, src + l, len - l);
+	/* Make sure data copied from SRAM is visible to all CPUs. */
 	smp_mb();
 	__fifo->in += len;
 	spin_unlock_irqrestore(lock, flags);

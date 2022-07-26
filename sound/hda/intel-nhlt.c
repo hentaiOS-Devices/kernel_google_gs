@@ -4,9 +4,9 @@
 #include <linux/acpi.h>
 #include <sound/intel-nhlt.h>
 
-struct acpi_table_nhlt *intel_nhlt_init(struct device *dev)
+struct nhlt_acpi_table *intel_nhlt_init(struct device *dev)
 {
-	struct acpi_table_nhlt *nhlt;
+	struct nhlt_acpi_table *nhlt;
 	acpi_status status;
 
 	status = acpi_get_table(ACPI_SIG_NHLT, 0,
@@ -20,13 +20,13 @@ struct acpi_table_nhlt *intel_nhlt_init(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(intel_nhlt_init);
 
-void intel_nhlt_free(struct acpi_table_nhlt *nhlt)
+void intel_nhlt_free(struct nhlt_acpi_table *nhlt)
 {
 	acpi_put_table((struct acpi_table_header *)nhlt);
 }
 EXPORT_SYMBOL_GPL(intel_nhlt_free);
 
-int intel_nhlt_get_dmic_geo(struct device *dev, struct acpi_table_nhlt *nhlt)
+int intel_nhlt_get_dmic_geo(struct device *dev, struct nhlt_acpi_table *nhlt)
 {
 	struct nhlt_endpoint *epnt;
 	struct nhlt_dmic_array_config *cfg;
@@ -111,7 +111,7 @@ int intel_nhlt_get_dmic_geo(struct device *dev, struct acpi_table_nhlt *nhlt)
 }
 EXPORT_SYMBOL_GPL(intel_nhlt_get_dmic_geo);
 
-bool intel_nhlt_has_endpoint_type(struct acpi_table_nhlt *nhlt, u8 link_type)
+bool intel_nhlt_has_endpoint_type(struct nhlt_acpi_table *nhlt, u8 link_type)
 {
 	struct nhlt_endpoint *epnt;
 	int i;
@@ -177,7 +177,7 @@ static bool nhlt_check_ep_match(struct device *dev, struct nhlt_endpoint *epnt,
 }
 
 struct nhlt_specific_cfg *
-intel_nhlt_get_endpoint_blob(struct device *dev, struct acpi_table_nhlt *nhlt,
+intel_nhlt_get_endpoint_blob(struct device *dev, struct nhlt_acpi_table *nhlt,
 			     u32 bus_id, u8 link_type, u8 vbps, u8 bps,
 			     u8 num_ch, u32 rate, u8 dir, u8 dev_type)
 {

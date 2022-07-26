@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Authors: Cezary Rojewski <cezary.rojewski@intel.com>
 //          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -12,35 +12,8 @@
 #include "avs.h"
 #include "messages.h"
 
-irqreturn_t skl_dsp_irq_thread(struct avs_dev *adev)
-{
-	union avs_reply_msg msg;
-	u32 hipct, hipcte;
-
-	hipct = snd_hdac_adsp_readl(adev, SKL_ADSP_REG_HIPCT);
-	hipcte = snd_hdac_adsp_readl(adev, SKL_ADSP_REG_HIPCTE);
-
-	/* ensure DSP sent new response to process */
-	if (!(hipct & SKL_ADSP_HIPCT_BUSY))
-		return IRQ_NONE;
-
-	msg.primary = hipct;
-	msg.ext.val = hipcte;
-	avs_dsp_process_response(adev, msg.val);
-
-	/* tell DSP we accepted its message */
-	snd_hdac_adsp_updatel(adev, SKL_ADSP_REG_HIPCT,
-			      SKL_ADSP_HIPCT_BUSY, SKL_ADSP_HIPCT_BUSY);
-	/* unmask busy interrupt */
-	snd_hdac_adsp_updatel(adev, SKL_ADSP_REG_HIPCCTL,
-			      AZX_ADSP_HIPCCTL_BUSY, AZX_ADSP_HIPCCTL_BUSY);
-
-	return IRQ_HANDLED;
-}
-
-static int skl_enable_logs(struct avs_dev *adev, enum avs_log_enable enable,
-			   u32 aging_period, u32 fifo_full_period,
-			   unsigned long resource_mask, u32 *priorities)
+static int skl_enable_logs(struct avs_dev *adev, enum avs_log_enable enable, u32 aging_period,
+			   u32 fifo_full_period, unsigned long resource_mask, u32 *priorities)
 {
 	struct skl_log_state_info *info;
 	u32 size, num_cores = adev->hw_cfg.dsp_cores;
@@ -71,7 +44,7 @@ static int skl_enable_logs(struct avs_dev *adev, enum avs_log_enable enable,
 	return 0;
 }
 
-unsigned int skl_log_buffer_offset(struct avs_dev *adev, u32 core)
+int skl_log_buffer_offset(struct avs_dev *adev, u32 core)
 {
 	return core * avs_log_buffer_size(adev);
 }
@@ -80,7 +53,7 @@ unsigned int skl_log_buffer_offset(struct avs_dev *adev, u32 core)
 #define FW_REGS_DBG_LOG_WP(core) (0x30 + 0x4 * core)
 
 static int
-skl_log_buffer_status(struct avs_dev *adev, union avs_notify_msg msg)
+skl_log_buffer_status(struct avs_dev *adev, union avs_notify_msg *msg)
 {
 	unsigned long flags;
 	void __iomem *buf;
@@ -93,21 +66,20 @@ skl_log_buffer_status(struct avs_dev *adev, union avs_notify_msg msg)
 	}
 
 	size = avs_log_buffer_size(adev) / 2;
-	write = readl(avs_sram_addr(adev, AVS_FW_REGS_WINDOW) +
-			FW_REGS_DBG_LOG_WP(msg.log.core));
+	write = readl(avs_sram_addr(adev, AVS_FW_REGS_WINDOW) + FW_REGS_DBG_LOG_WP(msg->log.core));
 	/* determine buffer half */
 	offset = (write < size) ? size : 0;
 
-	buf = avs_log_buffer_addr(adev, msg.log.core) + offset;
-	__kfifo_fromio_locked(&adev->dbg.trace_fifo, buf, size,
-			      &adev->dbg.fifo_lock);
+	/* Address is guaranteed to exist in SRAM2. */
+	buf = avs_log_buffer_addr(adev, msg->log.core) + offset;
+	__kfifo_fromio_locked(&adev->dbg.trace_fifo, buf, size, &adev->dbg.fifo_lock);
 	wake_up(&adev->dbg.trace_waitq);
 	spin_unlock_irqrestore(&adev->dbg.trace_lock, flags);
 
 	return 0;
 }
 
-static int skl_coredump(struct avs_dev *adev, union avs_notify_msg msg)
+static int skl_coredump(struct avs_dev *adev, union avs_notify_msg *msg)
 {
 	u8 *dump;
 
@@ -138,10 +110,10 @@ const struct avs_dsp_ops skl_dsp_ops = {
 	.power = avs_dsp_core_power,
 	.reset = avs_dsp_core_reset,
 	.stall = avs_dsp_core_stall,
-	.irq_handler = avs_ipc_irq_handler,
-	.irq_thread = skl_dsp_irq_thread,
-	.int_control = avs_dsp_int_control,
-	.load_fw = avs_cldma_load_basefw,
+	.irq_handler = avs_dsp_irq_handler,
+	.irq_thread = avs_dsp_irq_thread,
+	.int_control = avs_dsp_interrupt_control,
+	.load_basefw = avs_cldma_load_basefw,
 	.load_lib = avs_cldma_load_library,
 	.transfer_mods = avs_cldma_transfer_modules,
 	.enable_logs = skl_enable_logs,
