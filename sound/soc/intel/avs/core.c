@@ -332,10 +332,13 @@ static int avs_hdac_acquire_irq(struct avs_dev *adev)
 {
 	struct hdac_bus *bus = &adev->base.core;
 	struct pci_dev *pci = to_pci_dev(bus->dev);
+	unsigned int flags = PCI_IRQ_LEGACY;
 	int ret;
 
 	/* request one and check that we only got one interrupt */
-	ret = pci_alloc_irq_vectors(pci, 1, 1, PCI_IRQ_MSI | PCI_IRQ_LEGACY);
+	if (!avs_platattr_test(adev, CLDMA))
+		flags |= PCI_IRQ_MSI;
+	ret = pci_alloc_irq_vectors(pci, 1, 1, flags);
 	if (ret != 1) {
 		dev_err(adev->dev, "Failed to allocate IRQ vector: %d\n", ret);
 		return ret;
