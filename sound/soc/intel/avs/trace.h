@@ -10,8 +10,7 @@
 
 TRACE_EVENT(avs_dsp_core_op,
 
-	TP_PROTO(unsigned int reg, unsigned int mask,
-		const char *op, bool flag),
+	TP_PROTO(unsigned int reg, unsigned int mask, const char *op, bool flag),
 
 	TP_ARGS(reg, mask, op, flag),
 
@@ -75,10 +74,8 @@ DECLARE_EVENT_CLASS(avs_ipc_msg_hdr,
 
 	TP_printk("primary: 0x%08X, extension: 0x%08X,\n"
 		  "fwstatus: 0x%08X, fwerror: 0x%08X",
-		  lower_32_bits(__entry->header),
-		  upper_32_bits(__entry->header),
-		  lower_32_bits(__entry->fwregs),
-		  upper_32_bits(__entry->fwregs))
+		  lower_32_bits(__entry->header), upper_32_bits(__entry->header),
+		  lower_32_bits(__entry->fwregs), upper_32_bits(__entry->fwregs))
 );
 
 DEFINE_EVENT(avs_ipc_msg_hdr, avs_ipc_request_msg,
@@ -118,7 +115,7 @@ TRACE_EVENT_CONDITION(avs_ipc_msg_payload,
 		__entry->total = total;
 	),
 
-	TP_printk("range %lu-%lu out of %lu bytes%s",
+	TP_printk("range %zu-%zu out of %zu bytes%s",
 		  __entry->offset, __entry->pos, __entry->total,
 		  __print_hex_dump("", DUMP_PREFIX_NONE, 16, 4,
 				   __get_dynamic_array(buf),
@@ -145,8 +142,7 @@ TRACE_EVENT(avs_d0ix,
 
 	TP_printk("%s%s for request: 0x%08X 0x%08X",
 		  __entry->proceed ? "" : "ignore ", __get_str(op),
-		  lower_32_bits(__entry->header),
-		  upper_32_bits(__entry->header))
+		  lower_32_bits(__entry->header), upper_32_bits(__entry->header))
 );
 
 #endif /* _TRACE_INTEL_AVS_H */

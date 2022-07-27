@@ -628,6 +628,14 @@ static int soc_tplg_init_kcontrol(struct soc_tplg *tplg,
 	return 0;
 }
 
+static int soc_tplg_control_ready(struct soc_tplg *tplg, struct snd_kcontrol *k,
+				  struct snd_soc_tplg_ctl_hdr *hdr)
+{
+	if (tplg->ops && tplg->ops->control_ready)
+		return tplg->ops->control_ready(tplg->comp, tplg->index, k, hdr);
+
+	return 0;
+}
 
 static int soc_tplg_create_tlv_db_scale(struct soc_tplg *tplg,
 	struct snd_kcontrol_new *kc, struct snd_soc_tplg_tlv_dbscale *scale)
@@ -749,7 +757,13 @@ static int soc_tplg_dbytes_create(struct soc_tplg *tplg, unsigned int count,
 		}
 
 		list_add(&sbe->dobj.list, &tplg->comp->dobj_list);
+		err = soc_tplg_control_ready(tplg, sbe->dobj.control.kcontrol, (struct snd_soc_tplg_ctl_hdr *)be);
+		if (err < 0) {
+			dev_err(tplg->dev, "ASoC: failed to ready %s\n", be->hdr.name);
+			break;
+		}
 	}
+
 	return err;
 
 }

@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Authors: Cezary Rojewski <cezary.rojewski@intel.com>
 //          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
 //
 
 #include <linux/acpi.h>
-#include <linux/debugfs.h>
 #include <linux/module.h>
 #include <linux/dmi.h>
 #include <linux/pci.h>
@@ -19,9 +18,9 @@
 #include <sound/soc-component.h>
 #include "avs.h"
 
-static bool ssp_loopback_test;
-module_param_named(ssp_loopback, ssp_loopback_test, bool, 0444);
-MODULE_PARM_DESC(ssp_loopback, "SSP loopback test 0=disabled, 1=enabled");
+static bool i2s_test;
+module_param(i2s_test, bool, 0444);
+MODULE_PARM_DESC(i2s_test, "Probe I2S test-board and skip all other I2S boards");
 
 static const struct dmi_system_id kbl_dmi_table[] = {
 	{
@@ -33,7 +32,7 @@ static const struct dmi_system_id kbl_dmi_table[] = {
 	{}
 };
 
-static const struct dmi_system_id kbl_r_dmi_table[] = {
+static const struct dmi_system_id kblr_dmi_table[] = {
 	{
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
@@ -70,25 +69,25 @@ static struct snd_soc_acpi_mach avs_skl_i2s_machines[] = {
 		.id = "INT343A",
 		.drv_name = "avs_rt286",
 		.link_mask = AVS_SSP(0),
-		.fw_filename = "skl-rt286-tplg.bin",
+		.tplg_filename = "rt286-tplg.bin",
 	},
 	{
 		.id = "10508825",
 		.drv_name = "avs_nau8825",
 		.link_mask = AVS_SSP(1),
-		.fw_filename = "skl-nau8825-tplg.bin",
+		.tplg_filename = "nau8825-tplg.bin",
 	},
 	{
 		.id = "INT343B",
 		.drv_name = "avs_ssm4567",
 		.link_mask = AVS_SSP(0),
-		.fw_filename = "skl-ssm4567-tplg.bin",
+		.tplg_filename = "ssm4567-tplg.bin",
 	},
 	{
 		.id = "MX98357A",
 		.drv_name = "avs_max98357a",
 		.link_mask = AVS_SSP(0),
-		.fw_filename = "skl-max98357a-tplg.bin",
+		.tplg_filename = "max98357a-tplg.bin",
 	},
 	{},
 };
@@ -100,15 +99,27 @@ static struct snd_soc_acpi_mach avs_kbl_i2s_machines[] = {
 		.link_mask = AVS_SSP(0),
 		.quirk_data = &kbl_dmi_table,
 		.machine_quirk = dmi_match_quirk,
-		.fw_filename = "kbl-rt286-tplg.bin",
+		.tplg_filename = "rt286-tplg.bin",
 	},
 	{
 		.id = "INT343A",
 		.drv_name = "avs_rt298",
 		.link_mask = AVS_SSP(0),
-		.quirk_data = &kbl_r_dmi_table,
+		.quirk_data = &kblr_dmi_table,
 		.machine_quirk = dmi_match_quirk,
-		.fw_filename = "kblr-rt298-tplg.bin",
+		.tplg_filename = "rt298-tplg.bin",
+	},
+	{
+		.id = "MX98373",
+		.drv_name = "avs_max98373",
+		.link_mask = AVS_SSP(0),
+		.tplg_filename = "max98373-tplg.bin",
+	},
+	{
+		.id = "DLGS7219",
+		.drv_name = "avs_da7219",
+		.link_mask = AVS_SSP(1),
+		.tplg_filename = "da7219-tplg.bin",
 	},
 	{},
 };
@@ -118,26 +129,26 @@ static struct snd_soc_acpi_mach avs_apl_i2s_machines[] = {
 		.id = "INT343A",
 		.drv_name = "avs_rt298",
 		.link_mask = AVS_SSP(5),
-		.fw_filename = "apl-rt298-tplg.bin",
+		.tplg_filename = "rt298-tplg.bin",
 	},
 	{
 		.id = "INT34C3",
 		.drv_name = "avs_tdf8532",
 		.link_mask = AVS_SSP_RANGE(0, 5),
 		.pdata = (unsigned long[]){ 0, 0, 0x14, 0, 0, 0 }, /* SSP2 TDMs */
-		.fw_filename = "apl-tdf8532-tplg.bin",
+		.tplg_filename = "tdf8532-tplg.bin",
 	},
 	{
 		.id = "MX98357A",
 		.drv_name = "avs_max98357a",
 		.link_mask = AVS_SSP(5),
-		.fw_filename = "apl-max98357a-tplg.bin",
+		.tplg_filename = "max98357a-tplg.bin",
 	},
 	{
 		.id = "DLGS7219",
 		.drv_name = "avs_da7219",
 		.link_mask = AVS_SSP(1),
-		.fw_filename = "apl-da7219-tplg.bin",
+		.tplg_filename = "da7219-tplg.bin",
 	},
 	{},
 };
@@ -147,41 +158,41 @@ static struct snd_soc_acpi_mach avs_gml_i2s_machines[] = {
 		.id = "INT343A",
 		.drv_name = "avs_rt298",
 		.link_mask = AVS_SSP(2),
-		.fw_filename = "gml-rt298-tplg.bin",
+		.tplg_filename = "rt298-tplg.bin",
 	},
 	{},
 };
 
 static struct snd_soc_acpi_mach avs_test_i2s_machines[] = {
 	{
-		.drv_name = "avs_ssp_loopback",
+		.drv_name = "avs_i2s_test",
 		.link_mask = AVS_SSP(0),
-		.fw_filename = "avs_ssp0_loopback.bin",
+		.tplg_filename = "i2s-test-tplg.bin",
 	},
 	{
-		.drv_name = "avs_ssp_loopback",
+		.drv_name = "avs_i2s_test",
 		.link_mask = AVS_SSP(1),
-		.fw_filename = "avs_ssp1_loopback.bin",
+		.tplg_filename = "i2s-test-tplg.bin",
 	},
 	{
-		.drv_name = "avs_ssp_loopback",
+		.drv_name = "avs_i2s_test",
 		.link_mask = AVS_SSP(2),
-		.fw_filename = "avs_ssp2_loopback.bin",
+		.tplg_filename = "i2s-test-tplg.bin",
 	},
 	{
-		.drv_name = "avs_ssp_loopback",
+		.drv_name = "avs_i2s_test",
 		.link_mask = AVS_SSP(3),
-		.fw_filename = "avs_ssp3_loopback.bin",
+		.tplg_filename = "i2s-test-tplg.bin",
 	},
 	{
-		.drv_name = "avs_ssp_loopback",
+		.drv_name = "avs_i2s_test",
 		.link_mask = AVS_SSP(4),
-		.fw_filename = "avs_ssp4_loopback.bin",
+		.tplg_filename = "i2s-test-tplg.bin",
 	},
 	{
-		.drv_name = "avs_ssp_loopback",
+		.drv_name = "avs_i2s_test",
 		.link_mask = AVS_SSP(5),
-		.fw_filename = "avs_ssp5_loopback.bin",
+		.tplg_filename = "i2s-test-tplg.bin",
 	},
 	/* no NULL terminator, as we depend on ARRAY SIZE due to .id == NULL */
 };
@@ -207,7 +218,7 @@ static const struct avs_acpi_boards *avs_get_i2s_boards(struct avs_dev *adev)
 {
 	int id, i;
 
-	id = adev->bus.pci->device;
+	id = adev->base.pci->device;
 	for (i = 0; i < ARRAY_SIZE(i2s_boards); i++)
 		if (i2s_boards[i].id == id)
 			return &i2s_boards[i];
@@ -220,22 +231,10 @@ static void board_pdev_unregister(void *data)
 	platform_device_unregister(data);
 }
 
-static const struct dmi_system_id dmic_dmi_table[] = {
-	{
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "Example vendor"),
-			DMI_MATCH(DMI_BOARD_NAME, "Example RandomLake"),
-		},
-		.driver_data = "example-tplg.bin",
-	},
-	{}
-};
-
 static int avs_register_dmic_board(struct avs_dev *adev)
 {
 	struct platform_device *codec, *board;
-	struct snd_soc_acpi_mach mach = {0};
-	const struct dmi_system_id *dmi_id;
+	struct snd_soc_acpi_mach mach = {{0}};
 	int ret;
 
 	if (!adev->nhlt ||
@@ -244,8 +243,7 @@ static int avs_register_dmic_board(struct avs_dev *adev)
 		return 0;
 	}
 
-	codec = platform_device_register_simple("dmic-codec",
-						PLATFORM_DEVID_NONE, NULL, 0);
+	codec = platform_device_register_simple("dmic-codec", PLATFORM_DEVID_NONE, NULL, 0);
 	if (IS_ERR(codec)) {
 		dev_err(adev->dev, "dmic codec register failed\n");
 		return PTR_ERR(codec);
@@ -261,15 +259,10 @@ static int avs_register_dmic_board(struct avs_dev *adev)
 	if (ret < 0)
 		return ret;
 
-	dmi_id = dmi_first_match(dmic_dmi_table);
-	if (dmi_id)
-		mach.fw_filename = dmi_id->driver_data;
-	else
-		mach.fw_filename = "dmic-tplg.bin";
+	mach.tplg_filename = "dmic-tplg.bin";
 	mach.mach_params.platform = "dmic-platform";
 
-	board = platform_device_register_data(NULL, "avs_dmic",
-					PLATFORM_DEVID_NONE,
+	board = platform_device_register_data(NULL, "avs_dmic", PLATFORM_DEVID_NONE,
 					(const void *)&mach, sizeof(mach));
 	if (IS_ERR(board)) {
 		dev_err(adev->dev, "dmic board register failed\n");
@@ -285,8 +278,7 @@ static int avs_register_dmic_board(struct avs_dev *adev)
 	return 0;
 }
 
-static int avs_register_i2s_board(struct avs_dev *adev,
-				  struct snd_soc_acpi_mach *mach)
+static int avs_register_i2s_board(struct avs_dev *adev, struct snd_soc_acpi_mach *mach)
 {
 	struct platform_device *board;
 	int num_ssps;
@@ -296,24 +288,23 @@ static int avs_register_i2s_board(struct avs_dev *adev,
 	num_ssps = adev->hw_cfg.i2s_caps.ctrl_count;
 	if (fls(mach->link_mask) > num_ssps) {
 		dev_err(adev->dev, "Platform supports %d SSPs but board %s requires SSP%ld\n",
-			num_ssps, mach->drv_name, __fls(mach->link_mask));
+			num_ssps, mach->drv_name, (unsigned long)__fls(mach->link_mask));
 		return -ENODEV;
 	}
 
-	name = devm_kasprintf(adev->dev, GFP_KERNEL,
-			      "%s.%d-platform", mach->drv_name, mach->link_mask);
+	name = devm_kasprintf(adev->dev, GFP_KERNEL, "%s.%d-platform", mach->drv_name,
+			      mach->link_mask);
 	if (!name)
 		return -ENOMEM;
 
-	ret = avs_ssp_platform_register(adev, name, mach->link_mask, mach->pdata);
+	ret = avs_i2s_platform_register(adev, name, mach->link_mask, mach->pdata);
 	if (ret < 0)
 		return ret;
 
 	mach->mach_params.platform = name;
 
-	board = platform_device_register_data(NULL, mach->drv_name,
-					mach->link_mask,
-					(const void *)mach, sizeof(*mach));
+	board = platform_device_register_data(NULL, mach->drv_name, mach->link_mask,
+					      (const void *)mach, sizeof(*mach));
 	if (IS_ERR(board)) {
 		dev_err(adev->dev, "ssp board register failed\n");
 		return PTR_ERR(board);
@@ -339,21 +330,20 @@ static int avs_register_i2s_boards(struct avs_dev *adev)
 		return 0;
 	}
 
-	if (ssp_loopback_test) {
+	if (i2s_test) {
 		int i, num_ssps;
 
 		num_ssps = adev->hw_cfg.i2s_caps.ctrl_count;
 		/* constrain just in case FW says there can be more SSPs than possible */
-		num_ssps = min_t(int, ARRAY_SIZE(avs_test_i2s_machines),
-				 num_ssps);
+		num_ssps = min_t(int, ARRAY_SIZE(avs_test_i2s_machines), num_ssps);
 
 		mach = avs_test_i2s_machines;
 
 		for (i = 0; i < num_ssps; i++) {
 			ret = avs_register_i2s_board(adev, &mach[i]);
 			if (ret < 0)
-				dev_warn(adev->dev, "register i2s %s failed: %d\n",
-					 mach->drv_name, ret);
+				dev_warn(adev->dev, "register i2s %s failed: %d\n", mach->drv_name,
+					 ret);
 		}
 		return 0;
 	}
@@ -374,8 +364,7 @@ static int avs_register_i2s_boards(struct avs_dev *adev)
 
 		ret = avs_register_i2s_board(adev, mach);
 		if (ret < 0)
-			dev_warn(adev->dev, "register i2s %s failed: %d\n",
-				 mach->drv_name, ret);
+			dev_warn(adev->dev, "register i2s %s failed: %d\n", mach->drv_name, ret);
 	}
 
 	return 0;
@@ -383,14 +372,13 @@ static int avs_register_i2s_boards(struct avs_dev *adev)
 
 static int avs_register_hda_board(struct avs_dev *adev, struct hda_codec *codec)
 {
-	struct snd_soc_acpi_mach mach = {0};
+	struct snd_soc_acpi_mach mach = {{0}};
 	struct platform_device *board;
 	struct hdac_device *hdev = &codec->core;
 	char *pname;
 	int ret, id;
 
-	pname = devm_kasprintf(adev->dev, GFP_KERNEL, "%s-platform",
-			       dev_name(&hdev->dev));
+	pname = devm_kasprintf(adev->dev, GFP_KERNEL, "%s-platform", dev_name(&hdev->dev));
 	if (!pname)
 		return -ENOMEM;
 
@@ -400,14 +388,14 @@ static int avs_register_hda_board(struct avs_dev *adev, struct hda_codec *codec)
 
 	mach.pdata = codec;
 	mach.mach_params.platform = pname;
-	mach.fw_filename = devm_kasprintf(adev->dev, GFP_KERNEL,
-					  "hda-%08x-tplg.bin", hdev->vendor_id);
-	if (!mach.fw_filename)
+	mach.tplg_filename = devm_kasprintf(adev->dev, GFP_KERNEL, "hda-%08x-tplg.bin",
+					    hdev->vendor_id);
+	if (!mach.tplg_filename)
 		return -ENOMEM;
 
-	id = adev->bus.core.idx * HDA_MAX_CODECS + hdev->addr;
-	board = platform_device_register_data(NULL, "avs_hdaudio", id,
-					(const void *)&mach, sizeof(mach));
+	id = adev->base.core.idx * HDA_MAX_CODECS + hdev->addr;
+	board = platform_device_register_data(NULL, "avs_hdaudio", id, (const void *)&mach,
+					      sizeof(mach));
 	if (IS_ERR(board)) {
 		dev_err(adev->dev, "hda board register failed\n");
 		return PTR_ERR(board);
@@ -424,8 +412,8 @@ static int avs_register_hda_board(struct avs_dev *adev, struct hda_codec *codec)
 
 static int avs_register_hda_boards(struct avs_dev *adev)
 {
-	struct hdac_bus *bus = &adev->bus.core;
-	struct hdac_device *hdev, *save;
+	struct hdac_bus *bus = &adev->base.core;
+	struct hdac_device *hdev;
 	int ret;
 
 	if (!bus->num_codecs) {
@@ -433,7 +421,7 @@ static int avs_register_hda_boards(struct avs_dev *adev)
 		return 0;
 	}
 
-	list_for_each_entry_safe(hdev, save, &bus->codec_list, list) {
+	list_for_each_entry(hdev, &bus->codec_list, list) {
 		struct hda_codec *codec;
 
 		codec = dev_to_hda_codec(&hdev->dev);

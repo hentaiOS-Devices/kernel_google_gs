@@ -2,6 +2,7 @@
 #ifndef __SOUND_HDAUDIO_EXT_H
 #define __SOUND_HDAUDIO_EXT_H
 
+#include <linux/io-64-nonatomic-lo-hi.h>
 #include <linux/iopoll.h>
 #include <sound/hdaudio.h>
 
@@ -94,7 +95,6 @@ void snd_hdac_ext_stream_decouple_locked(struct hdac_bus *bus,
 				  struct hdac_ext_stream *azx_dev, bool decouple);
 void snd_hdac_ext_stream_decouple(struct hdac_bus *bus,
 				struct hdac_ext_stream *azx_dev, bool decouple);
-void snd_hdac_ext_stop_streams(struct hdac_bus *bus);
 
 int snd_hdac_ext_stream_set_spib(struct hdac_bus *bus,
 				 struct hdac_ext_stream *stream, u32 value);
@@ -146,25 +146,22 @@ void snd_hdac_ext_bus_link_power(struct hdac_device *codec, bool enable);
 	writew(((readw(addr + reg) & ~(mask)) | (val)), \
 		addr + reg)
 
-#define snd_hdac_reg_writeq(bus, addr, val)	writeq(val, addr)
-#define snd_hdac_reg_readq(bus, addr)		readq(addr)
-
 #define snd_hdac_adsp_writeb(chip, reg, value) \
-	snd_hdac_reg_writeb(chip, (chip)->adsp_ba + (reg), value)
+	snd_hdac_reg_writeb(chip, (chip)->dsp_ba + (reg), value)
 #define snd_hdac_adsp_readb(chip, reg) \
-	snd_hdac_reg_readb(chip, (chip)->adsp_ba + (reg))
+	snd_hdac_reg_readb(chip, (chip)->dsp_ba + (reg))
 #define snd_hdac_adsp_writew(chip, reg, value) \
-	snd_hdac_reg_writew(chip, (chip)->adsp_ba + (reg), value)
+	snd_hdac_reg_writew(chip, (chip)->dsp_ba + (reg), value)
 #define snd_hdac_adsp_readw(chip, reg) \
-	snd_hdac_reg_readw(chip, (chip)->adsp_ba + (reg))
+	snd_hdac_reg_readw(chip, (chip)->dsp_ba + (reg))
 #define snd_hdac_adsp_writel(chip, reg, value) \
-	snd_hdac_reg_writel(chip, (chip)->adsp_ba + (reg), value)
+	snd_hdac_reg_writel(chip, (chip)->dsp_ba + (reg), value)
 #define snd_hdac_adsp_readl(chip, reg) \
-	snd_hdac_reg_readl(chip, (chip)->adsp_ba + (reg))
+	snd_hdac_reg_readl(chip, (chip)->dsp_ba + (reg))
 #define snd_hdac_adsp_writeq(chip, reg, value) \
-	snd_hdac_reg_writeq(chip, (chip)->adsp_ba + (reg), value)
+	snd_hdac_reg_writeq(chip, (chip)->dsp_ba + (reg), value)
 #define snd_hdac_adsp_readq(chip, reg) \
-	snd_hdac_reg_readq(chip, (chip)->adsp_ba + (reg))
+	snd_hdac_reg_readq(chip, (chip)->dsp_ba + (reg))
 
 #define snd_hdac_adsp_updateb(chip, reg, mask, val) \
 	snd_hdac_adsp_writeb(chip, reg, \
@@ -180,16 +177,16 @@ void snd_hdac_ext_bus_link_power(struct hdac_device *codec, bool enable);
 			(snd_hdac_adsp_readq(chip, reg) & ~(mask)) | (val))
 
 #define snd_hdac_adsp_readb_poll(chip, reg, val, cond, delay_us, timeout_us) \
-	readb_poll_timeout((chip)->adsp_ba + (reg), val, cond, \
+	readb_poll_timeout((chip)->dsp_ba + (reg), val, cond, \
 			   delay_us, timeout_us)
 #define snd_hdac_adsp_readw_poll(chip, reg, val, cond, delay_us, timeout_us) \
-	readw_poll_timeout((chip)->adsp_ba + (reg), val, cond, \
+	readw_poll_timeout((chip)->dsp_ba + (reg), val, cond, \
 			   delay_us, timeout_us)
 #define snd_hdac_adsp_readl_poll(chip, reg, val, cond, delay_us, timeout_us) \
-	readl_poll_timeout((chip)->adsp_ba + (reg), val, cond, \
+	readl_poll_timeout((chip)->dsp_ba + (reg), val, cond, \
 			   delay_us, timeout_us)
 #define snd_hdac_adsp_readq_poll(chip, reg, val, cond, delay_us, timeout_us) \
-	readq_poll_timeout((chip)->adsp_ba + (reg), val, cond, \
+	readq_poll_timeout((chip)->dsp_ba + (reg), val, cond, \
 			   delay_us, timeout_us)
 #define snd_hdac_stream_readb_poll(strm, reg, val, cond, delay_us, timeout_us) \
 	readb_poll_timeout((strm)->sd_addr + AZX_REG_ ## reg, val, cond, \

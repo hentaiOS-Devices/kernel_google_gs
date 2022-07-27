@@ -16,6 +16,7 @@
 #include <uapi/linux/input-event-codes.h>
 #include "../../../codecs/da7219.h"
 #include "../../../codecs/da7219-aad.h"
+#include "../../common/soc-intel-quirks.h"
 
 #define DA7219_DAI_NAME		"da7219-hifi"
 
@@ -81,7 +82,10 @@ static int avs_da7219_codec_init(struct snd_soc_pcm_runtime *runtime)
 	int ret;
 
 	jack = snd_soc_card_get_drvdata(card);
-	clk_freq = 19200000;
+	if (soc_intel_is_apl())
+		clk_freq = 19200000;
+	else /* kbl */
+		clk_freq = 24576000;
 
 	ret = snd_soc_dai_set_sysclk(codec_dai, DA7219_CLKSRC_MCLK, clk_freq,
 				     SND_SOC_CLOCK_IN);

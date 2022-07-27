@@ -890,7 +890,6 @@ static void snd_hda_codec_dev_release(struct device *dev)
  * snd_hda_codec_device_init - allocate HDA codec device
  * @bus: codec's parent bus
  * @codec_addr: the codec address on the parent bus
- * @codecp: the pointer to store the generated codec
  * @fmt: format string for the device's name
  *
  * Returns newly allocated codec device or ERR_PTR() on failure.
@@ -976,7 +975,6 @@ int snd_hda_codec_device_new(struct hda_bus *bus, struct snd_card *card,
 	codec->core.dev.release = snd_hda_codec_dev_release;
 	codec->core.exec_verb = codec_exec_verb;
 
-	codec->bus = bus;
 	codec->card = card;
 	codec->addr = codec_addr;
 	mutex_init(&codec->spdif_mutex);

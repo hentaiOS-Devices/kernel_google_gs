@@ -617,7 +617,7 @@ static int hda_init(struct snd_sof_dev *sdev)
 
 static int check_nhlt_dmic(struct snd_sof_dev *sdev)
 {
-	struct acpi_table_nhlt *nhlt;
+	struct nhlt_acpi_table *nhlt;
 	int dmic_num;
 
 	nhlt = intel_nhlt_init(sdev->dev);

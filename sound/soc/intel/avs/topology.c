@@ -16,13 +16,21 @@
 #include "kcontrol.h"
 #include "topology.h"
 
-/* Vendor tuples extensions */
+/* Get pointer to vendor array at the specified offset. */
 #define avs_tplg_vendor_array_at(array, offset) \
 	((struct snd_soc_tplg_vendor_array *)((u8 *)array + offset))
 
+/* Get pointer to vendor array that is next in line. */
 #define avs_tplg_vendor_array_next(array) \
 	(avs_tplg_vendor_array_at(array, le32_to_cpu((array)->size)))
 
+/*
+ * Scan provided block of tuples for the specified token. If found,
+ * @offset is updated with position at which first matching token is
+ * located.
+ *
+ * Returns 0 on success, -ENOENT if not found and error code otherwise.
+ */
 static int
 avs_tplg_vendor_array_lookup(struct snd_soc_tplg_vendor_array *tuples,
 			     u32 block_size, u32 token, u32 *offset)
@@ -50,6 +58,15 @@ avs_tplg_vendor_array_lookup(struct snd_soc_tplg_vendor_array *tuples,
 	return -ENOENT;
 }
 
+/*
+ * See avs_tplg_vendor_array_lookup() for description.
+ *
+ * Behaves exactly like avs_tplg_vendor_lookup() but starts from the
+ * next vendor array in line. Useful when searching for the finish line
+ * of an arbitrary entry in a list of entries where each is composed of
+ * several vendor tuples and a specific token marks the beginning of
+ * a new entry block.
+ */
 static int
 avs_tplg_vendor_array_lookup_next(struct snd_soc_tplg_vendor_array *tuples,
 				  u32 block_size, u32 token, u32 *offset)
@@ -69,6 +86,16 @@ avs_tplg_vendor_array_lookup_next(struct snd_soc_tplg_vendor_array *tuples,
 	return ret;
 }
 
+/*
+ * Scan provided block of tuples for the specified token which marks
+ * the border of an entry block. Behavior is similar to
+ * avs_tplg_vendor_array_lookup() except 0 is also returned if no
+ * matching token has been found. In such case, returned @size is
+ * assigned to @block_size as the entire block belongs to the current
+ * entry.
+ *
+ * Returns 0 on success, error code otherwise.
+ */
 static int
 avs_tplg_vendor_entry_size(struct snd_soc_tplg_vendor_array *tuples,
 			   u32 block_size, u32 entry_id_token, u32 *size)
@@ -84,6 +111,14 @@ avs_tplg_vendor_entry_size(struct snd_soc_tplg_vendor_array *tuples,
 	return ret;
 }
 
+/*
+ * Vendor tuple parsing descriptor.
+ *
+ * @token: vendor specific token that identifies tuple
+ * @type: tuple type, one of SND_SOC_TPLG_TUPLE_TYPE_XXX
+ * @offset: offset of a struct's field to initialize
+ * @parse: parsing function, extracts and assigns value to object's field
+ */
 struct avs_tplg_token_parser {
 	enum avs_tplg_token token;
 	u32 type;
@@ -280,7 +315,7 @@ static int avs_parse_tokens(struct snd_soc_component *comp, void *object,
 		}
 
 		if (ret) {
-			dev_err(comp->dev, "parsing %ld tokens of %d type failed: %d\n",
+			dev_err(comp->dev, "parsing %zu tokens of %d type failed: %d\n",
 				count, tuples->type, ret);
 			return ret;
 		}
@@ -343,7 +378,10 @@ static int parse_link_formatted_string(struct snd_soc_component *comp, void *ele
 	struct snd_soc_acpi_mach *mach = dev_get_platdata(comp->card->dev);
 	char *val = (char *)((u8 *)object + offset);
 
-	/* dynamic naming supported only for topologies describing single device */
+	/*
+	 * Dynamic naming - string formats, e.g.: ssp%d - supported only for
+	 * topologies describing single device e.g.: an I2S codec on SSP0.
+	 */
 	if (hweight_long(mach->link_mask) != 1)
 		return avs_parse_string_token(comp, elem, object, offset);
 
@@ -1006,6 +1044,12 @@ static const struct avs_tplg_token_parser module_parsers[] = {
 		.offset = offsetof(struct avs_tplg_module, cfg_ext),
 		.parse = avs_parse_modcfg_ext_ptr,
 	},
+	{
+		.token = AVS_TKN_MOD_KCTRL_ID_U32,
+		.type = SND_SOC_TPLG_TUPLE_TYPE_WORD,
+		.offset = offsetof(struct avs_tplg_module, kctrl_id),
+		.parse = avs_parse_word_token,
+	},
 };
 
 static struct avs_tplg_module *
@@ -1363,7 +1407,7 @@ avs_tplg_path_template_create(struct snd_soc_component *comp, struct avs_tplg *o
 	if (!template)
 		return ERR_PTR(-ENOMEM);
 
-	template->owner = owner; /* Used when building sysfs hierarchy. */
+	template->owner = owner; /* Used to access component tplg is assigned to. */
 	INIT_LIST_HEAD(&template->path_list);
 	INIT_LIST_HEAD(&template->node);
 
@@ -1434,7 +1478,7 @@ static int avs_route_load(struct snd_soc_component *comp, int index,
 	char buf[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	u32 port;
 
-	/* dynamic naming supported only for topologies describing single device */
+	/* See parse_link_formatted_string() for dynamic naming when(s). */
 	if (hweight_long(mach->link_mask) == 1) {
 		port = __ffs(mach->link_mask);
 
@@ -1460,20 +1504,16 @@ static int avs_widget_load(struct snd_soc_component *comp, int index,
 	struct avs_soc_component *acomp = to_avs_soc_component(comp);
 	struct avs_tplg *tplg;
 
-	if (!w || !dw) {
-		dev_dbg(comp->dev, "something was definitely NULL..\n");
-		return 0;
-	}
-
 	if (!le32_to_cpu(dw->priv.size))
 		return 0;
 
 	tplg = acomp->tplg;
 	mach = dev_get_platdata(comp->card->dev);
 
-	/* dynamic naming supported only for topologies describing single device */
+	/* See parse_link_formatted_string() for dynamic naming when(s). */
 	if (hweight_long(mach->link_mask) == 1) {
 		kfree(w->name);
+		/* w->name is freed later by soc_tplg_dapm_widget_create() */
 		w->name = kasprintf(GFP_KERNEL, dw->name, __ffs(mach->link_mask));
 		if (!w->name)
 			return -ENOMEM;
@@ -1492,9 +1532,8 @@ static int avs_widget_load(struct snd_soc_component *comp, int index,
 	return 0;
 }
 
-static int avs_widget_ready(struct snd_soc_component *comp, int index,
-			    struct snd_soc_dapm_widget *w,
-			    struct snd_soc_tplg_dapm_widget *dw)
+static int avs_register_volume_kcontrols(struct snd_soc_component *comp,
+					 struct snd_soc_dapm_widget *w)
 {
 	struct avs_tplg_path_template *template = w->priv;
 	struct avs_tplg_pipeline *pipeline;
@@ -1581,6 +1620,73 @@ static int avs_widget_ready(struct snd_soc_component *comp, int index,
 	return 0;
 }
 
+/*
+ * topology creates kcontrols, and tells which modules use them, but they need
+ * to be connected somehow that is performed by following functions
+ * avs_connect_tlv_kcontrols() looks for modules which expect kcontrol to be
+ * created and avs_connect_module_kctrl() connects modules to those kcontrols
+ */
+static int avs_connect_module_kctrl(struct snd_soc_component *comp, struct avs_tplg_module *module)
+{
+	struct avs_soc_component *acomp = to_avs_soc_component(comp);
+	struct avs_tplg *tplg = acomp->tplg;
+	struct avs_tplg_kctrl *tplg_kctrl;
+	int ret = -EINVAL;
+
+	list_for_each_entry(tplg_kctrl, &tplg->kctrl_list, node) {
+		if (tplg_kctrl->id == module->kctrl_id) {
+			module->kctrl = tplg_kctrl->kctrl;
+			ret = 0;
+			break; /* only one control per module */
+		}
+	}
+
+	return ret;
+}
+
+static int avs_connect_tlv_kcontrols(struct snd_soc_component *comp, struct snd_soc_dapm_widget *w)
+{
+	struct avs_tplg_path_template *template = w->priv;
+	struct avs_tplg_pipeline *pipeline;
+	struct avs_tplg_module *module;
+	struct avs_tplg_path *path;
+	int ret = 0;
+
+	list_for_each_entry(path, &template->path_list, node) {
+		list_for_each_entry(pipeline, &path->ppl_list, node) {
+			list_for_each_entry(module, &pipeline->mod_list, node) {
+				if (module->kctrl_id) { /* kctrl_id==0 means no topology kcontrol */
+					ret = avs_connect_module_kctrl(comp, module);
+					if (ret)
+						goto out;
+				}
+			}
+		}
+	}
+
+out:
+	return ret;
+}
+
+static int avs_widget_ready(struct snd_soc_component *comp, int index,
+			    struct snd_soc_dapm_widget *w,
+			    struct snd_soc_tplg_dapm_widget *dw)
+{
+	int ret;
+
+	ret = avs_register_volume_kcontrols(comp, w);
+	if (ret < 0) {
+		dev_err(comp->dev, "failed to register volume kcontrol: %d\n", ret);
+		return ret;
+	}
+
+	ret = avs_connect_tlv_kcontrols(comp, w);
+	if (ret < 0)
+		dev_err(comp->dev, "failed to register TLV kcontrol: %d\n", ret);
+
+	return ret;
+}
+
 static int avs_dai_load(struct snd_soc_component *comp, int index,
 			struct snd_soc_dai_driver *dai_drv, struct snd_soc_tplg_pcm *pcm,
 			struct snd_soc_dai *dai)
@@ -1594,11 +1700,12 @@ static int avs_link_load(struct snd_soc_component *comp, int index, struct snd_s
 			 struct snd_soc_tplg_link_config *cfg)
 {
 	if (!link->no_pcm) {
-		/* Open link pipes last and close them first to prevent xruns. */
+		/* Stream control handled by IPCs. */
+		link->nonatomic = true;
+
+		/* Open LINK (BE) pipes last and close them first to prevent xruns. */
 		link->trigger[0] = SND_SOC_DPCM_TRIGGER_PRE;
 		link->trigger[1] = SND_SOC_DPCM_TRIGGER_PRE;
-
-		link->nonatomic = true;
 	}
 
 	return 0;
@@ -1741,13 +1848,75 @@ static int avs_manifest(struct snd_soc_component *comp, int index,
 	return avs_tplg_parse_condpath_templates(comp, tuples, remaining);
 }
 
+static const struct snd_soc_tplg_bytes_ext_ops avs_bytes_ext_ops[] = {
+	{ 256, NULL, avs_tlv_control_set },
+};
+
+static const struct avs_tplg_token_parser kctrl_parsers[] = {
+	{
+		.token = AVS_TKN_KCONTROL_ID_U32,
+		.type = SND_SOC_TPLG_TUPLE_TYPE_WORD,
+		.offset = offsetof(struct avs_tplg_kctrl, id),
+		.parse = avs_parse_word_token,
+	},
+};
+
+int avs_control_ready(struct snd_soc_component *comp, int index, struct snd_kcontrol *kctrl,
+		      struct snd_soc_tplg_ctl_hdr *tplg_ctl_hdr)
+{
+	struct avs_soc_component *acomp = to_avs_soc_component(comp);
+	struct snd_soc_tplg_bytes_control *tplg_bytes_control;
+	struct snd_soc_tplg_vendor_array *tuples;
+	struct avs_kcontrol_data *kctrl_data;
+	struct avs_tplg_kctrl *template;
+	u32 block_size;
+
+	/* allocate struct to keep data */
+	kctrl_data = devm_kzalloc(comp->card->dev, sizeof(*kctrl_data), GFP_KERNEL);
+	/* allocate data for linking with module during widget data parsing */
+	template = devm_kzalloc(comp->card->dev, sizeof(*template), GFP_KERNEL);
+	if (!kctrl_data || !template)
+		return -ENOMEM;
+
+	kctrl_data->adev = to_avs_dev(comp->dev);
+
+	tplg_bytes_control = container_of(tplg_ctl_hdr, struct snd_soc_tplg_bytes_control, hdr);
+	tuples = tplg_bytes_control->priv.array;
+	block_size = tplg_bytes_control->priv.size;
+
+	/* parse topology to find id */
+	if (block_size) {
+		int ret;
+		/* we expect only 1 control */
+		ret = parse_dictionary_entries(comp, tuples, block_size, template, 1,
+					       sizeof(*template), AVS_TKN_KCONTROL_ID_U32,
+					       kctrl_parsers, ARRAY_SIZE(kctrl_parsers));
+		if (ret)
+			return ret;
+	}
+
+	/* link created kcontrol to id */
+	template->kctrl = kctrl;
+
+	/* add to list of kcontrols, will be used to link kcontrol and widget on widget creation */
+	list_add_tail(&template->node, &acomp->tplg->kctrl_list);
+
+	/* tell kcontrol where we will keep data */
+	kctrl->private_data = kctrl_data;
+
+	return 0;
+}
+
 static struct snd_soc_tplg_ops avs_tplg_ops = {
-	.dapm_route_load = avs_route_load,
-	.widget_load	= avs_widget_load,
-	.widget_ready	= avs_widget_ready,
-	.dai_load	= avs_dai_load,
-	.link_load	= avs_link_load,
-	.manifest	= avs_manifest,
+	.bytes_ext_ops		= avs_bytes_ext_ops,
+	.bytes_ext_ops_count	= ARRAY_SIZE(avs_bytes_ext_ops),
+	.control_ready		= avs_control_ready,
+	.dapm_route_load	= avs_route_load,
+	.widget_load		= avs_widget_load,
+	.widget_ready		= avs_widget_ready,
+	.dai_load		= avs_dai_load,
+	.link_load		= avs_link_load,
+	.manifest		= avs_manifest,
 };
 
 struct avs_tplg *avs_tplg_new(struct snd_soc_component *comp)
@@ -1760,6 +1929,7 @@ struct avs_tplg *avs_tplg_new(struct snd_soc_component *comp)
 
 	tplg->comp = comp;
 	INIT_LIST_HEAD(&tplg->path_tmpl_list);
+	INIT_LIST_HEAD(&tplg->kctrl_list);
 
 	return tplg;
 }
@@ -1776,14 +1946,11 @@ int avs_load_topology(struct snd_soc_component *comp, const char *filename)
 	}
 
 	ret = snd_soc_tplg_component_load(comp, &avs_tplg_ops, fw);
-	if (ret < 0) {
+	if (ret < 0)
 		dev_err(comp->dev, "load topology \"%s\" failed: %d\n", filename, ret);
-		release_firmware(fw);
-		return ret;
-	}
 
 	release_firmware(fw);
-	return 0;
+	return ret;
 }
 
 int avs_remove_topology(struct snd_soc_component *comp)

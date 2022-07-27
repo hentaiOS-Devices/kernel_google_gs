@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2021 Intel Corporation. All rights reserved.
+// Copyright(c) 2021-2022 Intel Corporation. All rights reserved.
 //
 // Authors: Cezary Rojewski <cezary.rojewski@intel.com>
 //          Amadeusz Slawinski <amadeuszx.slawinski@linux.intel.com>
@@ -11,63 +11,89 @@
 #include "registers.h"
 #include "trace.h"
 
-#define AVS_ADSPCS_INTERVAL_MS		500
-#define AVS_ADSPCS_TIMEOUT_MS		50000
+#define AVS_ADSPCS_INTERVAL_US		500
+#define AVS_ADSPCS_TIMEOUT_US		50000
+#define AVS_ADSPCS_DELAY_US		1000
 
-int avs_dsp_core_power(struct avs_dev *adev, u32 core_mask, bool active)
+int avs_dsp_core_power(struct avs_dev *adev, u32 core_mask, bool power)
 {
 	u32 value, mask, reg;
+	int ret;
 
-	value = snd_hdac_adsp_readl(adev, AZX_ADSP_REG_ADSPCS);
-	trace_avs_dsp_core_op(value, core_mask, "power", active);
+	value = snd_hdac_adsp_readl(adev, AVS_ADSP_REG_ADSPCS);
+	trace_avs_dsp_core_op(value, core_mask, "power", power);
 
-	mask = AZX_ADSPCS_SPA_MASK(core_mask);
-	value = active ? mask : 0;
+	mask = AVS_ADSPCS_SPA_MASK(core_mask);
+	value = power ? mask : 0;
 
-	snd_hdac_adsp_updatel(adev, AZX_ADSP_REG_ADSPCS, mask, value);
+	snd_hdac_adsp_updatel(adev, AVS_ADSP_REG_ADSPCS, mask, value);
+	/* Delay the polling to avoid false positives. */
+	usleep_range(AVS_ADSPCS_DELAY_US, 2 * AVS_ADSPCS_DELAY_US);
 
-	value = active ? AZX_ADSPCS_CPA_MASK(core_mask) : 0;
+	mask = AVS_ADSPCS_CPA_MASK(core_mask);
+	value = power ? mask : 0;
 
-	return snd_hdac_adsp_readl_poll(adev, AZX_ADSP_REG_ADSPCS,
-					reg, (reg & value) == value,
-					AVS_ADSPCS_INTERVAL_MS,
-					AVS_ADSPCS_TIMEOUT_MS);
+	ret = snd_hdac_adsp_readl_poll(adev, AVS_ADSP_REG_ADSPCS,
+				       reg, (reg & mask) == value,
+				       AVS_ADSPCS_INTERVAL_US,
+				       AVS_ADSPCS_TIMEOUT_US);
+	if (ret)
+		dev_err(adev->dev, "core_mask %d power %s failed: %d\n",
+			core_mask, power ? "on" : "off", ret);
+
+	return ret;
 }
 
 int avs_dsp_core_reset(struct avs_dev *adev, u32 core_mask, bool reset)
 {
 	u32 value, mask, reg;
+	int ret;
 
-	value = snd_hdac_adsp_readl(adev, AZX_ADSP_REG_ADSPCS);
+	value = snd_hdac_adsp_readl(adev, AVS_ADSP_REG_ADSPCS);
 	trace_avs_dsp_core_op(value, core_mask, "reset", reset);
 
-	mask = AZX_ADSPCS_CRST_MASK(core_mask);
+	mask = AVS_ADSPCS_CRST_MASK(core_mask);
 	value = reset ? mask : 0;
 
-	snd_hdac_adsp_updatel(adev, AZX_ADSP_REG_ADSPCS, mask, value);
+	snd_hdac_adsp_updatel(adev, AVS_ADSP_REG_ADSPCS, mask, value);
 
-	return snd_hdac_adsp_readl_poll(adev, AZX_ADSP_REG_ADSPCS,
-					reg, (reg & value) == value,
-					AVS_ADSPCS_INTERVAL_MS,
-					AVS_ADSPCS_TIMEOUT_MS);
+	ret = snd_hdac_adsp_readl_poll(adev, AVS_ADSP_REG_ADSPCS,
+				       reg, (reg & mask) == value,
+				       AVS_ADSPCS_INTERVAL_US,
+				       AVS_ADSPCS_TIMEOUT_US);
+	if (ret)
+		dev_err(adev->dev, "core_mask %d %s reset failed: %d\n",
+			core_mask, reset ? "enter" : "exit", ret);
+
+	return ret;
 }
 
 int avs_dsp_core_stall(struct avs_dev *adev, u32 core_mask, bool stall)
 {
 	u32 value, mask, reg;
+	int ret;
 
-	value = snd_hdac_adsp_readl(adev, AZX_ADSP_REG_ADSPCS);
+	value = snd_hdac_adsp_readl(adev, AVS_ADSP_REG_ADSPCS);
 	trace_avs_dsp_core_op(value, core_mask, "stall", stall);
 
-	mask = AZX_ADSPCS_CSTALL_MASK(core_mask);
+	mask = AVS_ADSPCS_CSTALL_MASK(core_mask);
 	value = stall ? mask : 0;
 
-	snd_hdac_adsp_updatel(adev, AZX_ADSP_REG_ADSPCS, mask, value);
+	snd_hdac_adsp_updatel(adev, AVS_ADSP_REG_ADSPCS, mask, value);
 
-	return snd_hdac_adsp_readl_poll(adev, AZX_ADSP_REG_ADSPCS,
-					reg, (reg & value) == value,
-					AVS_ADSPCS_INTERVAL_MS,
-					AVS_ADSPCS_TIMEOUT_MS);
+	ret = snd_hdac_adsp_readl_poll(adev, AVS_ADSP_REG_ADSPCS,
+				       reg, (reg & mask) == value,
+				       AVS_ADSPCS_INTERVAL_US,
+				       AVS_ADSPCS_TIMEOUT_US);
+	if (ret) {
+		dev_err(adev->dev, "core_mask %d %sstall failed: %d\n",
+			core_mask, stall ? "" : "un", ret);
+		return ret;
+	}
+
+	/* Give HW time to propagate the change. */
+	usleep_range(AVS_ADSPCS_DELAY_US, 2 * AVS_ADSPCS_DELAY_US);
+	return 0;
 }
 
 int avs_dsp_core_enable(struct avs_dev *adev, u32 core_mask)
@@ -76,147 +102,125 @@ int avs_dsp_core_enable(struct avs_dev *adev, u32 core_mask)
 
 	ret = avs_dsp_op(adev, power, core_mask, true);
 	if (ret)
-		dev_warn(adev->dev, "core_mask %d power failed: %d\n",
-			 core_mask, ret);
+		return ret;
 
 	ret = avs_dsp_op(adev, reset, core_mask, false);
 	if (ret)
-		dev_warn(adev->dev, "core_mask %d reset failed: %d\n",
-			 core_mask, ret);
+		return ret;
 
 	return avs_dsp_op(adev, stall, core_mask, false);
 }
 
 int avs_dsp_core_disable(struct avs_dev *adev, u32 core_mask)
 {
-	int ret;
-
-	ret = avs_dsp_op(adev, stall, core_mask, true);
-	if (ret)
-		dev_warn(adev->dev, "core_mask %d stall failed: %d\n",
-			core_mask, ret);
-
-	ret = avs_dsp_op(adev, reset, core_mask, true);
-	if (ret)
-		dev_warn(adev->dev, "core_mask %d reset failed: %d\n",
-			core_mask, ret);
+	/* No error checks to allow for complete DSP shutdown. */
+	avs_dsp_op(adev, stall, core_mask, true);
+	avs_dsp_op(adev, reset, core_mask, true);
 
 	return avs_dsp_op(adev, power, core_mask, false);
 }
 
-int avs_dsp_enable(struct avs_dev *adev, u32 core_mask)
+static int avs_dsp_enable(struct avs_dev *adev, u32 core_mask)
 {
-	const struct avs_spec *const spec = adev->spec;
 	u32 mask;
 	int ret;
 
 	ret = avs_dsp_core_enable(adev, core_mask);
-	if (ret < 0) {
-		dev_err(adev->dev, "core_mask %08x enable failed: %d\n",
-			core_mask, ret);
+	if (ret < 0)
 		return ret;
-	}
 
-	mask = core_mask & ~(spec->master_mask);
+	mask = core_mask & ~AVS_MAIN_CORE_MASK;
 	if (!mask)
 		/*
-		 * without master core, fw is dead anyway
+		 * without main core, fw is dead anyway
 		 * so setting D0 for it is futile.
 		 */
 		return 0;
 
 	ret = avs_ipc_set_dx(adev, mask, true);
-	if (ret) {
-		dev_err(adev->dev, "set d0 failed: %d\n", ret);
-		return AVS_IPC_RET(ret);
-	}
-
-	return 0;
+	return AVS_IPC_RET(ret);
 }
 
-int avs_dsp_disable(struct avs_dev *adev, u32 core_mask)
+static int avs_dsp_disable(struct avs_dev *adev, u32 core_mask)
 {
 	int ret;
 
 	ret = avs_ipc_set_dx(adev, core_mask, false);
-	if (ret) {
-		dev_err(adev->dev, "set d3 failed: %d\n", ret);
+	if (ret)
 		return AVS_IPC_RET(ret);
-	}
 
-	ret = avs_dsp_core_disable(adev, core_mask);
-	if (ret < 0) {
-		dev_err(adev->dev, "core_mask %08x disable failed: %d\n",
-			core_mask, ret);
-		return ret;
-	}
-
-	return 0;
+	return avs_dsp_core_disable(adev, core_mask);
 }
 
-int avs_dsp_get_core(struct avs_dev *adev, u32 core_id)
+static int avs_dsp_get_core(struct avs_dev *adev, u32 core_id)
 {
-	const struct avs_spec *const spec = adev->spec;
-	atomic_t *ref;
 	u32 mask;
 	int ret;
 
 	mask = BIT_MASK(core_id);
-	if (mask == spec->master_mask)
-		/* nothing to do for master */
+	if (mask == AVS_MAIN_CORE_MASK)
+		/* nothing to do for main core */
 		return 0;
-	if (core_id >= adev->hw_cfg.dsp_cores)
-		return -EINVAL;
+	if (core_id >= adev->hw_cfg.dsp_cores) {
+		ret = -EINVAL;
+		goto err;
+	}
 
-	ref = &adev->core_refs[core_id];
-	if (atomic_add_return(1, ref) == 1) {
+	adev->core_refs[core_id]++;
+	if (adev->core_refs[core_id] == 1) {
 		/*
-		 * No cores other than master_mask can be running for DSP
+		 * No cores other than main-core can be running for DSP
 		 * to achieve d0ix. Conscious SET_D0IX IPC failure is permitted,
 		 * simply d0ix power state will no longer be attempted.
 		 */
 		ret = avs_dsp_disable_d0ix(adev);
 		if (ret && ret != -AVS_EIPC)
-			goto err;
+			goto err_disable_d0ix;
 
 		ret = avs_dsp_enable(adev, mask);
-		if (ret) {
-			avs_dsp_enable_d0ix(adev);
-			goto err;
-		}
+		if (ret)
+			goto err_enable_dsp;
 	}
 
 	return 0;
+
+err_enable_dsp:
+	avs_dsp_enable_d0ix(adev);
+err_disable_d0ix:
+	adev->core_refs[core_id]--;
 err:
-	atomic_dec(ref);
+	dev_err(adev->dev, "get core %d failed: %d\n", core_id, ret);
 	return ret;
 }
 
-int avs_dsp_put_core(struct avs_dev *adev, u32 core_id)
+static int avs_dsp_put_core(struct avs_dev *adev, u32 core_id)
 {
-	const struct avs_spec *const spec = adev->spec;
-	atomic_t *ref;
 	u32 mask;
 	int ret;
 
 	mask = BIT_MASK(core_id);
-	if (mask == spec->master_mask)
-		/* nothing to do for master */
+	if (mask == AVS_MAIN_CORE_MASK)
+		/* nothing to do for main core */
 		return 0;
-	if (core_id >= adev->hw_cfg.dsp_cores)
-		return -EINVAL;
+	if (core_id >= adev->hw_cfg.dsp_cores) {
+		ret = -EINVAL;
+		goto err;
+	}
 
-	ref = &adev->core_refs[core_id];
-	if (atomic_dec_and_test(ref)) {
+	adev->core_refs[core_id]--;
+	if (!adev->core_refs[core_id]) {
 		ret = avs_dsp_disable(adev, mask);
 		if (ret)
-			return ret;
+			goto err;
 
 		/* Match disable_d0ix in avs_dsp_get_core(). */
 		avs_dsp_enable_d0ix(adev);
 	}
 
 	return 0;
+err:
+	dev_err(adev->dev, "put core %d failed: %d\n", core_id, ret);
+	return ret;
 }
 
 int avs_dsp_init_module(struct avs_dev *adev, u16 module_id, u8 ppl_instance_id,
@@ -232,19 +236,19 @@ int avs_dsp_init_module(struct avs_dev *adev, u16 module_id, u8 ppl_instance_id,
 		return id;
 
 	ret = avs_get_module_id_entry(adev, module_id, &mentry);
+	if (ret)
+		goto err_mod_entry;
 
 	ret = avs_dsp_get_core(adev, core_id);
-	if (ret) {
-		dev_err(adev->dev, "get core failed: %d\n", ret);
-		goto err_core;
-	}
+	if (ret)
+		goto err_mod_entry;
 
 	/* Load code into memory if this is the first instance. */
 	if (!id && !avs_module_entry_is_loaded(&mentry)) {
 		ret = avs_dsp_op(adev, transfer_mods, true, &mentry, 1);
 		if (ret) {
 			dev_err(adev->dev, "load modules failed: %d\n", ret);
-			goto err_core;
+			goto err_mod_entry;
 		}
 		was_loaded = true;
 	}
@@ -252,7 +256,6 @@ int avs_dsp_init_module(struct avs_dev *adev, u16 module_id, u8 ppl_instance_id,
 	ret = avs_ipc_init_instance(adev, module_id, id, ppl_instance_id,
 				    core_id, domain, param, param_size);
 	if (ret) {
-		dev_err(adev->dev, "init instance failed: %d\n", ret);
 		ret = AVS_IPC_RET(ret);
 		goto err_ipc;
 	}
@@ -264,7 +267,7 @@ err_ipc:
 	if (was_loaded)
 		avs_dsp_op(adev, transfer_mods, false, &mentry, 1);
 	avs_dsp_put_core(adev, core_id);
-err_core:
+err_mod_entry:
 	avs_module_id_free(adev, module_id, id);
 	return ret;
 }
@@ -275,7 +278,7 @@ void avs_dsp_delete_module(struct avs_dev *adev, u16 module_id, u16 instance_id,
 	struct avs_module_entry mentry;
 	int ret;
 
-	/* Unowned modules need their resources freed explicitly. */
+	/* Modules not owned by any pipeline need to be freed explicitly. */
 	if (ppl_instance_id == INVALID_PIPELINE_ID)
 		avs_ipc_delete_instance(adev, module_id, instance_id);
 
@@ -291,9 +294,7 @@ void avs_dsp_delete_module(struct avs_dev *adev, u16 module_id, u16 instance_id,
 		}
 	}
 
-	ret = avs_dsp_put_core(adev, core_id);
-	if (ret)
-		dev_err(adev->dev, "put core failed: %d\n", ret);
+	avs_dsp_put_core(adev, core_id);
 }
 
 int avs_dsp_create_pipeline(struct avs_dev *adev, u16 req_size, u8 priority,
@@ -306,10 +307,8 @@ int avs_dsp_create_pipeline(struct avs_dev *adev, u16 req_size, u8 priority,
 	if (id < 0)
 		return id;
 
-	ret = avs_ipc_create_pipeline(adev, req_size, priority, id, lp,
-				      attributes);
+	ret = avs_ipc_create_pipeline(adev, req_size, priority, id, lp, attributes);
 	if (ret) {
-		dev_err(adev->dev, "create pipeline failed: %d\n", ret);
 		ida_free(&adev->ppl_ida, id);
 		return AVS_IPC_RET(ret);
 	}
@@ -323,10 +322,8 @@ int avs_dsp_delete_pipeline(struct avs_dev *adev, u8 instance_id)
 	int ret;
 
 	ret = avs_ipc_delete_pipeline(adev, instance_id);
-	if (ret) {
-		dev_err(adev->dev, "delete pipeline failed: %d\n", ret);
+	if (ret)
 		ret = AVS_IPC_RET(ret);
-	}
 
 	ida_free(&adev->ppl_ida, instance_id);
 	return ret;
