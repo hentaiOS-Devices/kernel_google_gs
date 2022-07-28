@@ -2053,6 +2053,12 @@ static int mt_reset(struct hid_device *hdev)
 	struct mt_device *td = hid_get_drvdata(hdev);
 	struct hid_haptic_device *haptic = td->haptic;
 
+	if (!device_is_registered(&hdev->dev))
+		return 0;
+
+	if (!(hdev->claimed & HID_CLAIMED_INPUT))
+		return -ENODEV;
+
 	mt_release_contacts(hdev);
 	mt_set_modes(hdev, HID_LATENCY_NORMAL, true, true);
 
@@ -2464,9 +2470,9 @@ static struct hid_driver mt_driver = {
 #ifdef CONFIG_PM
 	.suspend = mt_suspend,
 	.reset_resume = mt_reset_resume,
-	.reset = mt_reset,
 	.resume = mt_resume,
 #endif
+	.reset = mt_reset,
 };
 
 static int __init mt_init(void)
