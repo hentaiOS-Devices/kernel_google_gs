@@ -20,6 +20,8 @@
 #include "acp.h"
 #include "acp-dsp-offset.h"
 
+#define ACP_CLKMUX_SEL	0x1424
+
 static int smn_write(struct pci_dev *dev, u32 smn_addr, u32 data)
 {
 	pci_write_config_dword(dev, 0x60, smn_addr);
@@ -414,6 +416,8 @@ static int acp_reset(struct snd_sof_dev *sdev)
 					    ACP_REG_POLL_INTERVAL, ACP_REG_POLL_TIMEOUT_US);
 	if (ret < 0)
 		dev_err(sdev->dev, "timeout in releasing reset\n");
+
+	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_CLKMUX_SEL, 0x03);
 
 	return ret;
 }
