@@ -5,6 +5,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/debugfs.h>
+#include <linux/firmware.h>
 #include <linux/vmalloc.h>
 
 #include "t7xx_hif_cldma.h"
@@ -377,7 +378,7 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 {
 	struct t7xx_devlink *dl = devlink_priv(devlink);
 	const char *component = params->component;
-	const struct firmware *fw = params->fw;
+	const struct firmware *fw;
 	char flash_event[T7XX_FB_EVENT_SIZE];
 	struct t7xx_port *port;
 	int ret;
@@ -395,26 +396,35 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 		goto err_out;
 	}
 
-	if (!component || !fw->data) {
+	if (!component) {
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	set_bit(T7XX_FLASH_STATUS, &dl->status);
+	
+	devlink_flash_update_begin_notify(devlink);
+	ret = request_firmware(&fw, params->file_name, devlink->dev);
+	if (ret) {
+		dev_dbg(port->dev, "requested firmware file not found");
+		return ret;
+	}
+
 	dev_dbg(port->dev, "flash partition name:%s binary size:%zu\n", component, fw->size);
 	ret = t7xx_devlink_fb_flash_partition(component, fw->data, port, fw->size);
 	if (ret) {
 		devlink_flash_update_status_notify(devlink, "flashing failure!",
-						   params->component, 0, 0);
+						   params->component, 1, fw->size);
 		snprintf(flash_event, sizeof(flash_event), "%s for [%s]",
 			 T7XX_UEVENT_FLASHING_FAILURE, params->component);
 	} else {
 		devlink_flash_update_status_notify(devlink, "flashing success!",
-						   params->component, 0, 0);
+						   params->component, 1, fw->size);
 		snprintf(flash_event, sizeof(flash_event), "%s for [%s]",
 			 T7XX_UEVENT_FLASHING_SUCCESS, params->component);
 	}
 
+	devlink_flash_update_end_notify(devlink);
 	t7xx_uevent_send(dl->dev, flash_event);
 
 err_out:
@@ -553,13 +563,12 @@ int t7xx_devlink_register(struct t7xx_pci_dev *t7xx_dev)
 {
 	struct devlink *dl_ctx;
 
-	dl_ctx = devlink_alloc(&devlink_flash_ops, sizeof(struct t7xx_devlink),
-			       &t7xx_dev->pdev->dev);
+	dl_ctx = devlink_alloc(&devlink_flash_ops, sizeof(struct t7xx_devlink));
 	if (!dl_ctx)
 		return -ENOMEM;
 
 	devlink_set_features(dl_ctx, DEVLINK_F_RELOAD);
-	devlink_register(dl_ctx);
+	devlink_register(dl_ctx, &t7xx_dev->pdev->dev);
 	t7xx_dev->dl = devlink_priv(dl_ctx);
 	t7xx_dev->dl->dl_ctx = dl_ctx;
 
