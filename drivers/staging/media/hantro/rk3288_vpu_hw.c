@@ -54,6 +54,19 @@ static const struct hantro_fmt rk3288_vpu_enc_fmts[] = {
 			.step_height = MB_DIM,
 		},
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_VP8,
+		.codec_mode = HANTRO_MODE_VP8_ENC,
+		.max_depth = 2,
+		.frmsize = {
+			.min_width = 96,
+			.max_width = 1920,
+			.step_width = MB_DIM,
+			.min_height = 96,
+			.max_height = 1088,
+			.step_height = MB_DIM,
+		},
+	},
 };
 
 static const struct hantro_fmt rk3288_vpu_postproc_fmts[] = {
@@ -178,9 +191,14 @@ static const struct hantro_codec_ops rk3288_vpu_codec_ops[] = {
 	[HANTRO_MODE_JPEG_ENC] = {
 		.run = hantro_h1_jpeg_enc_run,
 		.reset = rk3288_vpu_enc_reset,
-		.init = hantro_jpeg_enc_init,
-		.done = hantro_jpeg_enc_done,
-		.exit = hantro_jpeg_enc_exit,
+		.done = hantro_h1_jpeg_enc_done,
+	},
+	[HANTRO_MODE_VP8_ENC] = {
+		.run = hantro_h1_vp8_enc_run,
+		.reset = rk3288_vpu_enc_reset,
+		.init = hantro_vp8_enc_init,
+		.done = hantro_vp8_enc_done,
+		.exit = hantro_vp8_enc_exit,
 	},
 	[HANTRO_MODE_H264_DEC] = {
 		.run = hantro_g1_h264_dec_run,
@@ -225,8 +243,8 @@ const struct hantro_variant rk3288_vpu_variant = {
 	.postproc_fmts = rk3288_vpu_postproc_fmts,
 	.num_postproc_fmts = ARRAY_SIZE(rk3288_vpu_postproc_fmts),
 	.postproc_regs = &hantro_g1_postproc_regs,
-	.codec = HANTRO_JPEG_ENCODER | HANTRO_MPEG2_DECODER |
-		 HANTRO_VP8_DECODER | HANTRO_H264_DECODER,
+	.codec = HANTRO_JPEG_ENCODER | HANTRO_VP8_ENCODER |
+		 HANTRO_MPEG2_DECODER | HANTRO_VP8_DECODER | HANTRO_H264_DECODER,
 	.codec_ops = rk3288_vpu_codec_ops,
 	.irqs = rk3288_irqs,
 	.num_irqs = ARRAY_SIZE(rk3288_irqs),

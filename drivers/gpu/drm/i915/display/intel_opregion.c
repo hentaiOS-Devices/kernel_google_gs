@@ -30,10 +30,9 @@
 #include <linux/firmware.h>
 #include <acpi/video.h>
 
-#include "display/intel_panel.h"
-
 #include "i915_drv.h"
 #include "intel_acpi.h"
+#include "intel_backlight.h"
 #include "intel_display_types.h"
 #include "intel_opregion.h"
 
@@ -195,6 +194,8 @@ struct opregion_asle_ext {
 #define ASLE_IUER_VOLUME_UP_BTN		(1 << 2)
 #define ASLE_IUER_WINDOWS_BTN		(1 << 1)
 #define ASLE_IUER_POWER_BTN		(1 << 0)
+
+#define ASLE_PHED_EDID_VALID_MASK	0x3
 
 /* Software System Control Interrupt (SWSCI) */
 #define SWSCI_SCIC_INDICATOR		(1 << 0)
@@ -361,6 +362,21 @@ int intel_opregion_notify_encoder(struct intel_encoder *intel_encoder,
 		port++;
 	}
 
+	/*
+	 * The port numbering and mapping here is bizarre. The now-obsolete
+	 * swsci spec supports ports numbered [0..4]. Port E is handled as a
+	 * special case, but port F and beyond are not. The functionality is
+	 * supposed to be obsolete for new platforms. Just bail out if the port
+	 * number is out of bounds after mapping.
+	 */
+	if (port > 4) {
+		drm_dbg_kms(&dev_priv->drm,
+			    "[ENCODER:%d:%s] port %c (index %u) out of bounds for display power state notification\n",
+			    intel_encoder->base.base.id, intel_encoder->base.name,
+			    port_name(intel_encoder->port), port);
+		return -EINVAL;
+	}
+
 	if (!enable)
 		parm |= 4 << 8;
 
@@ -450,7 +466,7 @@ static u32 asle_set_backlight(struct drm_i915_private *dev_priv, u32 bclp)
 		    bclp);
 	drm_connector_list_iter_begin(dev, &conn_iter);
 	for_each_intel_connector_iter(connector, &conn_iter)
-		intel_panel_set_backlight_acpi(connector->base.state, bclp, 255);
+		intel_backlight_set_acpi(connector->base.state, bclp, 255);
 	drm_connector_list_iter_end(&conn_iter);
 	asle->cblv = DIV_ROUND_UP(bclp * 100, 255) | ASLE_CBLV_VALID;
 
@@ -797,6 +813,60 @@ static const struct dmi_system_id intel_no_opregion_vbt[] = {
 	{ }
 };
 
+static int chromebook_broken_opregion_version_callback(const struct dmi_system_id *id)
+{
+	size_t idx;
+	static const enum dmi_field fields[] = {
+		DMI_BIOS_VENDOR,
+		DMI_BIOS_VERSION,
+		DMI_BIOS_DATE,
+		DMI_BIOS_RELEASE,
+		DMI_SYS_VENDOR,
+		DMI_PRODUCT_NAME,
+		DMI_PRODUCT_VERSION,
+		DMI_PRODUCT_FAMILY
+	};
+	static const char * const strings[] = {
+		"DMI_BIOS_VENDOR",
+		"DMI_BIOS_VERSION",
+		"DMI_BIOS_DATE",
+		"DMI_BIOS_RELEASE",
+		"DMI_SYS_VENDOR",
+		"DMI_PRODUCT_NAME",
+		"DMI_PRODUCT_VERSION",
+		"DMI_PRODUCT_FAMILY"
+	};
+
+	for (idx = 0; idx < ARRAY_SIZE(fields); idx++)
+		DRM_INFO("DMI info: %s %s\n", strings[idx],
+			 dmi_get_system_info(fields[idx]));
+
+	return 1;
+}
+
+static const struct dmi_system_id chromebook_broken_opregion_version[] = {
+	{
+		.callback = chromebook_broken_opregion_version_callback,
+		.ident = "Chromebook Coral",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Google"),
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Coral"),
+		},
+	},
+	{
+		.callback = chromebook_broken_opregion_version_callback,
+		.ident = "Chromebook baseboard Reef",
+		.matches = {
+			/*
+			 * There are many vendors of the Reef-based devices,
+			 * so it is enough to use the product family wildcard.
+			 */
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Reef"),
+		},
+	},
+	{ }
+};
+
 static int intel_load_vbt_firmware(struct drm_i915_private *dev_priv)
 {
 	struct intel_opregion *opregion = &dev_priv->opregion;
@@ -909,14 +979,36 @@ int intel_opregion_setup(struct drm_i915_private *dev_priv)
 		opregion->asle->ardy = ASLE_ARDY_NOT_READY;
 	}
 
-	if (mboxes & MBOX_ASLE_EXT)
+	if (mboxes & MBOX_ASLE_EXT) {
 		drm_dbg(&dev_priv->drm, "ASLE extension supported\n");
+		opregion->asle_ext = base + OPREGION_ASLE_EXT_OFFSET;
+	}
 
 	if (intel_load_vbt_firmware(dev_priv) == 0)
 		goto out;
 
 	if (dmi_check_system(intel_no_opregion_vbt))
 		goto out;
+
+	if (dmi_check_system(chromebook_broken_opregion_version)) {
+		typeof(opregion->header->over) *over = &(opregion->header->over);
+		u8 tmp;
+
+		if (over->major == 0 && over->minor == 0 &&
+		    over->revision == 0 && over->rsvd == 2) {
+			drm_info(&dev_priv->drm,
+				 "Quirk: swapping fields in opregion %hhu %hhu %hhu %hhu\n",
+				 over->major, over->minor, over->revision, over->rsvd);
+
+			tmp = over->rsvd;
+			over->rsvd = over->major;
+			over->major = tmp;
+
+			tmp = over->revision;
+			over->revision = over->minor;
+			over->minor = tmp;
+		}
+	}
 
 	if (opregion->header->over.major >= 2 && opregion->asle &&
 	    opregion->asle->rvda && opregion->asle->rvds) {
@@ -1037,6 +1129,54 @@ intel_opregion_get_panel_type(struct drm_i915_private *dev_priv)
 	return ret - 1;
 }
 
+/**
+ * intel_opregion_get_edid - Fetch EDID from ACPI OpRegion mailbox #5
+ * @intel_connector: eDP connector
+ *
+ * This reads the ACPI Opregion mailbox #5 to extract the EDID that is passed
+ * to it.
+ *
+ * Returns:
+ * The EDID in the OpRegion, or NULL if there is none or it's invalid.
+ *
+ */
+struct edid *intel_opregion_get_edid(struct intel_connector *intel_connector)
+{
+	struct drm_connector *connector = &intel_connector->base;
+	struct drm_i915_private *i915 = to_i915(connector->dev);
+	struct intel_opregion *opregion = &i915->opregion;
+	const void *in_edid;
+	const struct edid *edid;
+	struct edid *new_edid;
+	int len;
+
+	if (!opregion->asle_ext)
+		return NULL;
+
+	in_edid = opregion->asle_ext->bddc;
+
+	/* Validity corresponds to number of 128-byte blocks */
+	len = (opregion->asle_ext->phed & ASLE_PHED_EDID_VALID_MASK) * 128;
+	if (!len || !memchr_inv(in_edid, 0, len))
+		return NULL;
+
+	edid = in_edid;
+
+	if (len < EDID_LENGTH * (1 + edid->extensions)) {
+		drm_dbg_kms(&i915->drm, "Invalid EDID in ACPI OpRegion (Mailbox #5): too short\n");
+		return NULL;
+	}
+	new_edid = drm_edid_duplicate(edid);
+	if (!new_edid)
+		return NULL;
+	if (!drm_edid_is_valid(new_edid)) {
+		kfree(new_edid);
+		drm_dbg_kms(&i915->drm, "Invalid EDID in ACPI OpRegion (Mailbox #5)\n");
+		return NULL;
+	}
+	return new_edid;
+}
+
 void intel_opregion_register(struct drm_i915_private *i915)
 {
 	struct intel_opregion *opregion = &i915->opregion;
@@ -1077,6 +1217,9 @@ void intel_opregion_resume(struct drm_i915_private *i915)
 		opregion->asle->tche = ASLE_TCHE_BLC_EN;
 		opregion->asle->ardy = ASLE_ARDY_READY;
 	}
+
+	/* Some platforms abuse the _DSM to enable MUX */
+	intel_dsm_get_bios_data_funcs_supported(i915);
 
 	intel_opregion_notify_adapter(i915, PCI_D0);
 }
@@ -1127,6 +1270,7 @@ void intel_opregion_unregister(struct drm_i915_private *i915)
 	opregion->acpi = NULL;
 	opregion->swsci = NULL;
 	opregion->asle = NULL;
+	opregion->asle_ext = NULL;
 	opregion->vbt = NULL;
 	opregion->lid_state = NULL;
 }

@@ -142,6 +142,7 @@ struct mtk_cam_dev_node_desc {
 	u8 num_fmts;
 	u8 default_fmt_idx;
 	u8 max_buf_count;
+	u8 cached_mmap;
 	const struct v4l2_ioctl_ops *ioctl_ops;
 	const struct v4l2_format *fmts;
 	const struct v4l2_frmsizeenum *frmsizes;

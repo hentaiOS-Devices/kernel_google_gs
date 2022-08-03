@@ -9,7 +9,7 @@
 struct prestera_switch *prestera_devlink_alloc(void);
 void prestera_devlink_free(struct prestera_switch *sw);
 
-int prestera_devlink_register(struct prestera_switch *sw);
+void prestera_devlink_register(struct prestera_switch *sw);
 void prestera_devlink_unregister(struct prestera_switch *sw);
 
 int prestera_devlink_port_register(struct prestera_port *port);

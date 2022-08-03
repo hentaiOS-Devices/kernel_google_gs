@@ -1478,7 +1478,13 @@ static int tb_plug_events_active(struct tb_switch *sw, bool active)
 		case PCI_DEVICE_ID_INTEL_PORT_RIDGE:
 			break;
 		default:
-			data |= 4;
+			/*
+			 * Skip Alpine Ridge, it needs to have vendor
+			 * specific USB hotplug event enabled for the
+			 * internal xHCI to work.
+			 */
+			if (!tb_switch_is_alpine_ridge(sw))
+				data |= TB_PLUG_EVENTS_USB_DISABLE;
 		}
 	} else {
 		data = data | 0x7c;
@@ -1882,18 +1888,6 @@ static struct attribute *switch_attrs[] = {
 	NULL,
 };
 
-static bool has_port(const struct tb_switch *sw, enum tb_port_type type)
-{
-	const struct tb_port *port;
-
-	tb_switch_for_each_port(sw, port) {
-		if (!port->disabled && port->config.type == type)
-			return true;
-	}
-
-	return false;
-}
-
 static umode_t switch_attr_is_visible(struct kobject *kobj,
 				      struct attribute *attr, int n)
 {
@@ -1902,8 +1896,7 @@ static umode_t switch_attr_is_visible(struct kobject *kobj,
 
 	if (attr == &dev_attr_authorized.attr) {
 		if (sw->tb->security_level == TB_SECURITY_NOPCIE ||
-		    sw->tb->security_level == TB_SECURITY_DPONLY ||
-		    !has_port(sw, TB_TYPE_PCIE_UP))
+		    sw->tb->security_level == TB_SECURITY_DPONLY)
 			return 0;
 	} else if (attr == &dev_attr_device.attr) {
 		if (!sw->device)
@@ -2463,7 +2456,7 @@ static void tb_switch_default_link_ports(struct tb_switch *sw)
 {
 	int i;
 
-	for (i = 1; i <= sw->config.max_port_number; i += 2) {
+	for (i = 1; i <= sw->config.max_port_number; i++) {
 		struct tb_port *port = &sw->ports[i];
 		struct tb_port *subordinate;
 
@@ -3211,4 +3204,67 @@ struct tb_port *tb_switch_find_port(struct tb_switch *sw,
 	}
 
 	return NULL;
+}
+
+/**
+ * tb_switch_xhci_connect() - Connect internal xHCI
+ * @sw: Router whose xHCI to connect
+ *
+ * Can be called to any router. For Alpine Ridge and Titan Ridge
+ * performs special flows that bring the xHCI functional for any device
+ * connected to the type-C port. Call only after PCIe tunnel has been
+ * established. The function only does the connect if not done already
+ * so can be called several times for the same router.
+ */
+int tb_switch_xhci_connect(struct tb_switch *sw)
+{
+	bool usb_port1, usb_port3, xhci_port1, xhci_port3;
+	struct tb_port *port1, *port3;
+	int ret;
+
+	port1 = &sw->ports[1];
+	port3 = &sw->ports[3];
+
+	if (tb_switch_is_alpine_ridge(sw)) {
+		usb_port1 = tb_lc_is_usb_plugged(port1);
+		usb_port3 = tb_lc_is_usb_plugged(port3);
+		xhci_port1 = tb_lc_is_xhci_connected(port1);
+		xhci_port3 = tb_lc_is_xhci_connected(port3);
+
+		/* Figure out correct USB port to connect */
+		if (usb_port1 && !xhci_port1) {
+			ret = tb_lc_xhci_connect(port1);
+			if (ret)
+				return ret;
+		}
+		if (usb_port3 && !xhci_port3)
+			return tb_lc_xhci_connect(port3);
+	} else if (tb_switch_is_titan_ridge(sw)) {
+		ret = tb_lc_xhci_connect(port1);
+		if (ret)
+			return ret;
+		return tb_lc_xhci_connect(port3);
+	}
+
+	return 0;
+}
+
+/**
+ * tb_switch_xhci_disconnect() - Disconnect internal xHCI
+ * @sw: Router whose xHCI to disconnect
+ *
+ * The opposite of tb_switch_xhci_connect(). Disconnects xHCI on both
+ * ports.
+ */
+void tb_switch_xhci_disconnect(struct tb_switch *sw)
+{
+	if (sw->generation == 3) {
+		struct tb_port *port1 = &sw->ports[1];
+		struct tb_port *port3 = &sw->ports[3];
+
+		tb_lc_xhci_disconnect(port1);
+		tb_port_dbg(port1, "disconnected xHCI\n");
+		tb_lc_xhci_disconnect(port3);
+		tb_port_dbg(port3, "disconnected xHCI\n");
+	}
 }

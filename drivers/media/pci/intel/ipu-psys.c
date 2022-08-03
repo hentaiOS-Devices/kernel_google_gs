@@ -543,15 +543,15 @@ static int ipu_psys_getbuf(struct ipu_psys_buffer *buf, struct ipu_psys_fh *fh)
 
 	ret = dma_buf_fd(dbuf, 0);
 	if (ret < 0) {
-		kfree(kbuf);
 		dma_buf_put(dbuf);
 		return ret;
 	}
 
 	kbuf->fd = ret;
 	buf->base.fd = ret;
-	kbuf->flags = buf->flags &= ~IPU_BUFFER_FLAG_USERPTR;
-	kbuf->flags = buf->flags |= IPU_BUFFER_FLAG_DMA_HANDLE;
+	buf->flags &= ~IPU_BUFFER_FLAG_USERPTR;
+	buf->flags |= IPU_BUFFER_FLAG_DMA_HANDLE;
+	kbuf->flags = buf->flags;
 
 	mutex_lock(&fh->mutex);
 	list_add(&kbuf->list, &fh->bufmap);
@@ -666,7 +666,6 @@ kbuf_map_fail:
 	list_del(&kbuf->list);
 	if (!kbuf->userptr)
 		kfree(kbuf);
-	return ret;
 
 mapbuf_fail:
 	dma_buf_put(dbuf);
@@ -1340,7 +1339,6 @@ static int ipu_psys_probe(struct ipu_bus_device *adev)
 	INIT_LIST_HEAD(&psys->fhs);
 	INIT_LIST_HEAD(&psys->pgs);
 	INIT_LIST_HEAD(&psys->started_kcmds_list);
-	INIT_WORK(&psys->watchdog_work, ipu_psys_watchdog_work);
 
 	init_waitqueue_head(&psys->sched_cmd_wq);
 	atomic_set(&psys->wakeup_count, 0);
@@ -1360,18 +1358,11 @@ static int ipu_psys_probe(struct ipu_bus_device *adev)
 
 	ipu_bus_set_drvdata(adev, psys);
 
-	rval = ipu_psys_resource_pool_init(&psys->resource_pool_started);
-	if (rval < 0) {
-		dev_err(&psys->dev,
-			"unable to alloc process group resources\n");
-		goto out_mutex_destroy;
-	}
-
 	rval = ipu_psys_resource_pool_init(&psys->resource_pool_running);
 	if (rval < 0) {
 		dev_err(&psys->dev,
 			"unable to alloc process group resources\n");
-		goto out_resources_started_free;
+		goto out_mutex_destroy;
 	}
 
 	ipu6_psys_hw_res_variant_init();
@@ -1459,8 +1450,6 @@ out_free_pgs:
 	}
 
 	ipu_psys_resource_pool_cleanup(&psys->resource_pool_running);
-out_resources_started_free:
-	ipu_psys_resource_pool_cleanup(&psys->resource_pool_started);
 out_mutex_destroy:
 	mutex_destroy(&psys->mutex);
 	cdev_del(&psys->cdev);
@@ -1514,7 +1503,6 @@ static void ipu_psys_remove(struct ipu_bus_device *adev)
 
 	ipu_trace_uninit(&adev->dev);
 
-	ipu_psys_resource_pool_cleanup(&psys->resource_pool_started);
 	ipu_psys_resource_pool_cleanup(&psys->resource_pool_running);
 
 	device_unregister(&psys->dev);
@@ -1608,7 +1596,9 @@ static void __exit ipu_psys_exit(void)
 static const struct pci_device_id ipu_pci_tbl[] = {
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6_PCI_ID)},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6SE_PCI_ID)},
-	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_ADL_P_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_ADL_N_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_RPL_P_PCI_ID)},
 	{0,}
 };
 MODULE_DEVICE_TABLE(pci, ipu_pci_tbl);

@@ -138,12 +138,6 @@ panfrost_lookup_bos(struct drm_device *dev,
 	if (!job->bo_count)
 		return 0;
 
-	job->implicit_fences = kvmalloc_array(job->bo_count,
-				  sizeof(struct dma_fence *),
-				  GFP_KERNEL | __GFP_ZERO);
-	if (!job->implicit_fences)
-		return -ENOMEM;
-
 	ret = drm_gem_objects_lookup(file_priv,
 				     (void __user *)(uintptr_t)args->bo_handles,
 				     job->bo_count, &job->bos);
@@ -174,7 +168,7 @@ panfrost_lookup_bos(struct drm_device *dev,
 }
 
 /**
- * panfrost_copy_in_sync() - Sets up job->in_fences[] with the sync objects
+ * panfrost_copy_in_sync() - Sets up job->deps with the sync objects
  * referenced by the job.
  * @dev: DRM device
  * @file_priv: DRM file for this fd
@@ -194,22 +188,14 @@ panfrost_copy_in_sync(struct drm_device *dev,
 {
 	u32 *handles;
 	int ret = 0;
-	int i;
+	int i, in_fence_count;
 
-	job->in_fence_count = args->in_sync_count;
+	in_fence_count = args->in_sync_count;
 
-	if (!job->in_fence_count)
+	if (!in_fence_count)
 		return 0;
 
-	job->in_fences = kvmalloc_array(job->in_fence_count,
-					sizeof(struct dma_fence *),
-					GFP_KERNEL | __GFP_ZERO);
-	if (!job->in_fences) {
-		DRM_DEBUG("Failed to allocate job in fences\n");
-		return -ENOMEM;
-	}
-
-	handles = kvmalloc_array(job->in_fence_count, sizeof(u32), GFP_KERNEL);
+	handles = kvmalloc_array(in_fence_count, sizeof(u32), GFP_KERNEL);
 	if (!handles) {
 		ret = -ENOMEM;
 		DRM_DEBUG("Failed to allocate incoming syncobj handles\n");
@@ -218,16 +204,23 @@ panfrost_copy_in_sync(struct drm_device *dev,
 
 	if (copy_from_user(handles,
 			   (void __user *)(uintptr_t)args->in_syncs,
-			   job->in_fence_count * sizeof(u32))) {
+			   in_fence_count * sizeof(u32))) {
 		ret = -EFAULT;
 		DRM_DEBUG("Failed to copy in syncobj handles\n");
 		goto fail;
 	}
 
-	for (i = 0; i < job->in_fence_count; i++) {
+	for (i = 0; i < in_fence_count; i++) {
+		struct dma_fence *fence;
+
 		ret = drm_syncobj_find_fence(file_priv, handles[i], 0, 0,
-					     &job->in_fences[i]);
-		if (ret == -EINVAL)
+					     &fence);
+		if (ret)
+			goto fail;
+
+		ret = drm_gem_fence_array_add(&job->deps, fence);
+
+		if (ret)
 			goto fail;
 	}
 
@@ -264,6 +257,8 @@ static int panfrost_ioctl_submit(struct drm_device *dev, void *data,
 	}
 
 	kref_init(&job->refcount);
+
+	xa_init_flags(&job->deps, XA_FLAGS_ALLOC);
 
 	job->pfdev = pfdev;
 	job->jc = args->jc;
@@ -417,7 +412,7 @@ static int panfrost_ioctl_madvise(struct drm_device *dev, void *data,
 		 * anyway, so let's not bother.
 		 */
 		if (!list_is_singular(&bo->mappings.list) ||
-		    WARN_ON_ONCE(first->mmu != &priv->mmu)) {
+		    WARN_ON_ONCE(first->mmu != priv->mmu)) {
 			ret = -EINVAL;
 			goto out_unlock_mappings;
 		}
@@ -427,8 +422,8 @@ static int panfrost_ioctl_madvise(struct drm_device *dev, void *data,
 
 	if (args->retained) {
 		if (args->madv == PANFROST_MADV_DONTNEED)
-			list_add_tail(&bo->base.madv_list,
-				      &pfdev->shrinker_list);
+			list_move_tail(&bo->base.madv_list,
+				       &pfdev->shrinker_list);
 		else if (args->madv == PANFROST_MADV_WILLNEED)
 			list_del_init(&bo->base.madv_list);
 	}
@@ -449,32 +444,6 @@ int panfrost_unstable_ioctl_check(void)
 	return 0;
 }
 
-#define PFN_4G		(SZ_4G >> PAGE_SHIFT)
-#define PFN_4G_MASK	(PFN_4G - 1)
-#define PFN_16M		(SZ_16M >> PAGE_SHIFT)
-
-static void panfrost_drm_mm_color_adjust(const struct drm_mm_node *node,
-					 unsigned long color,
-					 u64 *start, u64 *end)
-{
-	/* Executable buffers can't start or end on a 4GB boundary */
-	if (!(color & PANFROST_BO_NOEXEC)) {
-		u64 next_seg;
-
-		if ((*start & PFN_4G_MASK) == 0)
-			(*start)++;
-
-		if ((*end & PFN_4G_MASK) == 0)
-			(*end)--;
-
-		next_seg = ALIGN(*start, PFN_4G);
-		if (next_seg - *start <= PFN_16M)
-			*start = next_seg + 1;
-
-		*end = min(*end, ALIGN(*start, PFN_4G) - 1);
-	}
-}
-
 static int
 panfrost_open(struct drm_device *dev, struct drm_file *file)
 {
@@ -489,15 +458,11 @@ panfrost_open(struct drm_device *dev, struct drm_file *file)
 	panfrost_priv->pfdev = pfdev;
 	file->driver_priv = panfrost_priv;
 
-	spin_lock_init(&panfrost_priv->mm_lock);
-
-	/* 4G enough for now. can be 48-bit */
-	drm_mm_init(&panfrost_priv->mm, SZ_32M >> PAGE_SHIFT, (SZ_4G - SZ_32M) >> PAGE_SHIFT);
-	panfrost_priv->mm.color_adjust = panfrost_drm_mm_color_adjust;
-
-	ret = panfrost_mmu_pgtable_alloc(panfrost_priv);
-	if (ret)
-		goto err_pgtable;
+	panfrost_priv->mmu = panfrost_mmu_ctx_create(pfdev);
+	if (IS_ERR(panfrost_priv->mmu)) {
+		ret = PTR_ERR(panfrost_priv->mmu);
+		goto err_free;
+	}
 
 	ret = panfrost_job_open(panfrost_priv);
 	if (ret)
@@ -506,9 +471,8 @@ panfrost_open(struct drm_device *dev, struct drm_file *file)
 	return 0;
 
 err_job:
-	panfrost_mmu_pgtable_free(panfrost_priv);
-err_pgtable:
-	drm_mm_takedown(&panfrost_priv->mm);
+	panfrost_mmu_ctx_put(panfrost_priv->mmu);
+err_free:
 	kfree(panfrost_priv);
 	return ret;
 }
@@ -521,8 +485,7 @@ panfrost_postclose(struct drm_device *dev, struct drm_file *file)
 	panfrost_perfcnt_close(file);
 	panfrost_job_close(panfrost_priv);
 
-	panfrost_mmu_pgtable_free(panfrost_priv);
-	drm_mm_takedown(&panfrost_priv->mm);
+	panfrost_mmu_ctx_put(panfrost_priv->mmu);
 	kfree(panfrost_priv);
 }
 
@@ -677,21 +640,21 @@ static const struct panfrost_compatible mediatek_mt8183_data = {
 
 static const struct of_device_id dt_match[] = {
 	/* Set first to probe before the generic compatibles */
-	{ .compatible = "amlogic,meson-gxm-mali",
+	{ .compatible = "amlogic,meson-gxm-mali-CHROMIUM",
 	  .data = &amlogic_data, },
-	{ .compatible = "amlogic,meson-g12a-mali",
+	{ .compatible = "amlogic,meson-g12a-mali-CHROMIUM",
 	  .data = &amlogic_data, },
-	{ .compatible = "arm,mali-t604", .data = &default_data, },
-	{ .compatible = "arm,mali-t624", .data = &default_data, },
-	{ .compatible = "arm,mali-t628", .data = &default_data, },
-	{ .compatible = "arm,mali-t720", .data = &default_data, },
-	{ .compatible = "arm,mali-t760", .data = &default_data, },
-	{ .compatible = "arm,mali-t820", .data = &default_data, },
-	{ .compatible = "arm,mali-t830", .data = &default_data, },
-	{ .compatible = "arm,mali-t860", .data = &default_data, },
-	{ .compatible = "arm,mali-t880", .data = &default_data, },
-	{ .compatible = "arm,mali-bifrost", .data = &default_data, },
-	{ .compatible = "mediatek,mt8183-mali", .data = &mediatek_mt8183_data },
+	{ .compatible = "arm,mali-t604-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t624-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t628-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t720-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t760-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t820-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t830-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t860-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-t880-CHROMIUM", .data = &default_data, },
+	{ .compatible = "arm,mali-bifrost-CHROMIUM", .data = &default_data, },
+	{ .compatible = "mediatek,mt8183-mali-CHROMIUM", .data = &mediatek_mt8183_data },
 	{}
 };
 MODULE_DEVICE_TABLE(of, dt_match);

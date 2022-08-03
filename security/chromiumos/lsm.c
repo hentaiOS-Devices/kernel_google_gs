@@ -208,55 +208,10 @@ static int chromiumos_security_file_open(struct file *file)
 	return policy == CHROMIUMOS_INODE_POLICY_BLOCK ? -EACCES : 0;
 }
 
-int chromiumos_sb_eat_lsm_opts(char *options, void **mnt_opts)
-{
-	char *from = options, *to = options;
-	bool found = false;
-	bool first = true;
-
-	while (1) {
-		char *next = strchr(from, ',');
-		int len;
-
-		if (next)
-			len = next - from;
-		else
-			len = strlen(from);
-
-		/*
-		 * Remove the option so that filesystems won't see it.
-		 * do_mount() has already forced the MS_NOSYMFOLLOW flag on
-		 * if it found this option, so no other action is needed.
-		 */
-		if (len == strlen("nosymfollow") && !strncmp(from, "nosymfollow", len)) {
-			found = true;
-		} else {
-			if (!first) {   /* copy with preceding comma */
-				from--;
-				len++;
-			}
-			if (to != from)
-				memmove(to, from, len);
-			to += len;
-			first = false;
-		}
-		if (!next)
-			break;
-		from += len + 1;
-	}
-	*to = '\0';
-
-	if (found)
-		pr_notice("nosymfollow option should be changed to MS_NOSYMFOLLOW flag.");
-
-	return 0;
-}
-
 static struct security_hook_list chromiumos_security_hooks[] = {
 	LSM_HOOK_INIT(sb_mount, chromiumos_security_sb_mount),
 	LSM_HOOK_INIT(inode_follow_link, chromiumos_security_inode_follow_link),
 	LSM_HOOK_INIT(file_open, chromiumos_security_file_open),
-	LSM_HOOK_INIT(sb_eat_lsm_opts, chromiumos_sb_eat_lsm_opts),
 };
 
 static int __init chromiumos_security_init(void)

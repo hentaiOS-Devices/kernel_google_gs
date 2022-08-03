@@ -166,11 +166,6 @@ static inline u16 intel_dsi_encoder_ports(struct intel_encoder *encoder)
 	return enc_to_intel_dsi(encoder)->ports;
 }
 
-/* icl_dsi.c */
-void icl_dsi_init(struct drm_i915_private *dev_priv);
-void icl_dsi_frame_update(struct intel_crtc_state *crtc_state);
-
-/* intel_dsi.c */
 int intel_dsi_bitrate(const struct intel_dsi *intel_dsi);
 int intel_dsi_tlpx_ns(const struct intel_dsi *intel_dsi);
 enum drm_panel_orientation
@@ -206,6 +201,9 @@ void bxt_dsi_pll_disable(struct intel_encoder *encoder);
 u32 bxt_dsi_get_pclk(struct intel_encoder *encoder,
 		     struct intel_crtc_state *config);
 void bxt_dsi_reset_clocks(struct intel_encoder *encoder, enum port port);
+
+void assert_dsi_pll_enabled(struct drm_i915_private *i915);
+void assert_dsi_pll_disabled(struct drm_i915_private *i915);
 
 /* intel_dsi_vbt.c */
 bool intel_dsi_vbt_init(struct intel_dsi *intel_dsi, u16 panel_id);
