@@ -116,12 +116,14 @@ static int __mfc_enc_check_ctrl_val(struct mfc_ctx *ctx, struct v4l2_control *ct
 	}
 
 	if (ctrl->value < c->minimum || ctrl->value > c->maximum
-	    || (c->step != 0 && ctrl->value % c->step != 0)) {
-		mfc_ctx_err("[CTRLS] Invalid control value for %#x (%#x)\n",
-				ctrl->id, ctrl->value);
+		|| (c->step != 0 && ctrl->value % c->step != 0)) {
+		mfc_ctx_err("[CTRLS][%s] id: %#x, invalid value (%d)\n",
+				c->name, ctrl->id, ctrl->value);
 		return -ERANGE;
 	}
 
+	mfc_debug(5, "[CTRLS][%s] id: %#x, value: %d (%#x)\n",
+			c->name, ctrl->id, ctrl->value, ctrl->value);
 	return 0;
 }
 
@@ -2092,9 +2094,6 @@ static int __mfc_enc_set_ctrl_val(struct mfc_ctx *ctx, struct v4l2_control *ctrl
 	int ret = 0;
 	int found = 0;
 
-	mfc_debug(5, "[CTRLS] id: %#x, value: %d (%#x)\n",
-			ctrl->id, ctrl->value, ctrl->value);
-
 	/* update parameter value */
 	ret = __mfc_enc_set_param(ctx, ctrl);
 	if (ret)
@@ -2281,7 +2280,7 @@ static int mfc_enc_s_ext_ctrls(struct file *file, void *priv,
 	int i;
 	int ret = 0;
 
-	if (f->which != V4L2_CTRL_CLASS_MPEG)
+	if (f->which != V4L2_CTRL_CLASS_CODEC)
 		return -EINVAL;
 
 	for (i = 0; i < f->count; i++) {
@@ -2301,10 +2300,9 @@ static int mfc_enc_s_ext_ctrls(struct file *file, void *priv,
 			f->error_idx = i;
 			break;
 		}
-
-		mfc_debug(5, "[CTRLS][%d] id: %#x, value: %d\n",
-				i, ext_ctrl->id, ext_ctrl->value);
 	}
+
+	mfc_debug_leave();
 
 	return ret;
 }
@@ -2318,7 +2316,7 @@ static int mfc_enc_try_ext_ctrls(struct file *file, void *priv,
 	int i;
 	int ret = 0;
 
-	if (f->which != V4L2_CTRL_CLASS_MPEG)
+	if (f->which != V4L2_CTRL_CLASS_CODEC)
 		return -EINVAL;
 
 	for (i = 0; i < f->count; i++) {
@@ -2332,9 +2330,9 @@ static int mfc_enc_try_ext_ctrls(struct file *file, void *priv,
 			f->error_idx = i;
 			break;
 		}
-
-		mfc_debug(2, "[%d] id: 0x%08x, value: %d\n", i, ext_ctrl->id, ext_ctrl->value);
 	}
+
+	mfc_debug_leave();
 
 	return ret;
 }
