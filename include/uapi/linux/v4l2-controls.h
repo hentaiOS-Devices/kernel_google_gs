@@ -1913,7 +1913,7 @@ struct v4l2_ctrl_vp8_frame {
 #define V4L2_AV1_SEQUENCE_FLAG_FILM_GRAIN_PARAMS_PRESENT  BIT(18)
 #define V4L2_AV1_SEQUENCE_FLAG_SEPARATE_UV_DELTA_Q	  BIT(19)
 
-#define V4L2_CID_STATELESS_AV1_SEQUENCE (V4L2_CID_CODEC_STATELESS_BASE + 401)
+#define V4L2_CID_STATELESS_AV1_SEQUENCE (V4L2_CID_CODEC_STATELESS_BASE + 408)
 /**
  * struct v4l2_ctrl_av1_sequence - AV1 Sequence
  *
@@ -1943,7 +1943,7 @@ struct v4l2_ctrl_av1_sequence {
 
 #define V4L2_AV1_TILE_GROUP_FLAG_START_AND_END_PRESENT BIT(0)
 
-#define V4L2_CID_STATELESS_AV1_TILE_GROUP (V4L2_CID_CODEC_STATELESS_BASE + 402)
+#define V4L2_CID_STATELESS_AV1_TILE_GROUP (V4L2_CID_CODEC_STATELESS_BASE + 409)
 /**
  * struct v4l2_ctrl_av1_tile_group - AV1 Tile Group header.
  *
@@ -1964,7 +1964,7 @@ struct v4l2_ctrl_av1_tile_group {
 	__u32 tg_end;
 };
 
-#define V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY (V4L2_CID_CODEC_STATELESS_BASE + 403)
+#define V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY (V4L2_CID_CODEC_STATELESS_BASE + 410)
 /**
  * struct v4l2_ctrl_av1_tile_group_entry - AV1 Tile Group entry
  *
@@ -2352,7 +2352,7 @@ enum v4l2_av1_tx_mode {
 #define V4L2_AV1_FRAME_HEADER_FLAG_BUFFER_REMOVAL_TIME_PRESENT	BIT(19)
 #define V4L2_AV1_FRAME_HEADER_FLAG_FRAME_REFS_SHORT_SIGNALING	BIT(20)
 
-#define V4L2_CID_STATELESS_AV1_FRAME_HEADER (V4L2_CID_CODEC_STATELESS_BASE + 406)
+#define V4L2_CID_STATELESS_AV1_FRAME_HEADER (V4L2_CID_CODEC_STATELESS_BASE + 411)
 /**
  * struct v4l2_ctrl_av1_frame_header - Represents an AV1 Frame Header OBU.
  *
@@ -2448,7 +2448,7 @@ struct v4l2_ctrl_av1_frame_header {
  *
  * Conveys the highest profile a decoder can work with.
  */
-#define V4L2_CID_STATELESS_AV1_PROFILE (V4L2_CID_CODEC_STATELESS_BASE + 407)
+#define V4L2_CID_STATELESS_AV1_PROFILE (V4L2_CID_CODEC_STATELESS_BASE + 412)
 enum v4l2_stateless_av1_profile {
 	V4L2_STATELESS_AV1_PROFILE_MAIN = 0,
 	V4L2_STATELESS_AV1_PROFILE_HIGH = 1,
@@ -2484,7 +2484,7 @@ enum v4l2_stateless_av1_profile {
  *
  * Conveys the highest level a decoder can work with.
  */
-#define V4L2_CID_STATELESS_AV1_LEVEL (V4L2_CID_CODEC_STATELESS_BASE + 408)
+#define V4L2_CID_STATELESS_AV1_LEVEL (V4L2_CID_CODEC_STATELESS_BASE + 413)
 enum v4l2_stateless_av1_level {
 	V4L2_STATELESS_AV1_LEVEL_2_0 = 0,
 	V4L2_STATELESS_AV1_LEVEL_2_1 = 1,
@@ -2588,7 +2588,7 @@ enum v4l2_stateless_av1_level {
  * @cr_offset: represents an offset used in derivation of the input index to the
  * cr component scaling function.
  */
-#define V4L2_CID_STATELESS_AV1_FILM_GRAIN (V4L2_CID_CODEC_STATELESS_BASE + 409)
+#define V4L2_CID_STATELESS_AV1_FILM_GRAIN (V4L2_CID_CODEC_STATELESS_BASE + 414)
 struct v4l2_ctrl_av1_film_grain {
 	__u8 flags;
 	__u16 grain_seed;
