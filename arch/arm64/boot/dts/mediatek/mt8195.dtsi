@@ -2935,7 +2935,7 @@
 			      <0 0x18004000 0 0x1000>;      /* VDEC_RACING_CTRL */
 			mediatek,scp = <&scp>;
 			iommus = <&iommu_vdo M4U_PORT_L21_VDEC_MC_EXT>;
-			dma-ranges = <0x1 0x0 0x0 0x40000000 0x0 0xfff00000>;
+			dma-ranges = <0x1 0x0 0x40000000 0xfff00000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges = <0 0 0x18000000 0x26000>;
