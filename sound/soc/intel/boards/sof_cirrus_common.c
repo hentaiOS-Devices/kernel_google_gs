@@ -10,9 +10,6 @@
 #include "../../codecs/cs35l41.h"
 #include "sof_cirrus_common.h"
 
-#define CS35L41_HID "CSC3541"
-#define CS35L41_MAX_AMPS 4
-
 /*
  * Cirrus Logic CS35L41/CS35L53
  */
@@ -38,12 +35,50 @@ static const struct snd_soc_dapm_route cs35l41_dapm_routes[] = {
 	{"TR Spk", NULL, "TR SPK"},
 };
 
-static struct snd_soc_dai_link_component cs35l41_components[CS35L41_MAX_AMPS];
+static struct snd_soc_dai_link_component cs35l41_components[] = {
+	{
+		.name = CS35L41_DEV0_NAME,
+		.dai_name = CS35L41_CODEC_DAI,
+	},
+	{
+		.name = CS35L41_DEV1_NAME,
+		.dai_name = CS35L41_CODEC_DAI,
+	},
+	{
+		.name = CS35L41_DEV2_NAME,
+		.dai_name = CS35L41_CODEC_DAI,
+	},
+	{
+		.name = CS35L41_DEV3_NAME,
+		.dai_name = CS35L41_CODEC_DAI,
+	},
+};
 
 /*
  * Mapping between ACPI instance id and speaker position.
+ *
+ * Four speakers:
+ *         0: Tweeter left, 1: Woofer left
+ *         2: Tweeter right, 3: Woofer right
  */
-static struct snd_soc_codec_conf cs35l41_codec_conf[CS35L41_MAX_AMPS];
+static struct snd_soc_codec_conf cs35l41_codec_conf[] = {
+	{
+		.dlc = COMP_CODEC_CONF(CS35L41_DEV0_NAME),
+		.name_prefix = "TL",
+	},
+	{
+		.dlc = COMP_CODEC_CONF(CS35L41_DEV1_NAME),
+		.name_prefix = "WL",
+	},
+	{
+		.dlc = COMP_CODEC_CONF(CS35L41_DEV2_NAME),
+		.name_prefix = "TR",
+	},
+	{
+		.dlc = COMP_CODEC_CONF(CS35L41_DEV3_NAME),
+		.name_prefix = "WR",
+	},
+};
 
 static int cs35l41_init(struct snd_soc_pcm_runtime *rtd)
 {
@@ -82,10 +117,10 @@ static int cs35l41_init(struct snd_soc_pcm_runtime *rtd)
 static const struct {
 	unsigned int rx[2];
 } cs35l41_channel_map[] = {
-	{.rx = {0, 1}}, /* WL */
-	{.rx = {1, 0}}, /* WR */
 	{.rx = {0, 1}}, /* TL */
+	{.rx = {0, 1}}, /* WL */
 	{.rx = {1, 0}}, /* TR */
+	{.rx = {1, 0}}, /* WR */
 };
 
 static int cs35l41_hw_params(struct snd_pcm_substream *substream,
@@ -140,32 +175,8 @@ static const struct snd_soc_ops cs35l41_ops = {
 	.hw_params = cs35l41_hw_params,
 };
 
-static const char *cs35l41_name_prefixes[] = { "WL", "WR", "TL", "TR" };
-
-static const char *cs35l41_uid_strings[] = { "0", "1", "2", "3" };
-
-static void cs35l41_compute_codec_conf(void)
-{
-	int uid;
-	struct acpi_device *adev;
-	struct device *physdev;
-
-	for (uid = 0; uid < CS35L41_MAX_AMPS; uid++) {
-		adev = acpi_dev_get_first_match_dev(CS35L41_HID, cs35l41_uid_strings[uid], -1);
-		if (!adev)
-			return;
-		physdev = get_device(acpi_get_first_physical_node(adev));
-		cs35l41_components[uid].name = dev_name(physdev);
-		cs35l41_components[uid].dai_name = CS35L41_CODEC_DAI;
-		cs35l41_codec_conf[uid].dlc.name = dev_name(physdev);
-		cs35l41_codec_conf[uid].name_prefix = cs35l41_name_prefixes[uid];
-		acpi_dev_put(adev);
-	}
-}
-
 void cs35l41_set_dai_link(struct snd_soc_dai_link *link)
 {
-	cs35l41_compute_codec_conf();
 	link->codecs = cs35l41_components;
 	link->num_codecs = ARRAY_SIZE(cs35l41_components);
 	link->init = cs35l41_init;
