@@ -64,6 +64,15 @@ static int live_slpc_clamp_min(void *arg)
 		return -EIO;
 	}
 
+	/*
+	 * FIXME: With efficient frequency enabled, GuC can request
+	 * frequencies higher than the SLPC max. While this is fixed
+	 * in GuC, we level set these tests with RPn as min.
+	 */
+	err = slpc_set_min_freq(slpc, slpc->min_freq);
+	if (err)
+		return err;
+
 	if (slpc_min_freq == slpc_max_freq) {
 		pr_err("Min/Max are fused to the same value\n");
 		return -EINVAL;

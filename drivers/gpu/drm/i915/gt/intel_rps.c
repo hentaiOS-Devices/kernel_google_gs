@@ -1082,7 +1082,12 @@ static void gen6_rps_init(struct intel_rps *rps)
 		u32 rp_state_cap = intel_uncore_read(uncore, GEN6_RP_STATE_CAP);
 
 		rps->rp0_freq = (rp_state_cap >>  0) & 0xff;
-		rps->rp1_freq = (rp_state_cap >>  8) & 0xff;
+		if (GRAPHICS_VER(i915) >= 10)
+			rps->rp1_freq = REG_FIELD_GET(RPE_MASK,
+						      intel_uncore_read(&i915->uncore,
+						      GEN10_FREQ_INFO_REC));
+		else
+			rps->rp1_freq = (rp_state_cap >>  8) & 0xff;
 		rps->min_freq = (rp_state_cap >> 16) & 0xff;
 	}
 
