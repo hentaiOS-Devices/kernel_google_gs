@@ -1181,7 +1181,7 @@ static int handle_exit_race(u32 __user *uaddr, u32 uval,
 	 *  tsk->futex_state =               } else {
 	 *	FUTEX_STATE_DEAD;              if (tsk->futex_state !=
 	 *					  FUTEX_STATE_DEAD)
-	 *					 return -EAGAIN;
+	 *				         return -EAGAIN;
 	 *				       return -ESRCH; <--- FAIL
 	 *				     }
 	 *
@@ -1584,16 +1584,16 @@ double_unlock_hb(struct futex_hash_bucket *hb1, struct futex_hash_bucket *hb2)
 }
 
 /*
- * Prepare wake queue matching bitset queued on this futex (uaddr).
+ * Wake up waiters matching bitset queued on this futex (uaddr).
  */
 static int
-prepare_wake_q(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset,
-	       struct wake_q_head *wake_q)
+futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
 {
 	struct futex_hash_bucket *hb;
 	struct futex_q *this, *next;
 	union futex_key key = FUTEX_KEY_INIT;
 	int ret;
+	DEFINE_WAKE_Q(wake_q);
 
 	if (!bitset)
 		return -EINVAL;
@@ -1621,28 +1621,14 @@ prepare_wake_q(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset,
 			if (!(this->bitset & bitset))
 				continue;
 
-			mark_wake_futex(wake_q, this);
+			mark_wake_futex(&wake_q, this);
 			if (++ret >= nr_wake)
 				break;
 		}
 	}
 
 	spin_unlock(&hb->lock);
-	return ret;
-}
-
-/*
- * Wake up waiters matching bitset queued on this futex (uaddr).
- */
-static int
-futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
-{
-	int ret;
-	DEFINE_WAKE_Q(wake_q);
-
-	ret = prepare_wake_q(uaddr, flags, nr_wake, bitset, &wake_q);
 	wake_up_q(&wake_q);
-
 	return ret;
 }
 
@@ -2590,12 +2576,9 @@ static int fixup_owner(u32 __user *uaddr, struct futex_q *q, int locked)
  * @hb:		the futex hash bucket, must be locked by the caller
  * @q:		the futex_q to queue up on
  * @timeout:	the prepared hrtimer_sleeper, or null for no timeout
- * @next:	if present, wake next and hint to the scheduler that we'd
- *		prefer to execute it locally.
  */
 static void futex_wait_queue_me(struct futex_hash_bucket *hb, struct futex_q *q,
-				struct hrtimer_sleeper *timeout,
-				struct task_struct *next)
+				struct hrtimer_sleeper *timeout)
 {
 	/*
 	 * The task state is guaranteed to be set before another task can
@@ -2620,26 +2603,10 @@ static void futex_wait_queue_me(struct futex_hash_bucket *hb, struct futex_q *q,
 		 * flagged for rescheduling. Only call schedule if there
 		 * is no timeout, or if it has yet to expire.
 		 */
-		if (!timeout || timeout->task) {
-			if (next) {
-				/*
-				 * wake_up_process() below will be replaced
-				 * in the next patch with
-				 * wake_up_process_prefer_current_cpu().
-				 */
-				wake_up_process(next);
-				put_task_struct(next);
-				next = NULL;
-			}
+		if (!timeout || timeout->task)
 			freezable_schedule();
-		}
 	}
 	__set_current_state(TASK_RUNNING);
-
-	if (next) {
-		wake_up_process(next);
-		put_task_struct(next);
-	}
 }
 
 /**
@@ -2715,7 +2682,7 @@ retry_private:
 }
 
 static int futex_wait(u32 __user *uaddr, unsigned int flags, u32 val,
-		      ktime_t *abs_time, u32 bitset, struct task_struct *next)
+		      ktime_t *abs_time, u32 bitset)
 {
 	struct hrtimer_sleeper timeout, *to;
 	struct restart_block *restart;
@@ -2739,8 +2706,7 @@ retry:
 		goto out;
 
 	/* queue_me and wait for wakeup, timeout, or a signal. */
-	futex_wait_queue_me(hb, &q, to, next);
-	next = NULL;
+	futex_wait_queue_me(hb, &q, to);
 
 	/* If we were woken (and unqueued), we succeeded, whatever. */
 	ret = 0;
@@ -2772,16 +2738,13 @@ retry:
 	ret = set_restart_fn(restart, futex_wait_restart);
 
 out:
-	if (next) {
-		wake_up_process(next);
-		put_task_struct(next);
-	}
 	if (to) {
 		hrtimer_cancel(&to->timer);
 		destroy_hrtimer_on_stack(&to->timer);
 	}
 	return ret;
 }
+
 
 static long futex_wait_restart(struct restart_block *restart)
 {
@@ -2794,29 +2757,10 @@ static long futex_wait_restart(struct restart_block *restart)
 	}
 	restart->fn = do_no_restart_syscall;
 
-	return (long)futex_wait(uaddr, restart->futex.flags, restart->futex.val,
-				tp, restart->futex.bitset, NULL);
+	return (long)futex_wait(uaddr, restart->futex.flags,
+				restart->futex.val, tp, restart->futex.bitset);
 }
 
-static int futex_swap(u32 __user *uaddr, unsigned int flags, u32 val,
-		      ktime_t *abs_time, u32 __user *uaddr2)
-{
-	u32 bitset = FUTEX_BITSET_MATCH_ANY;
-	struct task_struct *next = NULL;
-	DEFINE_WAKE_Q(wake_q);
-	int ret;
-
-	ret = prepare_wake_q(uaddr2, flags, 1, bitset, &wake_q);
-	if (ret < 0)
-		return ret;
-	if (!wake_q_empty(&wake_q)) {
-		/* At most one wakee can be present. Pull it out. */
-		next = container_of(wake_q.first, struct task_struct, wake_q);
-		next->wake_q.next = NULL;
-	}
-
-	return futex_wait(uaddr, flags, val, abs_time, bitset, next);
-}
 
 /*
  * Userspace tried a 0 -> TID atomic transition of the futex value
@@ -3278,7 +3222,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 	}
 
 	/* Queue the futex_q, drop the hb lock, wait for wakeup. */
-	futex_wait_queue_me(hb, &q, to, NULL);
+	futex_wait_queue_me(hb, &q, to);
 
 	spin_lock(&hb->lock);
 	ret = handle_early_requeue_pi_wakeup(hb, &q, &key2, to);
@@ -3788,7 +3732,7 @@ long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 		val3 = FUTEX_BITSET_MATCH_ANY;
 		fallthrough;
 	case FUTEX_WAIT_BITSET:
-		return futex_wait(uaddr, flags, val, timeout, val3, NULL);
+		return futex_wait(uaddr, flags, val, timeout, val3);
 	case FUTEX_WAKE:
 		val3 = FUTEX_BITSET_MATCH_ANY;
 		fallthrough;
@@ -3812,8 +3756,6 @@ long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 					     uaddr2);
 	case FUTEX_CMP_REQUEUE_PI:
 		return futex_requeue(uaddr, flags, uaddr2, val, val2, &val3, 1);
-	case FUTEX_SWAP:
-		return futex_swap(uaddr, flags, val, timeout, uaddr2);
 	}
 	return -ENOSYS;
 }
@@ -3830,7 +3772,7 @@ SYSCALL_DEFINE6(futex, u32 __user *, uaddr, int, op, u32, val,
 
 	if (utime && (cmd == FUTEX_WAIT || cmd == FUTEX_LOCK_PI ||
 		      cmd == FUTEX_WAIT_BITSET ||
-		      cmd == FUTEX_WAIT_REQUEUE_PI || cmd == FUTEX_SWAP)) {
+		      cmd == FUTEX_WAIT_REQUEUE_PI)) {
 		if (unlikely(should_fail_futex(!(op & FUTEX_PRIVATE_FLAG))))
 			return -EFAULT;
 		if (get_timespec64(&ts, utime))
@@ -3839,7 +3781,7 @@ SYSCALL_DEFINE6(futex, u32 __user *, uaddr, int, op, u32, val,
 			return -EINVAL;
 
 		t = timespec64_to_ktime(ts);
-		if (cmd == FUTEX_WAIT || cmd == FUTEX_SWAP)
+		if (cmd == FUTEX_WAIT)
 			t = ktime_add_safe(ktime_get(), t);
 		else if (cmd != FUTEX_LOCK_PI && !(op & FUTEX_CLOCK_REALTIME))
 			t = timens_ktime_to_host(CLOCK_MONOTONIC, t);
