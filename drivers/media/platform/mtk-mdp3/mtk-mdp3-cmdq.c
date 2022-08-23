@@ -17,6 +17,8 @@
 #define BYTE_PER_MB_Y				(4)
 #define BYTE_PER_MB_C				(2)
 
+static void *dip_userdata_dbg;
+
 struct mdp_path {
 	struct mdp_dev		*mdp_dev;
 	struct mdp_comp_ctx	comps[MDP_PATH_MAX_COMPS];
@@ -764,6 +766,7 @@ static void mdp_handle_cmdq_callback(struct cmdq_cb_data data)
 	struct mdp_dev *mdp;
 	struct device *dev;
 	int i;
+	void *cb_userdata;
 
 	if (!data.data) {
 		pr_info("%s:no callback data\n", __func__);
@@ -802,7 +805,11 @@ static void mdp_handle_cmdq_callback(struct cmdq_cb_data data)
 		user_cb_data.sta = data.sta;
 		user_cb_data.data = cb_param->user_cb_data;
 		cb_param->user_cmdq_cb(user_cb_data);
+		cb_userdata = user_cb_data.data;
 	}
+
+	if (data.sta != 0)
+		dev_err(dev, "DIP callback occur in %p, out %p", dip_userdata_dbg, cb_userdata);
 
 	mdp->stage_flag[cb_param->cmdq_user] |= MDP_STAGE_SEND_CB;
 
@@ -1037,6 +1044,8 @@ int mdp_cmdq_sendtask(struct platform_device *pdev, struct img_config *config,
 		.cb_data = cb_data,
 		.cmdq_user = MDP_CMDQ_DL,
 	};
+
+	dip_userdata_dbg = cb_data;
 
 	mdp->stage_flag[MDP_CMDQ_DL] = 0;
 

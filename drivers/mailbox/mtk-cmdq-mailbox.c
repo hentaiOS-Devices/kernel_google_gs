@@ -208,6 +208,8 @@ static void cmdq_task_exec_done(struct cmdq_task *task, int sta)
 	data.pkt = task->pkt;
 	if (cb->cb)
 		cb->cb(data);
+	if (sta != 0)
+		pr_info("%s callback occur error, return %p", __func__, data.data);
 
 	mbox_chan_received_data(task->thread->chan, &data);
 
