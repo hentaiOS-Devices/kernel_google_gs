@@ -1841,55 +1841,10 @@ This structure contains all loop filter related parameters. See sections
 	quantizer values. If not set, indicates that the U and V planes will share
 	the same delta quantizer value.
 
-``V4L2_CID_STATELESS_AV1_TILE_GROUP (struct)``
-    Represents a tile group as seen in an AV1 Tile Group OBU or Frame OBU. A
-    v4l2_ctrl_av1_tile_group instance will refer to tg_end - tg_start instances
-    of struct :c:type:`v4l2_ctrl_av1_tile_group_entry`. See section
-    6.10.1 "General tile group OBU semantics" in :ref:`av1` for more details.
-
-.. c:type:: v4l2_ctrl_av1_tile_group
-
-.. cssclass:: longtable
-
-.. tabularcolumns:: |p{5.8cm}|p{4.8cm}|p{6.6cm}|
-
-.. flat-table:: struct v4l2_ctrl_av1_tile_group
-    :header-rows:  0
-    :stub-columns: 0
-    :widths:       1 1 2
-
-    * - __u8
-      - ``flags``
-      - See :ref:`AV1 Tile Group Flags <av1_tile_group_flags>`.
-    * - __u8
-      - ``tg_start``
-      - Specifies the zero-based index of the first tile in the current tile
-        group.
-    * - __u8
-      - ``tg_end``
-      - Specifies the zero-based index of the last tile in the current tile
-        group.
-
-.. _av1_tile_group_flags:
-
-``AV1 Tile Group Flags``
-
-.. cssclass:: longtable
-
-.. flat-table::
-    :header-rows:  0
-    :stub-columns: 0
-    :widths:       1 1 2
-
-    * - ``V4L2_AV1_TILE_GROUP_FLAG_START_AND_END_PRESENT``
-      - 0x00000001
-      - Specifies whether tg_start and tg_end are present. If tg_start and
-	tg_end are not present, this tile group covers the entire frame.
-
 ``V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY (struct)``
     Represents a single AV1 tile inside an AV1 Tile Group. Note that MiRowStart,
     MiRowEnd, MiColStart and MiColEnd can be retrieved from struct
-    v4l2_av1_tile_info in struct v4l2_ctrl_av1_frame_header using tile_row and
+    v4l2_av1_tile_info in struct v4l2_ctrl_av1_frame using tile_row and
     tile_col. See section 6.10.1 "General tile group OBU semantics" in
     :ref:`av1` for more details.
 
@@ -2204,7 +2159,7 @@ semantics" of :ref:`av1`.
 
 .. tabularcolumns:: |p{1.5cm}|p{5.8cm}|p{10.0cm}|
 
-.. flat-table:: struct v4l2_av1_film_grain
+.. flat-table:: struct v4l2_ctrl_av1_film_grain
     :header-rows:  0
     :stub-columns: 0
     :widths:       1 1 2
@@ -2339,6 +2294,12 @@ AV1 Loop filter params as defined in section 6.8.10. "Loop filter semantics" of
     * - ``V4L2_AV1_LOOP_FILTER_FLAG_DELTA_LF_PRESENT``
       - 0x00000004
       - Specifies whether loop filter delta values are present
+    * - ``V4L2_AV1_LOOP_FILTER_FLAG_DELTA_LF_MULTI``
+      - 0x00000008
+      - A value equal to 1 specifies that separate loop filter
+        deltas are sent for horizontal luma edges, vertical luma edges,
+        the U edges, and the V edges. A value of delta_lf_multi equal to 0
+        specifies that the same loop filter delta is used for all edges.
 
 .. c:type:: v4l2_av1_quantization
 
@@ -2426,7 +2387,7 @@ AV1 Tile info as defined in section 6.8.14. "Tile info semantics" of ref:`av1`.
 
 .. tabularcolumns:: |p{1.5cm}|p{5.8cm}|p{10.0cm}|
 
-.. flat-table:: struct v4l2_av1_film_grain
+.. flat-table:: struct v4l2_ctrl_av1_film_grain
     :header-rows:  0
     :stub-columns: 0
     :widths:       1 1 2
@@ -2565,17 +2526,17 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
       - 2
       - The choice of transform size is specified explicitly for each block.
 
-``V4L2_CID_STATELESS_AV1_FRAME_HEADER (struct)``
-    Represents a tile list entry as seen in an AV1 Tile List OBU. See section
-    6.11.2. "Tile list entry semantics" of :ref:`av1` for more details.
+``V4L2_CID_STATELESS_AV1_FRAME (struct)``
+    Represents a Frame Header OBU. See 6.8. "Frame Header OBU semantics" of
+    :ref:`av1` for more details.
 
-.. c:type:: v4l2_ctrl_av1_frame_header
+.. c:type:: v4l2_ctrl_av1_frame
 
 .. cssclass:: longtable
 
 .. tabularcolumns:: |p{5.8cm}|p{4.8cm}|p{6.6cm}|
 
-.. flat-table:: struct v4l2_ctrl_av1_frame_header
+.. flat-table:: struct v4l2_ctrl_av1_frame
     :header-rows:  0
     :stub-columns: 0
     :widths:       1 1 2
@@ -2607,7 +2568,7 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
     * - __u32
       - ``flags``
       - See
-        :ref:`AV1 Tile Info flags <av1_frame_header_flags>` for more details.
+        :ref:`AV1 Tile Info flags <av1_frame_flags>` for more details.
     * - enum :c:type:`v4l2_av1_frame_type`
       - ``frame_type``
       - Specifies the AV1 frame type
@@ -2687,9 +2648,9 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
       - Specifies the frames to use for compound prediction when skip_mode is
         equal to 1.
 
-.. _av1_frame_header_flags:
+.. _av1_frame_flags:
 
-``AV1 Frame Header Flags``
+``AV1 Frame Flags``
 
 .. cssclass:: longtable
 
@@ -2698,96 +2659,96 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
     :stub-columns: 0
     :widths:       1 1 2
 
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_SHOW_FRAME``
+    * - ``V4L2_AV1_FRAME_FLAG_SHOW_FRAME``
       - 0x00000001
       - If set, specifies that this frame should be immediately output once
         decoded. If not set, specifies that this frame should not be immediately
         output. (It may be output later if a later uncompressed header uses
         show_existing_frame equal to 1).
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_SHOWABLE_FRAME``
+    * - ``V4L2_AV1_FRAME_FLAG_SHOWABLE_FRAME``
       - 0x00000002
       - If set, specifies that the frame may be output using the
         show_existing_frame mechanism. If not set, specifies that this frame
         will not be output using the show_existing_frame mechanism.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_ERROR_RESILIENT_MODE``
+    * - ``V4L2_AV1_FRAME_FLAG_ERROR_RESILIENT_MODE``
       - 0x00000004
       - Specifies whether error resilient mode is enabled.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_DISABLE_CDF_UPDATE``
+    * - ``V4L2_AV1_FRAME_FLAG_DISABLE_CDF_UPDATE``
       - 0x00000008
       - Specifies whether the CDF update in the symbol decoding process should
         be disabled.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_SCREEN_CONTENT_TOOLS``
+    * - ``V4L2_AV1_FRAME_FLAG_ALLOW_SCREEN_CONTENT_TOOLS``
       - 0x00000010
       - Specifies whether the CDF update in the symbol decoding process should
         be disabled.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_FORCE_INTEGER_MV``
+    * - ``V4L2_AV1_FRAME_FLAG_FORCE_INTEGER_MV``
       - 0x00000020
       - If set, specifies that motion vectors will always be integers. If not
         set, specifies that motion vectors can contain fractional bits.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_INTRABC``
+    * - ``V4L2_AV1_FRAME_FLAG_ALLOW_INTRABC``
       - 0x00000040
       - If set, indicates that intra block copy may be used in this frame. If
         not set, indicates that intra block copy is not allowed in this frame.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_USE_SUPERRES``
+    * - ``V4L2_AV1_FRAME_FLAG_USE_SUPERRES``
       - 0x00000080
       - If set, indicates that upscaling is needed.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_HIGH_PRECISION_MV``
+    * - ``V4L2_AV1_FRAME_FLAG_ALLOW_HIGH_PRECISION_MV``
       - 0x00000100
       - If set, specifies that motion vectors are specified to eighth pel
         precision. If not set, specifies that motion vectors are specified to
         quarter pel precision;
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_IS_MOTION_MODE_SWITCHABLE``
+    * - ``V4L2_AV1_FRAME_FLAG_IS_MOTION_MODE_SWITCHABLE``
       - 0x00000200
       - If not set, specifies that only the SIMPLE motion mode will be used.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_USE_REF_FRAME_MVS``
+    * - ``V4L2_AV1_FRAME_FLAG_USE_REF_FRAME_MVS``
       - 0x00000400
       - If set specifies that motion vector information from a previous frame
         can be used when decoding the current frame. If not set, specifies that
         this information will not be used.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_DISABLE_FRAME_END_UPDATE_CDF``
+    * - ``V4L2_AV1_FRAME_FLAG_DISABLE_FRAME_END_UPDATE_CDF``
       - 0x00000800
       - If set indicates that the end of frame CDF update is disabled. If not
         set, indicates that the end of frame CDF update is enabled
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_UNIFORM_TILE_SPACING``
+    * - ``V4L2_AV1_FRAME_FLAG_UNIFORM_TILE_SPACING``
       - 0x00001000
       - If set, means that the tiles are uniformly spaced across the frame. (In
         other words, all tiles are the same size except for the ones at the
         right and bottom edge which can be smaller). If not set, means that the
         tile sizes are coded
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_WARPED_MOTION``
+    * - ``V4L2_AV1_FRAME_FLAG_ALLOW_WARPED_MOTION``
       - 0x00002000
       - If set, indicates that the syntax element motion_mode may be present, if
         not set, indicates that the syntax element motion_mode will not be
         present.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_REFERENCE_SELECT``
+    * - ``V4L2_AV1_FRAME_FLAG_REFERENCE_SELECT``
       - 0x00004000
       - If set, specifies that the mode info for inter blocks contains the
         syntax element comp_mode that indicates whether to use single or
         compound reference prediction. If not set, specifies that all inter
         blocks will use single prediction.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_REDUCED_TX_SET``
+    * - ``V4L2_AV1_FRAME_FLAG_REDUCED_TX_SET``
       - 0x00008000
       - If set, specifies that the frame is restricted to a reduced subset of
         the full set of transform types.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_SKIP_MODE_ALLOWED``
+    * - ``V4L2_AV1_FRAME_FLAG_SKIP_MODE_ALLOWED``
       - 0x00010000
       - This flag retains the same meaning as SkipModeAllowed in :ref:`av1`.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_SKIP_MODE_PRESENT``
+    * - ``V4L2_AV1_FRAME_FLAG_SKIP_MODE_PRESENT``
       - 0x00020000
       - If set, specifies that the syntax element skip_mode will be present, if
         not set, specifies that skip_mode will not be used for this frame.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_FRAME_SIZE_OVERRIDE``
+    * - ``V4L2_AV1_FRAME_FLAG_FRAME_SIZE_OVERRIDE``
       - 0x00040000
       - If set, specifies that the frame size will either be specified as the
         size of one of the reference frames, or computed from the
         frame_width_minus_1 and frame_height_minus_1 syntax elements. If not
         set, specifies that the frame size is equal to the size in the sequence
         header.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_BUFFER_REMOVAL_TIME_PRESENT``
+    * - ``V4L2_AV1_FRAME_FLAG_BUFFER_REMOVAL_TIME_PRESENT``
       - 0x00080000
       - If set, specifies that buffer_removal_time is present. If not set,
         specifies that buffer_removal_time is not present.
-    * - ``V4L2_AV1_FRAME_HEADER_FLAG_FRAME_REFS_SHORT_SIGNALING``
+    * - ``V4L2_AV1_FRAME_FLAG_FRAME_REFS_SHORT_SIGNALING``
       - 0x00100000
       - If set, indicates that only two reference frames are explicitly
         signaled. If not set, indicates that all reference frames are explicitly
@@ -2803,7 +2764,7 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
 
 .. tabularcolumns:: |p{1.5cm}|p{5.8cm}|p{10.0cm}|
 
-.. flat-table:: struct v4l2_av1_film_grain
+.. flat-table:: struct v4l2_ctrl_av1_film_grain
     :header-rows:  0
     :stub-columns: 0
     :widths:       1 1 2

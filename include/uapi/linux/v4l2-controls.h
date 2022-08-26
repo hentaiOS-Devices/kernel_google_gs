@@ -1892,28 +1892,28 @@ struct v4l2_ctrl_vp8_frame {
 #define V4L2_AV1_MAX_TILE_ROWS		64
 #define V4L2_AV1_MAX_TILE_COUNT		512
 
-#define V4L2_AV1_SEQUENCE_FLAG_STILL_PICTURE		  BIT(0)
-#define V4L2_AV1_SEQUENCE_FLAG_USE_128X128_SUPERBLOCK	  BIT(1)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_FILTER_INTRA	  BIT(2)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_INTRA_EDGE_FILTER   BIT(3)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_INTERINTRA_COMPOUND BIT(4)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_MASKED_COMPOUND	  BIT(5)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_WARPED_MOTION	  BIT(6)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_DUAL_FILTER	  BIT(7)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_ORDER_HINT	  BIT(8)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_JNT_COMP		  BIT(9)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_REF_FRAME_MVS	  BIT(10)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_SUPERRES		  BIT(11)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_CDEF		  BIT(12)
-#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_RESTORATION	  BIT(13)
-#define V4L2_AV1_SEQUENCE_FLAG_MONO_CHROME		  BIT(14)
-#define V4L2_AV1_SEQUENCE_FLAG_COLOR_RANGE		  BIT(15)
-#define V4L2_AV1_SEQUENCE_FLAG_SUBSAMPLING_X		  BIT(16)
-#define V4L2_AV1_SEQUENCE_FLAG_SUBSAMPLING_Y		  BIT(17)
-#define V4L2_AV1_SEQUENCE_FLAG_FILM_GRAIN_PARAMS_PRESENT  BIT(18)
-#define V4L2_AV1_SEQUENCE_FLAG_SEPARATE_UV_DELTA_Q	  BIT(19)
+#define V4L2_AV1_SEQUENCE_FLAG_STILL_PICTURE		  0x00000001
+#define V4L2_AV1_SEQUENCE_FLAG_USE_128X128_SUPERBLOCK	  0x00000002
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_FILTER_INTRA	  0x00000004
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_INTRA_EDGE_FILTER   0x00000008
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_INTERINTRA_COMPOUND 0x00000010
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_MASKED_COMPOUND	  0x00000020
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_WARPED_MOTION	  0x00000040
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_DUAL_FILTER	  0x00000080
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_ORDER_HINT	  0x00000100
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_JNT_COMP		  0x00000200
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_REF_FRAME_MVS	  0x00000400
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_SUPERRES		  0x00000800
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_CDEF		  0x00001000
+#define V4L2_AV1_SEQUENCE_FLAG_ENABLE_RESTORATION	  0x00002000
+#define V4L2_AV1_SEQUENCE_FLAG_MONO_CHROME		  0x00004000
+#define V4L2_AV1_SEQUENCE_FLAG_COLOR_RANGE		  0x00008000
+#define V4L2_AV1_SEQUENCE_FLAG_SUBSAMPLING_X		  0x00010000
+#define V4L2_AV1_SEQUENCE_FLAG_SUBSAMPLING_Y		  0x00020000
+#define V4L2_AV1_SEQUENCE_FLAG_FILM_GRAIN_PARAMS_PRESENT  0x00040000
+#define V4L2_AV1_SEQUENCE_FLAG_SEPARATE_UV_DELTA_Q	  0x00080000
 
-#define V4L2_CID_STATELESS_AV1_SEQUENCE (V4L2_CID_CODEC_STATELESS_BASE + 408)
+#define V4L2_CID_STATELESS_AV1_SEQUENCE (V4L2_CID_CODEC_STATELESS_BASE + 500)
 /**
  * struct v4l2_ctrl_av1_sequence - AV1 Sequence
  *
@@ -1941,36 +1941,13 @@ struct v4l2_ctrl_av1_sequence {
 	__u16 max_frame_height_minus_1;
 };
 
-#define V4L2_AV1_TILE_GROUP_FLAG_START_AND_END_PRESENT BIT(0)
-
-#define V4L2_CID_STATELESS_AV1_TILE_GROUP (V4L2_CID_CODEC_STATELESS_BASE + 409)
-/**
- * struct v4l2_ctrl_av1_tile_group - AV1 Tile Group header.
- *
- * Represents a tile group as seen in an AV1 Tile Group OBU or Frame OBU. A
- * v4l2_ctrl_av1_tile_group instance will refer to tg_end - tg_start instances
- * of v4l2_ctrl_tile_group_entry. See section 6.10.1 "General tile group OBU
- * semantics" for more details.
- *
- * @flags: see V4L2_AV1_TILE_GROUP_FLAG_{}.
- * @tg_start: specifies the zero-based index of the first tile in the current
- * tile group.
- * @tg_end: specifies the zero-based index of the last tile in the current tile
- * group.
- */
-struct v4l2_ctrl_av1_tile_group {
-	__u8 flags;
-	__u32 tg_start;
-	__u32 tg_end;
-};
-
-#define V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY (V4L2_CID_CODEC_STATELESS_BASE + 410)
+#define V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY (V4L2_CID_CODEC_STATELESS_BASE + 501)
 /**
  * struct v4l2_ctrl_av1_tile_group_entry - AV1 Tile Group entry
  *
  * Represents a single AV1 tile inside an AV1 Tile Group. Note that MiRowStart,
  * MiRowEnd, MiColStart and MiColEnd can be retrieved from struct
- * v4l2_av1_tile_info in struct v4l2_ctrl_av1_frame_header using tile_row and
+ * v4l2_av1_tile_info in struct v4l2_ctrl_av1_frame using tile_row and
  * tile_col. See section 6.10.1 "General tile group OBU semantics" for more
  * details.
  *
@@ -2034,9 +2011,9 @@ enum v4l2_av1_reference_frame {
 
 #define V4L2_AV1_GLOBAL_MOTION_IS_INVALID(ref) (1 << (ref))
 
-#define V4L2_AV1_GLOBAL_MOTION_FLAG_IS_GLOBAL	   BIT(0)
-#define V4L2_AV1_GLOBAL_MOTION_FLAG_IS_ROT_ZOOM	   BIT(1)
-#define V4L2_AV1_GLOBAL_MOTION_FLAG_IS_TRANSLATION BIT(2)
+#define V4L2_AV1_GLOBAL_MOTION_FLAG_IS_GLOBAL	   0x1
+#define V4L2_AV1_GLOBAL_MOTION_FLAG_IS_ROT_ZOOM	   0x2
+#define V4L2_AV1_GLOBAL_MOTION_FLAG_IS_TRANSLATION 0x4
 /**
  * struct v4l2_av1_global_motion - AV1 Global Motion parameters as described in
  * section 6.8.17 "Global motion params semantics" of the AV1 specification.
@@ -2073,8 +2050,8 @@ enum v4l2_av1_frame_restoration_type {
 	V4L2_AV1_FRAME_RESTORE_SWITCHABLE = 3,
 };
 
-#define V4L2_AV1_LOOP_RESTORATION_FLAG_USES_LR		BIT(0)
-#define V4L2_AV1_LOOP_RESTORATION_FLAG_USES_CHROMA_LR	BIT(1)
+#define V4L2_AV1_LOOP_RESTORATION_FLAG_USES_LR		0x1
+#define V4L2_AV1_LOOP_RESTORATION_FLAG_USES_CHROMA_LR	0x2
 
 /**
  * struct v4l2_av1_loop_restoration - AV1 Loop Restauration as described in
@@ -2082,7 +2059,7 @@ enum v4l2_av1_frame_restoration_type {
  *
  * @flags: See V4L2_AV1_LOOP_RESTORATION_FLAG_{}.
  * @frame_restoration_type: specifies the type of restoration used for each
- * plane. See enum_v4l2_av1_frame_restoration_type.
+ * plane. See enum v4l2_av1_frame_restoration_type.
  * @lr_unit_shift: specifies if the luma restoration size should be halved.
  * @lr_uv_shift: specifies if the chroma size should be half the luma size.
  * @loop_restoration_size: specifies the size of loop restoration units in units
@@ -2117,11 +2094,11 @@ struct v4l2_av1_cdef {
 	__u8 uv_sec_strength[V4L2_AV1_CDEF_MAX];
 };
 
-#define V4L2_AV1_SEGMENTATION_FLAG_ENABLED	   BIT(0)
-#define V4L2_AV1_SEGMENTATION_FLAG_UPDATE_MAP	   BIT(1)
-#define V4L2_AV1_SEGMENTATION_FLAG_TEMPORAL_UPDATE BIT(2)
-#define V4L2_AV1_SEGMENTATION_FLAG_UPDATE_DATA	   BIT(3)
-#define V4L2_AV1_SEGMENTATION_FLAG_SEG_ID_PRE_SKIP	BIT(4)
+#define V4L2_AV1_SEGMENTATION_FLAG_ENABLED	   0x1
+#define V4L2_AV1_SEGMENTATION_FLAG_UPDATE_MAP	   0x2
+#define V4L2_AV1_SEGMENTATION_FLAG_TEMPORAL_UPDATE 0x4
+#define V4L2_AV1_SEGMENTATION_FLAG_UPDATE_DATA	   0x8
+#define V4L2_AV1_SEGMENTATION_FLAG_SEG_ID_PRE_SKIP 0x10
 
 /**
  * enum v4l2_av1_segment_feature - AV1 segment features as described in section
@@ -2166,13 +2143,15 @@ struct v4l2_av1_segmentation {
 	__u8 last_active_seg_id;
 };
 
-#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_ENABLED    BIT(0)
-#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_UPDATE     BIT(1)
-#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_LF_PRESENT BIT(2)
+#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_ENABLED    0x1
+#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_UPDATE     0x2
+#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_LF_PRESENT 0x4
+#define V4L2_AV1_LOOP_FILTER_FLAG_DELTA_LF_MULTI   0x8
 
 /**
  * struct v4l2_av1_loop_filter - AV1 Loop filter params as defined in section
- * 6.8.10. "Loop filter semantics" of the AV1 specification.
+ * 6.8.10. "Loop filter semantics" and "6.8.16. Loop filter delta parameters
+ * semantics" of the AV1 specification.
  *
  * @flags: see V4L2_AV1_LOOP_FILTER_FLAG_{}
  * @level: an array containing loop filter strength values. Different loop
@@ -2191,10 +2170,6 @@ struct v4l2_av1_segmentation {
  * previous value.
  * @delta_lf_res: specifies the left shift which should be applied to decoded
  * loop filter delta values.
- * @delta_lf_multi: a value equal to 1 specifies that separate loop filter
- * deltas are sent for horizontal luma edges, vertical luma edges,
- * the U edges, and the V edges. A value of delta_lf_multi equal to 0 specifies
- * that the same loop filter delta is used for all edges.
  */
 struct v4l2_av1_loop_filter {
 	__u8 flags;
@@ -2203,12 +2178,11 @@ struct v4l2_av1_loop_filter {
 	__s8 ref_deltas[V4L2_AV1_TOTAL_REFS_PER_FRAME];
 	__s8 mode_deltas[2];
 	__u8 delta_lf_res;
-	__u8 delta_lf_multi;
 };
 
-#define V4L2_AV1_QUANTIZATION_FLAG_DIFF_UV_DELTA   BIT(0)
-#define V4L2_AV1_QUANTIZATION_FLAG_USING_QMATRIX   BIT(1)
-#define V4L2_AV1_QUANTIZATION_FLAG_DELTA_Q_PRESENT BIT(2)
+#define V4L2_AV1_QUANTIZATION_FLAG_DIFF_UV_DELTA   0x1
+#define V4L2_AV1_QUANTIZATION_FLAG_USING_QMATRIX   0x2
+#define V4L2_AV1_QUANTIZATION_FLAG_DELTA_Q_PRESENT 0x4
 
 /**
  * struct v4l2_av1_quantization - AV1 Quantization params as defined in section
@@ -2245,7 +2219,7 @@ struct v4l2_av1_quantization {
 	__u8 delta_q_res;
 };
 
-#define V4L2_AV1_TILE_INFO_FLAG_UNIFORM_TILE_SPACING	BIT(0)
+#define V4L2_AV1_TILE_INFO_FLAG_UNIFORM_TILE_SPACING	0x1
 
 /**
  * struct v4l2_av1_tile_info - AV1 Tile info as defined in section 6.8.14. "Tile
@@ -2330,31 +2304,31 @@ enum v4l2_av1_tx_mode {
 	V4L2_AV1_TX_MODE_SELECT = 2
 };
 
-#define V4L2_AV1_FRAME_HEADER_FLAG_SHOW_FRAME			BIT(0)
-#define V4L2_AV1_FRAME_HEADER_FLAG_SHOWABLE_FRAME		BIT(1)
-#define V4L2_AV1_FRAME_HEADER_FLAG_ERROR_RESILIENT_MODE		BIT(2)
-#define V4L2_AV1_FRAME_HEADER_FLAG_DISABLE_CDF_UPDATE		BIT(3)
-#define V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_SCREEN_CONTENT_TOOLS	BIT(4)
-#define V4L2_AV1_FRAME_HEADER_FLAG_FORCE_INTEGER_MV		BIT(5)
-#define V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_INTRABC		BIT(6)
-#define V4L2_AV1_FRAME_HEADER_FLAG_USE_SUPERRES			BIT(7)
-#define V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_HIGH_PRECISION_MV	BIT(8)
-#define V4L2_AV1_FRAME_HEADER_FLAG_IS_MOTION_MODE_SWITCHABLE	BIT(9)
-#define V4L2_AV1_FRAME_HEADER_FLAG_USE_REF_FRAME_MVS		BIT(10)
-#define V4L2_AV1_FRAME_HEADER_FLAG_DISABLE_FRAME_END_UPDATE_CDF BIT(11)
-#define V4L2_AV1_FRAME_HEADER_FLAG_UNIFORM_TILE_SPACING		BIT(12)
-#define V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_WARPED_MOTION		BIT(13)
-#define V4L2_AV1_FRAME_HEADER_FLAG_REFERENCE_SELECT		BIT(14)
-#define V4L2_AV1_FRAME_HEADER_FLAG_REDUCED_TX_SET		BIT(15)
-#define V4L2_AV1_FRAME_HEADER_FLAG_SKIP_MODE_ALLOWED		BIT(16)
-#define V4L2_AV1_FRAME_HEADER_FLAG_SKIP_MODE_PRESENT		BIT(17)
-#define V4L2_AV1_FRAME_HEADER_FLAG_FRAME_SIZE_OVERRIDE		BIT(18)
-#define V4L2_AV1_FRAME_HEADER_FLAG_BUFFER_REMOVAL_TIME_PRESENT	BIT(19)
-#define V4L2_AV1_FRAME_HEADER_FLAG_FRAME_REFS_SHORT_SIGNALING	BIT(20)
+#define V4L2_AV1_FRAME_FLAG_SHOW_FRAME			 0x00000001
+#define V4L2_AV1_FRAME_FLAG_SHOWABLE_FRAME		 0x00000002
+#define V4L2_AV1_FRAME_FLAG_ERROR_RESILIENT_MODE	 0x00000004
+#define V4L2_AV1_FRAME_FLAG_DISABLE_CDF_UPDATE		 0x00000008
+#define V4L2_AV1_FRAME_FLAG_ALLOW_SCREEN_CONTENT_TOOLS	 0x00000010
+#define V4L2_AV1_FRAME_FLAG_FORCE_INTEGER_MV		 0x00000020
+#define V4L2_AV1_FRAME_FLAG_ALLOW_INTRABC		 0x00000040
+#define V4L2_AV1_FRAME_FLAG_USE_SUPERRES		 0x00000080
+#define V4L2_AV1_FRAME_FLAG_ALLOW_HIGH_PRECISION_MV	 0x00000100
+#define V4L2_AV1_FRAME_FLAG_IS_MOTION_MODE_SWITCHABLE	 0x00000200
+#define V4L2_AV1_FRAME_FLAG_USE_REF_FRAME_MVS		 0x00000400
+#define V4L2_AV1_FRAME_FLAG_DISABLE_FRAME_END_UPDATE_CDF 0x00000800
+#define V4L2_AV1_FRAME_FLAG_UNIFORM_TILE_SPACING	 0x00001000
+#define V4L2_AV1_FRAME_FLAG_ALLOW_WARPED_MOTION		 0x00002000
+#define V4L2_AV1_FRAME_FLAG_REFERENCE_SELECT		 0x00004000
+#define V4L2_AV1_FRAME_FLAG_REDUCED_TX_SET		 0x00008000
+#define V4L2_AV1_FRAME_FLAG_SKIP_MODE_ALLOWED		 0x00010000
+#define V4L2_AV1_FRAME_FLAG_SKIP_MODE_PRESENT		 0x00020000
+#define V4L2_AV1_FRAME_FLAG_FRAME_SIZE_OVERRIDE		 0x00040000
+#define V4L2_AV1_FRAME_FLAG_BUFFER_REMOVAL_TIME_PRESENT	 0x00080000
+#define V4L2_AV1_FRAME_FLAG_FRAME_REFS_SHORT_SIGNALING	 0x00100000
 
-#define V4L2_CID_STATELESS_AV1_FRAME_HEADER (V4L2_CID_CODEC_STATELESS_BASE + 411)
+#define V4L2_CID_STATELESS_AV1_FRAME (V4L2_CID_CODEC_STATELESS_BASE + 502)
 /**
- * struct v4l2_ctrl_av1_frame_header - Represents an AV1 Frame Header OBU.
+ * struct v4l2_ctrl_av1_frame - Represents an AV1 Frame Header OBU.
  *
  * @tile_info: tile info
  * @quantization: quantization params
@@ -2363,8 +2337,7 @@ enum v4l2_av1_tx_mode {
  * @cdef: cdef params
  * @loop_restoration: loop restoration params
  * @global_motion: global motion params
- * @film_grain: film grain params
- * @flags: see V4L2_AV1_FRAME_HEADER_FLAG_{}
+ * @flags: see V4L2_AV1_FRAME_FLAG_{}
  * @frame_type: specifies the AV1 frame type
  * @order_hint: specifies OrderHintBits least significant bits of the expected
  * output order for this frame.
@@ -2396,15 +2369,14 @@ enum v4l2_av1_tx_mode {
  * @gold_frame_idx: specifies the reference frame to use for GOLDEN_FRAME.
  * refs
  * @reference_frame_ts: the V4L2 timestamp of the reference frame slots.
- * @ref_frame_idx: index into @reference_frame_ts fo the frames used by
- *   inter-frames.
- * enumerated in &v4l2_av1_reference_frame. The timestamp refers to the
- * timestamp field in struct v4l2_buffer. Use v4l2_timeval_to_ns() to convert
- * the struct timeval to a __u64.
+ * @ref_frame_idx: used to index into @reference_frame_ts when decoding
+ * inter-frames. The meaning of this array is the same as in the specification.
+ * The timestamp refers to the timestamp field in struct v4l2_buffer. Use
+ * v4l2_timeval_to_ns() to convert the struct timeval to a __u64.
  * @skip_mode_frame: specifies the frames to use for compound prediction when
  * skip_mode is equal to 1.
  */
-struct v4l2_ctrl_av1_frame_header {
+struct v4l2_ctrl_av1_frame {
 	struct v4l2_av1_tile_info tile_info;
 	struct v4l2_av1_quantization quantization;
 	struct v4l2_av1_segmentation segmentation;
@@ -2448,7 +2420,7 @@ struct v4l2_ctrl_av1_frame_header {
  *
  * Conveys the highest profile a decoder can work with.
  */
-#define V4L2_CID_STATELESS_AV1_PROFILE (V4L2_CID_CODEC_STATELESS_BASE + 412)
+#define V4L2_CID_STATELESS_AV1_PROFILE (V4L2_CID_CODEC_STATELESS_BASE + 503)
 enum v4l2_stateless_av1_profile {
 	V4L2_STATELESS_AV1_PROFILE_MAIN = 0,
 	V4L2_STATELESS_AV1_PROFILE_HIGH = 1,
@@ -2484,7 +2456,7 @@ enum v4l2_stateless_av1_profile {
  *
  * Conveys the highest level a decoder can work with.
  */
-#define V4L2_CID_STATELESS_AV1_LEVEL (V4L2_CID_CODEC_STATELESS_BASE + 413)
+#define V4L2_CID_STATELESS_AV1_LEVEL (V4L2_CID_CODEC_STATELESS_BASE + 504)
 enum v4l2_stateless_av1_level {
 	V4L2_STATELESS_AV1_LEVEL_2_0 = 0,
 	V4L2_STATELESS_AV1_LEVEL_2_1 = 1,
@@ -2517,14 +2489,14 @@ enum v4l2_stateless_av1_level {
 	V4L2_STATELESS_AV1_LEVEL_7_3 = 23
 };
 
-#define V4L2_AV1_FILM_GRAIN_FLAG_APPLY_GRAIN BIT(0)
-#define V4L2_AV1_FILM_GRAIN_FLAG_UPDATE_GRAIN BIT(1)
-#define V4L2_AV1_FILM_GRAIN_FLAG_CHROMA_SCALING_FROM_LUMA BIT(2)
-#define V4L2_AV1_FILM_GRAIN_FLAG_OVERLAP BIT(3)
-#define V4L2_AV1_FILM_GRAIN_FLAG_CLIP_TO_RESTRICTED_RANGE BIT(4)
+#define V4L2_AV1_FILM_GRAIN_FLAG_APPLY_GRAIN 0x1
+#define V4L2_AV1_FILM_GRAIN_FLAG_UPDATE_GRAIN 0x2
+#define V4L2_AV1_FILM_GRAIN_FLAG_CHROMA_SCALING_FROM_LUMA 0x4
+#define V4L2_AV1_FILM_GRAIN_FLAG_OVERLAP 0x8
+#define V4L2_AV1_FILM_GRAIN_FLAG_CLIP_TO_RESTRICTED_RANGE 0x10
 
 /**
- * struct v4l2_av1_film_grain - AV1 Film Grain parameters.
+ * struct v4l2_ctrl_av1_film_grain - AV1 Film Grain parameters.
  *
  * Film grain parameters as specified by section 6.8.20 of the AV1
    Specification.
@@ -2588,7 +2560,7 @@ enum v4l2_stateless_av1_level {
  * @cr_offset: represents an offset used in derivation of the input index to the
  * cr component scaling function.
  */
-#define V4L2_CID_STATELESS_AV1_FILM_GRAIN (V4L2_CID_CODEC_STATELESS_BASE + 414)
+#define V4L2_CID_STATELESS_AV1_FILM_GRAIN (V4L2_CID_CODEC_STATELESS_BASE + 505)
 struct v4l2_ctrl_av1_film_grain {
 	__u8 flags;
 	__u16 grain_seed;

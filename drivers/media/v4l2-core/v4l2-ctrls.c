@@ -1251,9 +1251,8 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_STATELESS_VP9_COMPRESSED_HDR:	return "VP9 Probabilities Updates";
 	case V4L2_CID_STATELESS_VP9_FRAME:			return "VP9 Frame Decode Parameters";
 	case V4L2_CID_STATELESS_AV1_SEQUENCE:			return "AV1 Sequence parameters";
-	case V4L2_CID_STATELESS_AV1_TILE_GROUP:		        return "AV1 Tile Group";
 	case V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY:	        return "AV1 Tile Group Entry";
-	case V4L2_CID_STATELESS_AV1_FRAME_HEADER:		return "AV1 Frame Header parameters";
+	case V4L2_CID_STATELESS_AV1_FRAME:			return "AV1 Frame parameters";
 	case V4L2_CID_STATELESS_AV1_PROFILE:			return "AV1 Profile";
 	case V4L2_CID_STATELESS_AV1_LEVEL:			return "AV1 Level";
 	case V4L2_CID_STATELESS_AV1_FILM_GRAIN:			return "AV1 Film Grain";
@@ -1564,16 +1563,12 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_STATELESS_AV1_SEQUENCE:
 		*type = V4L2_CTRL_TYPE_AV1_SEQUENCE;
 		break;
-	case V4L2_CID_STATELESS_AV1_TILE_GROUP:
-		*type = V4L2_CTRL_TYPE_AV1_TILE_GROUP;
-		*flags |= V4L2_CTRL_FLAG_DYNAMIC_ARRAY;
-		break;
 	case V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY:
 		*type = V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY;
 		*flags |= V4L2_CTRL_FLAG_DYNAMIC_ARRAY;
 		break;
-	case V4L2_CID_STATELESS_AV1_FRAME_HEADER:
-		*type = V4L2_CTRL_TYPE_AV1_FRAME_HEADER;
+	case V4L2_CID_STATELESS_AV1_FRAME:
+		*type = V4L2_CTRL_TYPE_AV1_FRAME;
 		break;
 	case V4L2_CID_STATELESS_AV1_FILM_GRAIN:
 		*type = V4L2_CTRL_TYPE_AV1_FILM_GRAIN;
@@ -1934,14 +1929,11 @@ static void std_log(const struct v4l2_ctrl *ctrl)
 	case V4L2_CTRL_TYPE_AV1_SEQUENCE:
 		pr_cont("AV1_SEQUENCE");
 		break;
-	case V4L2_CTRL_TYPE_AV1_TILE_GROUP:
-		pr_cont("AV1_TILE_GROUP");
-		break;
 	case V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY:
 		pr_cont("AV1_TILE_GROUP_ENTRY");
 		break;
-	case V4L2_CTRL_TYPE_AV1_FRAME_HEADER:
-		pr_cont("AV1_FRAME_HEADER");
+	case V4L2_CTRL_TYPE_AV1_FRAME:
+		pr_cont("AV1_FRAME");
 		break;
 	case V4L2_CTRL_TYPE_AV1_FILM_GRAIN:
 		pr_cont("AV1_FILM_GRAIN");
@@ -2283,7 +2275,7 @@ static int validate_av1_film_grain(struct v4l2_ctrl_av1_film_grain *fg)
 	return 0;
 }
 
-static int validate_av1_frame_header(struct v4l2_ctrl_av1_frame_header *f)
+static int validate_av1_frame(struct v4l2_ctrl_av1_frame *f)
 {
 	int ret = 0;
 
@@ -2304,27 +2296,27 @@ static int validate_av1_frame_header(struct v4l2_ctrl_av1_frame_header *f)
 		return ret;
 
 	if (f->flags &
-	~(V4L2_AV1_FRAME_HEADER_FLAG_SHOW_FRAME |
-	  V4L2_AV1_FRAME_HEADER_FLAG_SHOWABLE_FRAME |
-	  V4L2_AV1_FRAME_HEADER_FLAG_ERROR_RESILIENT_MODE |
-	  V4L2_AV1_FRAME_HEADER_FLAG_DISABLE_CDF_UPDATE |
-	  V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_SCREEN_CONTENT_TOOLS |
-	  V4L2_AV1_FRAME_HEADER_FLAG_FORCE_INTEGER_MV |
-	  V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_INTRABC |
-	  V4L2_AV1_FRAME_HEADER_FLAG_USE_SUPERRES |
-	  V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_HIGH_PRECISION_MV |
-	  V4L2_AV1_FRAME_HEADER_FLAG_IS_MOTION_MODE_SWITCHABLE |
-	  V4L2_AV1_FRAME_HEADER_FLAG_USE_REF_FRAME_MVS |
-	  V4L2_AV1_FRAME_HEADER_FLAG_DISABLE_FRAME_END_UPDATE_CDF |
-	  V4L2_AV1_FRAME_HEADER_FLAG_UNIFORM_TILE_SPACING |
-	  V4L2_AV1_FRAME_HEADER_FLAG_ALLOW_WARPED_MOTION |
-	  V4L2_AV1_FRAME_HEADER_FLAG_REFERENCE_SELECT |
-	  V4L2_AV1_FRAME_HEADER_FLAG_REDUCED_TX_SET |
-	  V4L2_AV1_FRAME_HEADER_FLAG_SKIP_MODE_ALLOWED |
-	  V4L2_AV1_FRAME_HEADER_FLAG_SKIP_MODE_PRESENT |
-	  V4L2_AV1_FRAME_HEADER_FLAG_FRAME_SIZE_OVERRIDE |
-	  V4L2_AV1_FRAME_HEADER_FLAG_BUFFER_REMOVAL_TIME_PRESENT |
-	  V4L2_AV1_FRAME_HEADER_FLAG_FRAME_REFS_SHORT_SIGNALING))
+	~(V4L2_AV1_FRAME_FLAG_SHOW_FRAME |
+	  V4L2_AV1_FRAME_FLAG_SHOWABLE_FRAME |
+	  V4L2_AV1_FRAME_FLAG_ERROR_RESILIENT_MODE |
+	  V4L2_AV1_FRAME_FLAG_DISABLE_CDF_UPDATE |
+	  V4L2_AV1_FRAME_FLAG_ALLOW_SCREEN_CONTENT_TOOLS |
+	  V4L2_AV1_FRAME_FLAG_FORCE_INTEGER_MV |
+	  V4L2_AV1_FRAME_FLAG_ALLOW_INTRABC |
+	  V4L2_AV1_FRAME_FLAG_USE_SUPERRES |
+	  V4L2_AV1_FRAME_FLAG_ALLOW_HIGH_PRECISION_MV |
+	  V4L2_AV1_FRAME_FLAG_IS_MOTION_MODE_SWITCHABLE |
+	  V4L2_AV1_FRAME_FLAG_USE_REF_FRAME_MVS |
+	  V4L2_AV1_FRAME_FLAG_DISABLE_FRAME_END_UPDATE_CDF |
+	  V4L2_AV1_FRAME_FLAG_UNIFORM_TILE_SPACING |
+	  V4L2_AV1_FRAME_FLAG_ALLOW_WARPED_MOTION |
+	  V4L2_AV1_FRAME_FLAG_REFERENCE_SELECT |
+	  V4L2_AV1_FRAME_FLAG_REDUCED_TX_SET |
+	  V4L2_AV1_FRAME_FLAG_SKIP_MODE_ALLOWED |
+	  V4L2_AV1_FRAME_FLAG_SKIP_MODE_PRESENT |
+	  V4L2_AV1_FRAME_FLAG_FRAME_SIZE_OVERRIDE |
+	  V4L2_AV1_FRAME_FLAG_BUFFER_REMOVAL_TIME_PRESENT |
+	  V4L2_AV1_FRAME_FLAG_FRAME_REFS_SHORT_SIGNALING))
 		return -EINVAL;
 
 	if (f->superres_denom > GENMASK(2, 0) + 9)
@@ -2366,16 +2358,6 @@ static int validate_av1_sequence(struct v4l2_ctrl_av1_sequence *s)
 		return -EINVAL;
 
 	/* TODO: PROFILES */
-	return 0;
-}
-
-static int validate_av1_tile_group(struct v4l2_ctrl_av1_tile_group *t)
-{
-	if (t->flags & ~(V4L2_AV1_TILE_GROUP_FLAG_START_AND_END_PRESENT))
-		return -EINVAL;
-	if (t->tg_start > t->tg_end)
-		return -EINVAL;
-
 	return 0;
 }
 
@@ -2630,12 +2612,10 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 		zero_padding(p_vp8_frame->coder_state);
 		break;
 
-	case V4L2_CTRL_TYPE_AV1_FRAME_HEADER:
-		return validate_av1_frame_header(p);
+	case V4L2_CTRL_TYPE_AV1_FRAME:
+		return validate_av1_frame(p);
 	case V4L2_CTRL_TYPE_AV1_SEQUENCE:
 		return validate_av1_sequence(p);
-	case V4L2_CTRL_TYPE_AV1_TILE_GROUP:
-		return validate_av1_tile_group(p);
 	case V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY:
 		break;
 	case V4L2_CTRL_TYPE_AV1_FILM_GRAIN:
@@ -3574,14 +3554,11 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 	case V4L2_CTRL_TYPE_AV1_SEQUENCE:
 		elem_size = sizeof(struct v4l2_ctrl_av1_sequence);
 		break;
-	case V4L2_CTRL_TYPE_AV1_TILE_GROUP:
-		elem_size = sizeof(struct v4l2_ctrl_av1_tile_group);
-		break;
 	case V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY:
 		elem_size = sizeof(struct v4l2_ctrl_av1_tile_group_entry);
 		break;
-	case V4L2_CTRL_TYPE_AV1_FRAME_HEADER:
-		elem_size = sizeof(struct v4l2_ctrl_av1_frame_header);
+	case V4L2_CTRL_TYPE_AV1_FRAME:
+		elem_size = sizeof(struct v4l2_ctrl_av1_frame);
 		break;
 	case V4L2_CTRL_TYPE_AV1_FILM_GRAIN:
 		elem_size = sizeof(struct v4l2_ctrl_av1_film_grain);

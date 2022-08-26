@@ -240,8 +240,7 @@ Compressed Formats
         pipeline with the :ref:`stateless_decoder`. Metadata associated with the
         frame to decode is required to be passed through the
         ``V4L2_CID_STATELESS_AV1_SEQUENCE``, ``V4L2_CID_STATELESS_AV1_FRAME``,
-        ``V4L2_CID_STATELESS_AV1_TILE_GROUP`` and
-        ``V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY`` controls.
+        and ``V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY`` controls.
         See the :ref:`associated Codec Control IDs <v4l2-codec-stateless-av1>`.
         Exactly one output and one capture buffer must be provided for use with
         this pixel format. The output buffer must contain the appropriate number
