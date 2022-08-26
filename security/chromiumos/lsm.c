@@ -210,7 +210,7 @@ static int chromiumos_security_file_open(struct file *file)
 	return policy == CHROMIUMOS_INODE_POLICY_BLOCK ? -EACCES : 0;
 }
 
-int chromiumos_bprm_creds_for_exec(struct linux_binprm *bprm)
+static int chromiumos_bprm_creds_for_exec(struct linux_binprm *bprm)
 {
 	struct file *file = bprm->file;
 
