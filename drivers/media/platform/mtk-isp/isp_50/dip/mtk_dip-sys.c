@@ -225,7 +225,7 @@ static void dip_mdp_cb_func(struct cmdq_cb_data data)
 		pr_err("%s: req->dip_pipe is NULL\n", __func__);
 		return;
 	}
-	pr_info("req(0x%x), req->dip_pipe(0x%x)\n", req, req->dip_pipe);
+	pr_info("req(0x%px), req->dip_pipe(0x%px)\n", req, req->dip_pipe);
 	dip_dev = req->dip_pipe->dip_dev;
 
 	dev_dbg(dip_dev->dev, "%s: req(%p), idx(%d), no(%d), s(%d), n_in(%d), n_out(%d)\n",
@@ -254,7 +254,7 @@ static void dip_runner_func(struct work_struct *work)
 	struct img_config *config_data =
 		(struct img_config *)req->working_buf->config_data.vaddr;
 
-	dev_info(dip_dev->dev, "req(0x%x), req->dip_pipe(0x%x)\n", req, req->dip_pipe);
+	dev_info(dip_dev->dev, "req(0x%px), req->dip_pipe(0x%px)\n", req, req->dip_pipe);
 	/*
 	 * Call MDP/GCE API to do HW excecution
 	 * Pass the framejob to MDP driver
