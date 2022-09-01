@@ -322,11 +322,6 @@ struct plane_resource {
 	struct dcn_fe_bandwidth bw;
 };
 
-
-struct link_config {
-	struct dc_link_settings dp_link_settings;
-};
-
 union pipe_update_flags {
 	struct {
 		uint32_t enable : 1;
@@ -358,13 +353,6 @@ struct pipe_ctx {
 	struct clock_source *clock_source;
 
 	struct pll_settings pll_settings;
-
-	/* link config records software decision for what link config should be
-	 * enabled given current link capability and stream during hw resource
-	 * mapping. This is to decouple the dependency on link capability during
-	 * dc commit or update.
-	 */
-	struct link_config link_config;
 
 	uint8_t pipe_idx;
 

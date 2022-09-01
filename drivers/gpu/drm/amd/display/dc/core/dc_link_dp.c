@@ -2699,13 +2699,15 @@ static bool decide_mst_link_settings(const struct dc_link *link, struct dc_link_
 	return true;
 }
 
-bool decide_link_settings(struct dc_stream_state *stream,
+void decide_link_settings(struct dc_stream_state *stream,
 	struct dc_link_settings *link_setting)
 {
-	struct dc_link *link = stream->link;
-	uint32_t req_bw = dc_bandwidth_in_kbps_from_timing(&stream->timing);
+	struct dc_link *link;
+	uint32_t req_bw;
 
-	memset(link_setting, 0, sizeof(*link_setting));
+	req_bw = dc_bandwidth_in_kbps_from_timing(&stream->timing);
+
+	link = stream->link;
 
 	/* if preferred is specified through AMDDP, use it, if it's enough
 	 * to drive the mode
@@ -2714,23 +2716,26 @@ bool decide_link_settings(struct dc_stream_state *stream,
 			LANE_COUNT_UNKNOWN &&
 			link->preferred_link_setting.link_rate !=
 					LINK_RATE_UNKNOWN) {
-		*link_setting = link->preferred_link_setting;
-		return true;
+		*link_setting =  link->preferred_link_setting;
+		return;
 	}
 
 	/* MST doesn't perform link training for now
 	 * TODO: add MST specific link training routine
 	 */
 	if (stream->signal == SIGNAL_TYPE_DISPLAY_PORT_MST) {
-		decide_mst_link_settings(link, link_setting);
+		if (decide_mst_link_settings(link, link_setting))
+			return;
 	} else if (link->connector_signal == SIGNAL_TYPE_EDP) {
-		decide_edp_link_settings(link, link_setting, req_bw);
-	} else {
-		decide_dp_link_settings(link, link_setting, req_bw);
-	}
+		if (decide_edp_link_settings(link, link_setting, req_bw))
+			return;
+	} else if (decide_dp_link_settings(link, link_setting, req_bw))
+		return;
 
-	return link_setting->lane_count != LANE_COUNT_UNKNOWN &&
-			link_setting->link_rate != LINK_RATE_UNKNOWN;
+	BREAK_TO_DEBUGGER();
+	ASSERT(link->verified_link_cap.lane_count != LANE_COUNT_UNKNOWN);
+
+	*link_setting = link->verified_link_cap;
 }
 
 /*************************Short Pulse IRQ***************************/
