@@ -353,8 +353,11 @@ static void eh_compr_fifo_init(struct eh_device *eh_dev)
 	data = (unsigned long)virt_to_phys(eh_dev->fifo) | __ffs(eh_dev->fifo_size);
 	writeq(data, eh_dev->regs + EH_REG_CDESC_LOC);
 
+	/* Program max incompressible size limt to 3K */
+	data |= (0x30 << EH_CDESC_CTRL_COMPRESS_SIZE_LIMIT);
+
 	/* enable compression */
-	data = 1UL << EH_CDESC_CTRL_COMPRESS_ENABLE_SHIFT;
+	data |= 1UL << EH_CDESC_CTRL_COMPRESS_ENABLE_SHIFT;
 	writeq(data, eh_dev->regs + EH_REG_CDESC_CTRL);
 }
 
