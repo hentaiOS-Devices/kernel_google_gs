@@ -923,8 +923,7 @@ static int btusb_recv_isoc(struct btusb_data *data, void *buffer, int count)
 		 * alt settings 3, since this is only used with RTK chips so
 		 * let vendor function detect it.
 		 */
-		if (test_bit(BTUSB_USE_ALT3_FOR_WBS, &data->flags) &&
-			btrealtek_test_flag(data->hdev, REALTEK_WBS_FILTER)) {
+		if (test_bit(BTUSB_USE_ALT3_FOR_WBS, &data->flags)) {
 			err = btrtl_usb_recv_isoc(skb->len, skb->data, buffer,
 							len, wMaxPacketSize);
 			if (err)
