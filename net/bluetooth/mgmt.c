@@ -8710,7 +8710,7 @@ static int get_sco_codec_capabilities(struct sock *sk, struct hci_dev *hdev,
 				if (c->transport != 0x01 || c->id != 0x05)
 					continue;
 
-				rc->codec = c->id;
+				rc->codec = cp->codecs[i];
 				rc->packet_size = c->len;
 				rc->data_length = c->caps->len;
 				memcpy(rc->data, c->caps, c->caps->len);
