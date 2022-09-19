@@ -317,7 +317,7 @@ void exynos_pcie_rc_pcie_phy_config(struct exynos_pcie *exynos_pcie, int ch_num)
 	 * always start from an initial value (determined through simulation)
 	 * ensures that AFC has enough time to complete.
 	 */
-	dev_info(exynos_pcie->pci->dev, "AFC cal mode set to restart\n");
+	dev_dbg(exynos_pcie->pci->dev, "AFC cal mode set to restart\n");
 	writel(0x4, phy_base_regs + 0xBF4);
 }
 EXPORT_SYMBOL_GPL(exynos_pcie_rc_pcie_phy_config);
