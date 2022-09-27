@@ -41,6 +41,7 @@
 #include "set_mode_types.h"
 #include "virtual/virtual_stream_encoder.h"
 #include "dpcd_defs.h"
+#include "dc_link_dp.h"
 
 #if defined(CONFIG_DRM_AMD_DC_SI)
 #include "dce60/dce60_resource.h"
@@ -2057,6 +2058,12 @@ enum dc_status resource_map_pool_resources(
 		&context->res_ctx, pool,
 		pipe_ctx->stream_res.stream_enc,
 		true);
+
+	/* Decide link settings */
+	if (dc_is_dp_signal(stream->signal)) {
+		if (!decide_link_settings(stream, &pipe_ctx->link_config.dp_link_settings))
+			return DC_FAIL_DP_LINK_BANDWIDTH;
+	}
 
 	/* TODO: Add check if ASIC support and EDID audio */
 	if (!stream->converter_disable_audio &&
