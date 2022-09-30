@@ -88,9 +88,7 @@ static int enetc_vf_set_mac_addr(struct net_device *ndev, void *addr)
 static int enetc_vf_set_features(struct net_device *ndev,
 				 netdev_features_t features)
 {
-	enetc_set_features(ndev, features);
-
-	return 0;
+	return enetc_set_features(ndev, features);
 }
 
 /* Probing/ Init */

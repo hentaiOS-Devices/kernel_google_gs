@@ -1,4 +1,3 @@
-#!/bin/bash
 # SPDX-License-Identifier: GPL-2.0
 
 # This test sends one stream of traffic from H1 through a TBF shaper, to a RED
