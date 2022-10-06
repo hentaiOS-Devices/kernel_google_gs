@@ -3854,6 +3854,7 @@ static bool walk_mm_list(struct lruvec *lruvec, unsigned long max_seq,
 	VM_BUG_ON(max_seq != READ_ONCE(lrugen->max_seq));
 
 	inc_max_seq(lruvec, max_seq);
+	sysfs_notify(mm_kobj, "lru_gen", "admin");
 	/* either we see any waiters or they will see updated max_seq */
 	if (wq_has_sleeper(&mm_list->nodes[nid].wait))
 		wake_up_all(&mm_list->nodes[nid].wait);
