@@ -219,6 +219,11 @@ static void dip_mdp_cb_func(struct cmdq_cb_data data)
 		       __func__);
 		return;
 	}
+	if (data.sta < 0) {
+		pr_err("%s: callback data return error\n",
+		       __func__);
+		return;
+	}
 
 	req = data.data;
 	if (!req->dip_pipe) {
