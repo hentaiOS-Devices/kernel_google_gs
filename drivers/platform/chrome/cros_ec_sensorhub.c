@@ -21,6 +21,13 @@
 
 static const struct dmi_system_id sensor_override_table[] = {
 	{
+		.ident = "Chromebook Reef/Electro",
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_NAME, "Reef"),
+			DMI_MATCH(DMI_SYS_VENDOR, "Google"),
+		},
+	},
+	{
 		.ident = "Chromebook Snappy",
 		.matches = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "Snappy"),
