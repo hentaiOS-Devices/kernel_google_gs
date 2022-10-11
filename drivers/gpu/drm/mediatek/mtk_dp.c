@@ -2635,6 +2635,11 @@ static void mtk_dp_bridge_atomic_disable(struct drm_bridge *bridge,
 {
 	struct mtk_dp *mtk_dp = mtk_dp_from_bridge(bridge);
 
+	if (mtk_dp->train_info.cable_plugged_in) {
+		drm_dp_dpcd_writeb(&mtk_dp->aux, DP_SET_POWER, DP_SET_POWER_D3);
+		usleep_range(2000, 3000);
+	}
+
 	mtk_dp_video_mute(mtk_dp, true);
 	mtk_dp_audio_mute(mtk_dp, true);
 	mtk_dp->state = MTK_DP_STATE_IDLE;
