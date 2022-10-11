@@ -124,6 +124,7 @@ enum mtk_dp_color_depth {
 };
 
 struct mtk_dp_audio_cfg {
+	int sad_count;
 	int sample_rate;
 	int word_length_bits;
 	int channels;
@@ -132,7 +133,7 @@ struct mtk_dp_audio_cfg {
 struct mtk_dp_info {
 	enum mtk_dp_color_depth depth;
 	enum mtk_dp_color_format format;
-	struct mtk_dp_audio_cfg audio_caps;
+	struct mtk_dp_audio_cfg audio_cur_cfg;
 	struct mtk_dp_timings timings;
 };
 
@@ -1900,50 +1901,15 @@ static bool mtk_dp_parse_capabilities(struct mtk_dp *mtk_dp)
 	return true;
 }
 
-static int mtk_dp_edid_parse_audio_capabilities(struct mtk_dp *mtk_dp,
+static bool mtk_dp_edid_parse_audio_capabilities(struct mtk_dp *mtk_dp,
 						struct mtk_dp_audio_cfg *cfg)
 {
-	struct cea_sad *sads;
-	int sad_count;
-	int i;
-	int ret = 0;
-
-	mutex_lock(&mtk_dp->edid_lock);
-	if (!mtk_dp->edid) {
-		mutex_unlock(&mtk_dp->edid_lock);
-		dev_err(mtk_dp->dev, "EDID not found!\n");
-		return -EINVAL;
-	}
-
-	sad_count = drm_edid_to_sad(mtk_dp->edid, &sads);
-	mutex_unlock(&mtk_dp->edid_lock);
-	if (sad_count <= 0) {
+	if (mtk_dp->info.audio_cur_cfg.sad_count <= 0) {
 		drm_info(mtk_dp->drm_dev, "The SADs is NULL\n");
-		return 0;
+		return false;
 	}
 
-	for (i = 0; i < sad_count; i++) {
-		int sample_rate;
-		int word_length;
-		// Only PCM supported at the moment
-		if (sads[i].format != HDMI_AUDIO_CODING_TYPE_PCM)
-			continue;
-
-		sample_rate = drm_cea_sad_get_sample_rate(&sads[i]);
-		word_length =
-			drm_cea_sad_get_uncompressed_word_length(&sads[i]);
-		if (sample_rate <= 0 || word_length <= 0)
-			continue;
-
-		cfg->channels = sads[i].channels;
-		cfg->word_length_bits = word_length;
-		cfg->sample_rate = sample_rate;
-		ret = 1;
-		break;
-	}
-	kfree(sads);
-
-	return ret;
+	return true;
 }
 
 static void mtk_dp_train_change_mode(struct mtk_dp *mtk_dp)
@@ -2064,15 +2030,7 @@ static int mtk_dp_train_handler(struct mtk_dp *mtk_dp)
 		}
 		break;
 
-	case MTK_DP_TRAIN_STATE_CHECKEDID: {
-		int caps_found = mtk_dp_edid_parse_audio_capabilities(
-			mtk_dp, &mtk_dp->info.audio_caps);
-		mtk_dp->audio_enable = caps_found > 0;
-		if (!mtk_dp->audio_enable)
-			memset(&mtk_dp->info.audio_caps, 0,
-			       sizeof(mtk_dp->info.audio_caps));
-	}
-
+	case MTK_DP_TRAIN_STATE_CHECKEDID:
 		mtk_dp->train_state = MTK_DP_TRAIN_STATE_TRAINING_PRE;
 		break;
 
@@ -2192,11 +2150,6 @@ static int mtk_dp_state_handler(struct mtk_dp *mtk_dp)
 		mtk_dp_video_config(mtk_dp);
 		mtk_dp_video_enable(mtk_dp, true);
 
-		if (mtk_dp->audio_enable) {
-			mtk_dp_audio_setup(mtk_dp, &mtk_dp->info.audio_caps);
-			mtk_dp_audio_mute(mtk_dp, false);
-		}
-
 		mtk_dp->state = MTK_DP_STATE_NORMAL;
 		break;
 
@@ -2267,6 +2220,8 @@ static irqreturn_t mtk_dp_hpd_event_thread(int hpd, void *dev)
 			if (mtk_dp->has_fec)
 				mtk_dp_fec_enable(mtk_dp, false);
 			mtk_dp_sdp_stop_sending(mtk_dp);
+			memset(&mtk_dp->info.audio_cur_cfg, 0,
+				sizeof(mtk_dp->info.audio_cur_cfg));
 
 			mtk_dp_edid_free(mtk_dp);
 			mtk_dp_update_bits(mtk_dp, MTK_DP_TOP_PWR_STATE,
@@ -2415,6 +2370,8 @@ static struct edid *mtk_dp_get_edid(struct drm_bridge *bridge,
 	struct mtk_dp *mtk_dp = mtk_dp_from_bridge(bridge);
 	bool enabled = mtk_dp->enabled;
 	struct edid *new_edid = NULL;
+	struct mtk_dp_audio_cfg *audio_caps = &mtk_dp->info.audio_cur_cfg;
+	struct cea_sad *sads;
 
 	if (!enabled)
 		drm_bridge_chain_pre_enable(bridge);
@@ -2424,6 +2381,9 @@ static struct edid *mtk_dp_get_edid(struct drm_bridge *bridge,
 
 	if (mtk_dp_plug_state(mtk_dp))
 		new_edid = drm_get_edid(connector, &mtk_dp->aux.ddc);
+
+	if (new_edid)
+		audio_caps->sad_count = drm_edid_to_sad(new_edid, &sads);
 
 	if (!enabled)
 		drm_bridge_chain_post_disable(bridge);
@@ -2727,6 +2687,17 @@ static void mtk_dp_bridge_atomic_enable(struct drm_bridge *bridge,
 		}
 	}
 
+	mtk_dp->audio_enable = mtk_dp_edid_parse_audio_capabilities(mtk_dp,
+		&mtk_dp->info.audio_cur_cfg);
+
+	if (mtk_dp->audio_enable) {
+		mtk_dp_audio_setup(mtk_dp, &mtk_dp->info.audio_cur_cfg);
+		mtk_dp_audio_mute(mtk_dp, false);
+	} else {
+		memset(&mtk_dp->info.audio_cur_cfg, 0,
+			sizeof(mtk_dp->info.audio_cur_cfg));
+	}
+
 	mtk_dp->enabled = true;
 	mtk_dp_update_plugged_status(mtk_dp);
 
@@ -2872,18 +2843,17 @@ static int mtk_dp_audio_hw_params(struct device *dev, void *data,
 				  struct hdmi_codec_params *params)
 {
 	struct mtk_dp *mtk_dp = dev_get_drvdata(dev);
-	struct mtk_dp_audio_cfg cfg;
 
 	if (!mtk_dp->enabled) {
 		pr_err("%s, DP is not ready!\n", __func__);
 		return -ENODEV;
 	}
 
-	cfg.channels = params->cea.channels;
-	cfg.sample_rate = params->sample_rate;
-	cfg.word_length_bits = 24;
+	mtk_dp->info.audio_cur_cfg.channels = params->cea.channels;
+	mtk_dp->info.audio_cur_cfg.sample_rate = params->sample_rate;
+	mtk_dp->info.audio_cur_cfg.word_length_bits = 24;
 
-	mtk_dp_audio_setup(mtk_dp, &cfg);
+	mtk_dp_audio_setup(mtk_dp, &mtk_dp->info.audio_cur_cfg);
 
 	return 0;
 }
