@@ -60,7 +60,7 @@
 			enable-method = "psci";
 			cpu-idle-states =  <&ANANKE_CPU_SLEEP>;
 			capacity-dmips-mhz = <250>;
-			dynamic-power-coefficient = <70>;
+			dynamic-power-coefficient = <89>;
 		};
 		cpu1: cpu@0100 {
 			device_type = "cpu";
@@ -69,7 +69,7 @@
 			enable-method = "psci";
 			cpu-idle-states =  <&ANANKE_CPU_SLEEP>;
 			capacity-dmips-mhz = <250>;
-			dynamic-power-coefficient = <70>;
+			dynamic-power-coefficient = <89>;
 		};
 		cpu2: cpu@0200 {
 			device_type = "cpu";
@@ -78,7 +78,7 @@
 			enable-method = "psci";
 			cpu-idle-states =  <&ANANKE_CPU_SLEEP>;
 			capacity-dmips-mhz = <250>;
-			dynamic-power-coefficient = <70>;
+			dynamic-power-coefficient = <89>;
 		};
 		cpu3: cpu@0300 {
 			device_type = "cpu";
@@ -87,7 +87,7 @@
 			enable-method = "psci";
 			cpu-idle-states =  <&ANANKE_CPU_SLEEP>;
 			capacity-dmips-mhz = <250>;
-			dynamic-power-coefficient = <70>;
+			dynamic-power-coefficient = <89>;
 		};
 		cpu4: cpu@0400 {
 			device_type = "cpu";
@@ -95,8 +95,8 @@
 			reg = <0x0 0x0400>;
 			enable-method = "psci";
 			cpu-idle-states =  <&ENYO_CPU_SLEEP>;
-			capacity-dmips-mhz = <620>;
-			dynamic-power-coefficient = <284>;
+			capacity-dmips-mhz = <927>;
+			dynamic-power-coefficient = <513>;
 		};
 		cpu5: cpu@0500 {
 			device_type = "cpu";
@@ -104,8 +104,8 @@
 			reg = <0x0 0x0500>;
 			enable-method = "psci";
 			cpu-idle-states =  <&ENYO_CPU_SLEEP>;
-			capacity-dmips-mhz = <620>;
-			dynamic-power-coefficient = <284>;
+			capacity-dmips-mhz = <927>;
+			dynamic-power-coefficient = <513>;
 		};
 		cpu6: cpu@0600 {
 			device_type = "cpu";
@@ -114,7 +114,7 @@
 			enable-method = "psci";
 			cpu-idle-states =  <&HERA_CPU_SLEEP>;
 			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <650>;
+			dynamic-power-coefficient = <757>;
 		};
 		cpu7: cpu@0700 {
 			device_type = "cpu";
@@ -123,7 +123,7 @@
 			enable-method = "psci";
 			cpu-idle-states =  <&HERA_CPU_SLEEP>;
 			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <650>;
+			dynamic-power-coefficient = <757>;
 		};
 
 		idle-states {
@@ -361,18 +361,18 @@
 				  2802000	1401000
 				  2704000	1401000
 				  2630000	1401000
-				  2507000	1328000
-				  2401000	1328000
-				  2252000	1197000
-				  2188000	1197000
+				  2507000	1401000
+				  2401000	1401000
+				  2252000	1328000
+				  2188000	1328000
 				  2048000	1197000
 				  1826000	1098000
 				  1745000	1098000
-				  1582000	1098000
+				  1582000	930000
 				  1426000	930000
 				  1277000	738000
 				  1106000	738000
-				  984000	574000
+				  984000	738000
 				  851000	574000
 				  500000	300000 >;
 		};
