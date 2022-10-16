@@ -660,7 +660,7 @@ struct vdec_av1_slice_vsi {
 	/* lat and core share*/
 	struct vdec_av1_slice_mem tile;
 	struct vdec_av1_slice_slot slots;
-	u8 slot_id;
+	s8 slot_id;
 	struct vdec_av1_slice_frame frame;
 	struct vdec_av1_slice_state state;
 	u32 cur_lst_tile_id;
@@ -1937,7 +1937,7 @@ static int vdec_av1_slice_init(struct mtk_vcodec_ctx *ctx)
 	}
 
 	if (vsi->vsi_size != sizeof(struct vdec_av1_slice_vsi))
-		mtk_vcodec_err(instance, "remote vsi size 0x%x mismatch! expected: 0x%lx\n",
+		mtk_vcodec_err(instance, "remote vsi size 0x%x mismatch! expected: 0x%zx\n",
 			       vsi->vsi_size, sizeof(struct vdec_av1_slice_vsi));
 
 	instance->irq = 1;
@@ -2135,8 +2135,8 @@ static int vdec_av1_slice_lat_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 		return -EBUSY;
 	}
 	vsi->trans.dma_addr_end += ctx->msg_queue.wdma_addr.dma_addr;
-	mtk_vcodec_debug(instance, "lat dma 1 0x%llx 0x%llx\n",
-			 pfc->vsi.trans.dma_addr, pfc->vsi.trans.dma_addr_end);
+	mtk_vcodec_debug(instance, "lat dma 1 %pad %pad\n",
+			 &pfc->vsi.trans.dma_addr, &pfc->vsi.trans.dma_addr_end);
 
 	vdec_msg_queue_update_ube_wptr(&ctx->msg_queue, vsi->trans.dma_addr_end);
 
@@ -2208,8 +2208,8 @@ static int vdec_av1_slice_core_decode(struct vdec_lat_buf *lat_buf)
 		goto err;
 	}
 
-	mtk_vcodec_debug(instance, "core dma_addr_end 0x%llx\n",
-			 instance->core_vsi->trans.dma_addr_end);
+	mtk_vcodec_debug(instance, "core dma_addr_end %pad\n",
+			 &instance->core_vsi->trans.dma_addr_end);
 	vdec_msg_queue_update_ube_rptr(&ctx->msg_queue, instance->core_vsi->trans.dma_addr_end);
 
 	ctx->dev->vdec_pdata->cap_to_disp(ctx, 0, lat_buf->src_buf_req);
