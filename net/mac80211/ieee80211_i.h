@@ -1556,6 +1556,8 @@ struct ieee802_11_elems {
 	u8 tx_pwr_env_len[IEEE80211_TPE_MAX_IE_COUNT];
 	u8 tx_pwr_env_num;
 
+	void *nontx_profile;
+
 	/* whether a parse error occurred while retrieving these elements */
 	bool parse_error;
 };
