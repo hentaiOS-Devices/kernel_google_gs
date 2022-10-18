@@ -359,6 +359,10 @@ static void sdhci_arasan_reset(struct sdhci_host *host, u8 mask)
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_arasan_data *sdhci_arasan = sdhci_pltfm_priv(pltfm_host);
 
+	if ((host->mmc->caps2 & MMC_CAP2_CQE) && (mask & SDHCI_RESET_ALL) &&
+	    sdhci_arasan->has_cqe)
+		cqhci_deactivate(host->mmc);
+
 	sdhci_reset(host, mask);
 
 	if (sdhci_arasan->quirks & SDHCI_ARASAN_QUIRK_FORCE_CDTEST) {
@@ -1486,7 +1490,8 @@ static int sdhci_arasan_register_sdclk(struct sdhci_arasan_data *sdhci_arasan,
 	return 0;
 }
 
-static int sdhci_arasan_add_host(struct sdhci_arasan_data *sdhci_arasan)
+static int sdhci_arasan_add_host(struct sdhci_arasan_data *sdhci_arasan,
+				 struct device_node *np)
 {
 	struct sdhci_host *host = sdhci_arasan->host;
 	struct cqhci_host *cq_host;
@@ -1513,6 +1518,10 @@ static int sdhci_arasan_add_host(struct sdhci_arasan_data *sdhci_arasan)
 	dma64 = host->flags & SDHCI_USE_64_BIT_DMA;
 	if (dma64)
 		cq_host->caps |= CQHCI_TASK_DESC_SZ_128;
+
+	host->mmc->caps2 |= MMC_CAP2_CQE;
+	if (!of_property_read_bool(np, "disable-cqe-dcmd"))
+		host->mmc->caps2 |= MMC_CAP2_CQE_DCMD;
 
 	ret = cqhci_init(cq_host, host->mmc, dma64);
 	if (ret)
@@ -1661,13 +1670,9 @@ static int sdhci_arasan_probe(struct platform_device *pdev)
 		host->mmc_host_ops.start_signal_voltage_switch =
 					sdhci_arasan_voltage_switch;
 		sdhci_arasan->has_cqe = true;
-		host->mmc->caps2 |= MMC_CAP2_CQE;
-
-		if (!of_property_read_bool(np, "disable-cqe-dcmd"))
-			host->mmc->caps2 |= MMC_CAP2_CQE_DCMD;
 	}
 
-	ret = sdhci_arasan_add_host(sdhci_arasan);
+	ret = sdhci_arasan_add_host(sdhci_arasan, np);
 	if (ret)
 		goto err_add_host;
 
