@@ -3352,7 +3352,7 @@ static bool ieee80211_assoc_success(struct ieee80211_sub_if_data *sdata,
 	}
 	capab_info = le16_to_cpu(mgmt->u.assoc_resp.capab_info);
 	elems = ieee802_11_parse_elems(pos, len - (pos - (u8 *)mgmt), false,
-				       mgmt->bssid, assoc_data->bss->bssid);
+				       mgmt->bssid, NULL);
 
 	if (!elems)
 		return false;
@@ -3457,6 +3457,7 @@ static bool ieee80211_assoc_success(struct ieee80211_sub_if_data *sdata,
 				   "AP bug: VHT operation missing from AssocResp\n");
 		}
 
+		kfree(bss_elems->nontx_profile);
 		kfree(bss_elems);
 	}
 
@@ -3776,7 +3777,7 @@ static void ieee80211_rx_mgmt_assoc_resp(struct ieee80211_sub_if_data *sdata,
 		return;
 
 	elems = ieee802_11_parse_elems(pos, len - (pos - (u8 *)mgmt), false,
-				       mgmt->bssid, assoc_data->bss->bssid);
+				       mgmt->bssid, NULL);
 	if (!elems)
 		goto notify_driver;
 
@@ -4118,6 +4119,7 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
 		ifmgd->assoc_data->timeout = jiffies;
 		ifmgd->assoc_data->timeout_started = true;
 		run_again(sdata, ifmgd->assoc_data->timeout);
+		kfree(elems->nontx_profile);
 		kfree(elems);
 		return;
 	}
@@ -4315,6 +4317,7 @@ static void ieee80211_rx_mgmt_beacon(struct ieee80211_sub_if_data *sdata,
 
 	ieee80211_bss_info_change_notify(sdata, changed);
 free:
+	kfree(elems->nontx_profile);
 	kfree(elems);
 }
 
