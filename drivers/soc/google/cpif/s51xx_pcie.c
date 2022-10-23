@@ -213,9 +213,6 @@ void s51xx_pcie_save_state(struct pci_dev *pdev)
 void s51xx_pcie_restore_state(struct pci_dev *pdev)
 {
 	struct s51xx_pcie *s51xx_pcie = pci_get_drvdata(pdev);
-	struct pci_driver *driver = pdev->driver;
-	struct modem_ctl *mc = container_of(driver, struct modem_ctl, pci_driver);
-
 	int ret;
 	u32 val;
 
@@ -253,22 +250,16 @@ void s51xx_pcie_restore_state(struct pci_dev *pdev)
 
 	/* BAR0 value correction  */
 	pci_read_config_dword(pdev, PCI_BASE_ADDRESS_0, &val);
-	dev_dbg(&pdev->dev, "[%s]restored:PCI_BASE_ADDRESS_0 = 0x%x\n", __func__, val);
-	if ((val & 0xfffffff0) != 0x40000000) {
-		pci_write_config_dword(pdev, PCI_BASE_ADDRESS_0, 0x40000000);
+	dev_dbg(&pdev->dev, "restored:PCI_BASE_ADDRESS_0 = 0x%x\n", val);
+	if (val != s51xx_pcie->dbaddr_base) {
+		pci_write_config_dword(pdev, PCI_BASE_ADDRESS_0, s51xx_pcie->dbaddr_base);
 		pci_write_config_dword(pdev, PCI_BASE_ADDRESS_1, 0x0);
-		mif_info("write BAR0 value: 0x40000000\n");
-		dev_info(&pdev->dev, "[%s]:VALUE CHECK\n", __func__);
+		mif_info("write BAR0 value:  0x%x\n", s51xx_pcie->dbaddr_base);
 		s51xx_pcie_chk_ep_conf(pdev);
 	}
 
 	/* Enable L1.2 after PCIe power on */
-	if (mc->phone_state == STATE_CRASH_EXIT) {
-		pr_err("Disable L1.2 on CP CRASH!!!\n");
-		s51xx_pcie_l1ss_ctrl(0, s51xx_pcie->pcie_channel_num);
-	} else {
-		s51xx_pcie_l1ss_ctrl(1, s51xx_pcie->pcie_channel_num);
-	}
+	s51xx_pcie_l1ss_ctrl(1, s51xx_pcie->pcie_channel_num);
 
 	s51xx_pcie->link_status = 1;
 	/* pci_pme_active(s51xx_pcie.s51xx_pdev, 1); */
