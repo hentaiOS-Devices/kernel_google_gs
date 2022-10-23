@@ -192,9 +192,6 @@ void s51xx_pcie_save_state(struct pci_dev *pdev)
 
 	pci_clear_master(pdev);
 
-	if (s51xx_pcie->pci_saved_configs)
-		kfree(s51xx_pcie->pci_saved_configs);
-
 	pci_save_state(pdev);
 
 	s51xx_pcie->pci_saved_configs = pci_store_saved_state(pdev);
@@ -361,7 +358,7 @@ static int s51xx_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *en
 	struct pci_bus *bus = pdev->bus;
 	struct pci_dev *bus_self = bus->self;
 	struct resource *tmp_rsc;
-	int resno = PCI_BRIDGE_MEM_WINDOW;
+	int resno = 8;
 	u32 val, db_addr;
 
 	dev_info(dev, "%s EP driver Probe(%s), chNum: %d\n",
@@ -477,12 +474,7 @@ void print_msi_register(struct pci_dev *pdev)
 
 static void s51xx_pcie_remove(struct pci_dev *pdev)
 {
-	struct s51xx_pcie *s51xx_pcie = pci_get_drvdata(pdev);
-
 	pr_err("s51xx PCIe Remove!!!\n");
-
-	if (s51xx_pcie->pci_saved_configs)
-		kfree(s51xx_pcie->pci_saved_configs);
 
 	pci_release_regions(pdev);
 }
@@ -518,6 +510,8 @@ int s51xx_pcie_init(struct modem_ctl *mc)
 
 	/* Create PROC fs */
 	proc_create("driver/s51xx_pcie_proc", 0, NULL, &s51xx_pcie_proc_fops);
+
+	device_disable_async_suspend(&mc->s51xx_pdev->dev);
 
 	return 0;
 }

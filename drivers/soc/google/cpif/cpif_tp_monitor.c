@@ -162,10 +162,13 @@ static void calc_rx_speed_internal(struct cpif_tpmon *tpmon,
 
 	/* mbps 131072 = 1024 * 1024 / 8 */
 	/* kbps 128 = 1024 / 8 */
-	divider_mbps = 131072 * tpmon->monitor_interval_msec / 1000;
-	divider_mbps *= tpmon->rx_bytes_valid_cnt;
-	divider_kbps = 128 * tpmon->monitor_interval_msec / 1000;
-	divider_kbps *= tpmon->rx_bytes_valid_cnt;
+	if (tpmon->monitor_interval_msec >= 1000) {
+		divider_mbps = 131072 * tpmon->monitor_interval_msec / 1000;
+		divider_kbps = 128 * tpmon->monitor_interval_msec / 1000;
+	} else {
+		divider_mbps = 131072;
+		divider_kbps = 128;
+	}
 
 	spin_lock_irqsave(&tpmon->lock, flags);
 	rx_bytes = rx_data->rx_bytes;
@@ -177,14 +180,17 @@ static void calc_rx_speed_internal(struct cpif_tpmon *tpmon,
 	rx_data->rx_bytes_data[rx_data->rx_bytes_idx] = rx_bytes;
 
 	rx_data->rx_bytes_idx++;
-	rx_data->rx_bytes_idx %= tpmon->rx_bytes_len;
+	if (tpmon->monitor_interval_msec >= 1000)
+		rx_data->rx_bytes_idx = 0;
+	else
+		rx_data->rx_bytes_idx %= (1000 / tpmon->monitor_interval_msec);
 
-	if (!divider_mbps || rx_data->rx_sum < divider_mbps)
+	if (rx_data->rx_sum < divider_mbps)
 		rx_data->rx_mbps = 0;
 	else
 		rx_data->rx_mbps = rx_data->rx_sum / divider_mbps;
 
-	if (!divider_kbps || rx_data->rx_sum < divider_kbps)
+	if (rx_data->rx_sum < divider_kbps)
 		rx_data->rx_kbps = 0;
 	else
 		rx_data->rx_kbps = rx_data->rx_sum / divider_kbps;
@@ -192,19 +198,10 @@ static void calc_rx_speed_internal(struct cpif_tpmon *tpmon,
 
 static void tpmon_calc_rx_speed(struct cpif_tpmon *tpmon)
 {
-	unsigned long flags;
-
-	if (tpmon->rx_bytes_valid_cnt < tpmon->rx_bytes_len)
-		tpmon->rx_bytes_valid_cnt++;
-
 	calc_rx_speed_internal(tpmon, &tpmon->rx_total);
 	calc_rx_speed_internal(tpmon, &tpmon->rx_tcp);
 	calc_rx_speed_internal(tpmon, &tpmon->rx_udp);
 	calc_rx_speed_internal(tpmon, &tpmon->rx_others);
-
-	spin_lock_irqsave(&tpmon->lock, flags);
-	tpmon->rx_bytes_skip_add = false;
-	spin_unlock_irqrestore(&tpmon->lock, flags);
 }
 
 /* Inforamtion */
@@ -531,7 +528,6 @@ static void tpmon_set_gro(struct tpmon_data *data)
 {
 	struct mem_link_device *mld = container_of(data->tpmon->ld,
 			struct mem_link_device, link_dev);
-	long timeout;
 #if IS_ENABLED(CONFIG_CP_PKTPROC)
 	struct pktproc_adaptor *ppa = &mld->pktproc;
 	int i;
@@ -543,11 +539,11 @@ static void tpmon_set_gro(struct tpmon_data *data)
 	if (!data->enable)
 		return;
 
-	timeout = data->tpmon->use_user_value ?
-		data->user_value : data->values[data->curr_value_pos];
+	gro_flush_time = data->tpmon->use_user_value ?
+			data->user_value : data->values[data->curr_value_pos];
 
 #if !IS_ENABLED(CONFIG_CP_PKTPROC) && !IS_ENABLED(CONFIG_EXYNOS_DIT)
-	mld->dummy_net.gro_flush_timeout = timeout;
+	mld->dummy_net.gro_flush_timeout = gro_flush_time;
 #endif
 
 #if IS_ENABLED(CONFIG_CP_PKTPROC)
@@ -555,22 +551,22 @@ static void tpmon_set_gro(struct tpmon_data *data)
 		for (i = 0; i > ppa->num_queue; i++) {
 			struct pktproc_queue *q = ppa->q[i];
 
-			q->netdev.gro_flush_timeout = timeout;
+			q->netdev.gro_flush_timeout = gro_flush_time;
 		}
 	} else {
-		mld->dummy_net.gro_flush_timeout = timeout;
+		mld->dummy_net.gro_flush_timeout = gro_flush_time;
 	}
 #endif
 
 #if IS_ENABLED(CONFIG_EXYNOS_DIT)
 	netdev = dit_get_netdev();
 	if (netdev) {
-		netdev->gro_flush_timeout = timeout;
+		netdev->gro_flush_timeout = gro_flush_time;
 		mld->dummy_net.gro_flush_timeout = 0;
 	}
 #endif
 
-	mif_info("%s (flush timeout:%ld)\n", data->name, timeout);
+	mif_info("%s (flush time:%u)\n", data->name, gro_flush_time);
 }
 
 /* IRQ affinity */
@@ -898,8 +894,6 @@ void tpmon_add_rx_bytes(struct sk_buff *skb)
 	}
 
 	spin_lock_irqsave(&tpmon->lock, flags);
-	if (tpmon->rx_bytes_skip_add)
-		goto skip_add;
 
 	tpmon->rx_total.rx_bytes += skb->len;
 
@@ -915,7 +909,6 @@ void tpmon_add_rx_bytes(struct sk_buff *skb)
 		break;
 	}
 
-skip_add:
 	spin_unlock_irqrestore(&tpmon->lock, flags);
 }
 EXPORT_SYMBOL(tpmon_add_rx_bytes);
@@ -970,8 +963,6 @@ static int tpmon_init_params(struct cpif_tpmon *tpmon)
 	tpmon->legacy_packet_count = 0;
 
 	tpmon->jiffies_to_trigger = 0;
-	tpmon->rx_bytes_len = (MAX_RX_BYTES_COUNT / tpmon->monitor_interval_msec) ?: 1;
-	tpmon->rx_bytes_valid_cnt = tpmon->rx_bytes_len;
 
 	atomic_set(&tpmon->need_urgent, 0);
 	tpmon->urgent_active = false;
@@ -1032,7 +1023,6 @@ static bool tpmon_check_to_start(struct cpif_tpmon *tpmon)
 {
 	u64 jiffies_curr;
 	u64 delta_msec;
-	unsigned long flags;
 
 	jiffies_curr = get_jiffies_64();
 	if (!tpmon->jiffies_to_trigger) {
@@ -1055,7 +1045,7 @@ static bool tpmon_check_to_start(struct cpif_tpmon *tpmon)
 		return false;
 	}
 
-	if (!delta_msec || delta_msec < tpmon->trigger_msec_min)
+	if (delta_msec < tpmon->trigger_msec_min)
 		return false;
 
 	if (delta_msec >= 1000) {
@@ -1067,7 +1057,7 @@ static bool tpmon_check_to_start(struct cpif_tpmon *tpmon)
 	}
 
 	if (tpmon->debug_print)
-		mif_info_limited("%ldMbps(%ldKbps) %llumsec rx_bytes:%ld(%ld/%ld/%ld) legacy:%d\n",
+		mif_info_limited("%ldMbps(%ldKbps) %ldmsec rx_bytes:%ld(%ld/%ld/%ld) legacy:%d\n",
 			tpmon->rx_total.rx_mbps, tpmon->rx_total.rx_kbps, delta_msec,
 			tpmon->rx_total.rx_bytes, tpmon->rx_tcp.rx_bytes,
 			tpmon->rx_udp.rx_bytes, tpmon->rx_others.rx_bytes,
@@ -1085,22 +1075,6 @@ static bool tpmon_check_to_start(struct cpif_tpmon *tpmon)
 	}
 
 	mif_info("trigger@%ldMbps\n", tpmon->rx_total.rx_mbps);
-
-	spin_lock_irqsave(&tpmon->lock, flags);
-	tpmon->rx_bytes_skip_add = true;
-
-	/* Normalize rx_bytes by interval */
-	tpmon->rx_total.rx_bytes *= tpmon->monitor_interval_msec;
-	tpmon->rx_total.rx_bytes /= delta_msec;
-	tpmon->rx_tcp.rx_bytes *= tpmon->monitor_interval_msec;
-	tpmon->rx_tcp.rx_bytes /= delta_msec;
-	tpmon->rx_udp.rx_bytes *= tpmon->monitor_interval_msec;
-	tpmon->rx_udp.rx_bytes /= delta_msec;
-	tpmon->rx_others.rx_bytes *= tpmon->monitor_interval_msec;
-	tpmon->rx_others.rx_bytes /= delta_msec;
-	spin_unlock_irqrestore(&tpmon->lock, flags);
-
-	tpmon->rx_bytes_valid_cnt = 0;
 
 	return true;
 }
@@ -1280,19 +1254,19 @@ static ssize_t status_show(struct device *dev, struct device_attribute *attr, ch
 			tpmon->boost_hold_msec,
 			tpmon->unboost_tp_percent);
 	len += scnprintf(buf + len, PAGE_SIZE - len,
-			"rx_total %ldbytes %ldMbps %ldKbps sum:%lu\n",
+			"rx_total %ldbytes %ldMbps %ldKbps sum:%d\n",
 			tpmon->rx_total.rx_bytes, tpmon->rx_total.rx_mbps,
 			tpmon->rx_total.rx_kbps, tpmon->rx_total.rx_sum);
 	len += scnprintf(buf + len, PAGE_SIZE - len,
-			"rx_tcp %ldbytes %ldMbps %ldKbps sum:%lu\n",
+			"rx_tcp %ldbytes %ldMbps %ldKbps sum:%d\n",
 			tpmon->rx_tcp.rx_bytes, tpmon->rx_tcp.rx_mbps,
 			tpmon->rx_tcp.rx_kbps, tpmon->rx_tcp.rx_sum);
 	len += scnprintf(buf + len, PAGE_SIZE - len,
-			"rx_udp %ldbytes %ldMbps %ldKbps sum:%lu\n",
+			"rx_udp %ldbytes %ldMbps %ldKbps sum:%d\n",
 			tpmon->rx_udp.rx_bytes, tpmon->rx_udp.rx_mbps,
 			tpmon->rx_udp.rx_kbps, tpmon->rx_udp.rx_sum);
 	len += scnprintf(buf + len, PAGE_SIZE - len,
-			"rx_others %ldbytes %ldMbps %ldKbps sum:%lu\n",
+			"rx_others %ldbytes %ldMbps %ldKbps sum:%d\n",
 			tpmon->rx_others.rx_bytes, tpmon->rx_others.rx_mbps,
 			tpmon->rx_others.rx_kbps, tpmon->rx_others.rx_sum);
 	len += scnprintf(buf + len, PAGE_SIZE - len,
@@ -1513,7 +1487,7 @@ static int tpmon_parse_dt(struct device_node *np, struct cpif_tpmon *tpmon)
 	mif_dt_read_u32(tpmon_np, "tpmon_unboost_tp_percent",
 			tpmon->unboost_tp_percent);
 	mif_info("boost hold:%dmsec unboost percent:%d\n",
-			tpmon->boost_hold_msec,
+			tpmon->monitor_interval_msec, tpmon->boost_hold_msec,
 			tpmon->unboost_tp_percent);
 
 	for_each_child_of_node(tpmon_np, child_np) {
@@ -1529,7 +1503,7 @@ static int tpmon_parse_dt(struct device_node *np, struct cpif_tpmon *tpmon)
 		ret = of_property_read_string(child_np, "tpmon,name",
 						(const char **)&data->name);
 		if (ret < 0) {
-			mif_info("can not get %u tpmon,name:%d\n", count, ret);
+			mif_info("can not get %d tpmon,name:%s\n", count, ret);
 			return ret;
 		}
 
@@ -1802,8 +1776,7 @@ int tpmon_create(struct platform_device *pdev, struct link_device *ld)
 	tpmon->bts_scen_index = bts_get_scenindex("cp_throughput");
 #endif
 
-	tpmon->monitor_wq = alloc_workqueue("cpif_tpmon_monitor_wq",
-					__WQ_LEGACY | WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
+	tpmon->monitor_wq = create_workqueue("cpif_tpmon_monitor_wq");
 	if (!tpmon->monitor_wq) {
 		mif_err("create_workqueue() error\n");
 		ret = -EINVAL;

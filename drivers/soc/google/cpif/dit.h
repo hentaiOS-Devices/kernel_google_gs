@@ -162,12 +162,6 @@ enum dit_init_type {
 	DIT_INIT_DEINIT,
 };
 
-enum dit_store_type {
-	DIT_STORE_NONE = 0,
-	DIT_STORE_BACKUP,
-	DIT_STORE_RESTORE,
-};
-
 enum dit_int_enable_bits {
 	TX_DST0_INT_ENABLE_BIT = 0,
 	TX_DST1_INT_ENABLE_BIT,
@@ -273,10 +267,10 @@ struct dit_src_desc {
 	u64	src_addr:36,
 		_reserved_0:12,
 		/* the below 16 bits are "private info" on the document */
-		ch_id:8,		/* max ch value for rmnet is 17 */
+		ch_id:5,		/* max ch value for rmnet is 17 */
 		pre_csum:1,		/* checksum successful from pktproc */
 		udp_csum_zero:1,	/* reset udp checksum 0 after NAT */
-		_reserved_2:6;
+		_reserved_2:9;
 	u64	length:16,
 		_reserved_1:32,
 		control:8,
@@ -287,10 +281,10 @@ struct dit_dst_desc {
 	u64	dst_addr:36,
 		packet_info:12,
 		/* the below 16 bits are "private info" on the document */
-		ch_id:8,
+		ch_id:5,
 		pre_csum:1,
 		udp_csum_zero:1,
-		_reserved_2:6;
+		_reserved_2:9;
 	u64	length:16,
 		org_port:16,
 		trans_port:16,
@@ -316,7 +310,6 @@ struct dit_desc_info {
 	unsigned int dst_desc_ring_len;
 	struct dit_dst_desc *dst_desc_ring[DIT_DST_DESC_RING_MAX];
 	struct sk_buff **dst_skb_buf[DIT_DST_DESC_RING_MAX];
-	bool dst_skb_buf_filled[DIT_DST_DESC_RING_MAX];
 };
 
 struct dit_ctrl_t {
@@ -413,7 +406,7 @@ enum dit_idle_ip {
 #define DIT_SRC_DESC_RING_LEN_PADDING	(2)
 
 int dit_create(struct platform_device *pdev);
-int dit_init(struct link_device *ld, enum dit_init_type type, enum dit_store_type store);
+int dit_init(struct link_device *ld, enum dit_init_type type);
 int dit_enqueue_reg_value_with_ext_lock(u32 value, u32 offset);
 int dit_enqueue_reg_value(u32 value, u32 offset);
 int dit_read_rx_dst_poll(struct napi_struct *napi, int budget);

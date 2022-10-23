@@ -98,7 +98,6 @@ struct cp_image {
 
 /* AP capability index - considers first 32bits only*/
 #define AP_CAP_PKTPROC_UL		0x00000001
-#define AP_CAP_CH_EXTENSION		0x00000002
 
 /* Log dump */
 #define IOCTL_MIF_LOG_DUMP		_IO(IOCTL_MAGIC, 0x51)
@@ -556,6 +555,13 @@ struct link_device {
 	void (*start_timers)(struct mem_link_device *mld);
 	void (*stop_timers)(struct mem_link_device *mld);
 
+	void (*gro_flush)(struct link_device *ld, struct napi_struct *napi);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+	struct timespec64 (*update_flush_time)(struct timespec64 org_flush_time);
+#else
+	struct timespec (*update_flush_time)(struct timespec org_flush_time);
+#endif
+
 	int (*handover_block_info)(struct link_device *ld, unsigned long arg);
 
 #if IS_ENABLED(CONFIG_LINK_DEVICE_PCIE)
@@ -567,6 +573,8 @@ struct link_device {
 	struct timer_list cplog_timer;
 #endif
 };
+
+extern long gro_flush_time;
 
 #define pm_to_link_device(pm)	container_of(pm, struct link_device, pm)
 
@@ -619,10 +627,10 @@ struct modem_shared {
 	spinlock_t active_list_lock;
 
 	/* Array of pointers to IO devices corresponding to ch[n] */
-	struct io_device *ch2iod[IOD_CH_ID_MAX];
+	struct io_device *ch2iod[256];
 
 	/* Array of active channels */
-	u8 ch[IOD_CH_ID_MAX];
+	u8 ch[256];
 
 	/* The number of active channels in the array @ch[] */
 	unsigned int num_channels;
@@ -755,7 +763,7 @@ struct modem_ctl {
 	bool pcie_voice_call_on;
 	struct work_struct call_on_work;
 	struct work_struct call_off_work;
-	struct notifier_block call_state_nb;
+	struct notifier_block abox_call_state_nb;
 #endif
 
 #if IS_ENABLED(CONFIG_LINK_DEVICE_PCIE_GPIO_WA)

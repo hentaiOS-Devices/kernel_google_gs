@@ -12,8 +12,6 @@
 #include "modem_utils.h"
 #include "dit_hal.h"
 
-#define DIT_HAL_STATS_MAX	(S64_MAX)
-
 static struct dit_ctrl_t *dc;
 static struct dit_hal_ctrl_t *dhc;
 
@@ -44,7 +42,7 @@ static ssize_t dit_hal_read(struct file *filp, char *buf, size_t count, loff_t *
 	unsigned long flags;
 
 	if (count < sizeof(event)) {
-		mif_err("not support small buffer size: %zu\n", count);
+		mif_err("not support small buffer size: %d\n", count);
 		return 0;
 	}
 
@@ -60,7 +58,7 @@ static ssize_t dit_hal_read(struct file *filp, char *buf, size_t count, loff_t *
 	spin_unlock_irqrestore(&dhc->event_lock, flags);
 
 	event.event_num = event_item->event_num;
-	devm_kfree(dc->dev, event_item);
+	kvfree(event_item);
 
 	if (copy_to_user((void __user *)buf, (void *)&event, sizeof(event)))
 		return 0;
@@ -84,8 +82,7 @@ static int dit_hal_init(void)
 	dhc->last_event_num = OFFLOAD_MAX;
 
 	spin_lock_irqsave(&dhc->stats_lock, flags);
-	dhc->stats.data_warning = DIT_HAL_STATS_MAX;
-	dhc->stats.data_limit = DIT_HAL_STATS_MAX;
+	dhc->stats.data_limit = S64_MAX;
 	dhc->stats.rx_bytes = 0;
 	dhc->stats.tx_bytes = 0;
 	dhc->stats.rx_diff = 0;
@@ -99,7 +96,7 @@ static int dit_hal_init(void)
 	while (!list_empty(&dhc->event_q)) {
 		event_item = list_first_entry(&dhc->event_q, struct offload_event_item, list);
 		list_del(&event_item->list);
-		devm_kfree(dc->dev, event_item);
+		kvfree(event_item);
 	}
 	spin_unlock_irqrestore(&dhc->event_lock, flags);
 
@@ -114,7 +111,7 @@ static int dit_hal_set_event(enum offload_event_num event_num)
 	if (event_num == dhc->last_event_num)
 		return -EEXIST;
 
-	event_item = devm_kzalloc(dc->dev, sizeof(struct offload_event_item), GFP_ATOMIC);
+	event_item = kvzalloc(sizeof(struct offload_event_item), GFP_ATOMIC);
 	if (!event_item) {
 		mif_err("event=%d generation failed\n", event_num);
 		return -ENOMEM;
@@ -150,38 +147,20 @@ struct net_device *dit_hal_get_dst_netdev(enum dit_desc_ring ring_num)
 }
 EXPORT_SYMBOL(dit_hal_get_dst_netdev);
 
-static bool dit_hal_check_data_warning_reached(void)
-{
-	unsigned long flags;
-	bool ret = false;
-
-	if (!dhc)
-		return false;
-
-	spin_lock_irqsave(&dhc->stats_lock, flags);
-	if ((dhc->stats.rx_bytes + dhc->stats.tx_bytes) >= dhc->stats.data_warning) {
-		dhc->stats.data_warning = DIT_HAL_STATS_MAX;
-		ret = true;
-	}
-	spin_unlock_irqrestore(&dhc->stats_lock, flags);
-
-	return ret;
-}
-
 static bool dit_hal_check_data_limit_reached(void)
 {
 	unsigned long flags;
-	bool ret = false;
 
 	if (!dhc)
 		return false;
 
 	spin_lock_irqsave(&dhc->stats_lock, flags);
-	if ((dhc->stats.rx_bytes + dhc->stats.tx_bytes) >= dhc->stats.data_limit)
-		ret = true;
+	if ((dhc->stats.rx_bytes + dhc->stats.tx_bytes) >= dhc->stats.data_limit) {
+		spin_unlock_irqrestore(&dhc->stats_lock, flags);
+		return true;
+	}
 	spin_unlock_irqrestore(&dhc->stats_lock, flags);
-
-	return ret;
+	return false;
 }
 
 void dit_hal_add_data_bytes(u64 rx_bytes, u64 tx_bytes)
@@ -197,9 +176,6 @@ void dit_hal_add_data_bytes(u64 rx_bytes, u64 tx_bytes)
 	dhc->stats.rx_diff += rx_bytes;
 	dhc->stats.tx_diff += tx_bytes;
 	spin_unlock_irqrestore(&dhc->stats_lock, flags);
-
-	if (dit_hal_check_data_warning_reached())
-		dit_hal_set_event(OFFLOAD_WARNING_REACHED);
 
 	if (dit_hal_check_data_limit_reached())
 		dit_hal_set_event(OFFLOAD_STOPPED_LIMIT_REACHED);
@@ -229,30 +205,16 @@ exit:
 	return ret;
 }
 
-/* struct forward_limit is for V1.1 */
-static bool dit_hal_set_data_limit(struct forward_stats *stats,
-				   struct forward_limit *limit)
+static void dit_hal_set_data_limit(struct forward_stats *stats)
 {
 	unsigned long flags;
 
-	if (!stats && !limit)
-		return false;
-
 	spin_lock_irqsave(&dhc->stats_lock, flags);
-	if (stats) {
-		strlcpy(dhc->stats.iface, stats->iface, IFNAMSIZ);
-		dhc->stats.data_warning = DIT_HAL_STATS_MAX;
-		dhc->stats.data_limit = stats->data_limit;
-	} else {
-		strlcpy(dhc->stats.iface, limit->iface, IFNAMSIZ);
-		dhc->stats.data_warning = limit->data_warning;
-		dhc->stats.data_limit = limit->data_limit;
-	}
+	strlcpy(dhc->stats.iface, stats->iface, IFNAMSIZ);
+	dhc->stats.data_limit = stats->data_limit;
 	dhc->stats.rx_bytes = 0;
 	dhc->stats.tx_bytes = 0;
 	spin_unlock_irqrestore(&dhc->stats_lock, flags);
-
-	return true;
 }
 
 static bool dit_hal_check_ready_to_start(void)
@@ -304,8 +266,11 @@ static int dit_hal_add_dst_iface(bool is_upstream,
 
 			dhc->dst_iface[i].netdev =
 				dev_get_by_name(&init_net, info->iface);
-			if (dhc->dst_iface[i].netdev)
+			if (dhc->dst_iface[i].netdev) {
 				dhc->dst_iface[i].iface_set = true;
+				/* ToDo: move to dit_hal_remove_dst_iface? */
+				dev_put(dhc->dst_iface[i].netdev);
+			}
 
 			info->dst_ring = i;
 			return i;
@@ -323,8 +288,10 @@ static int dit_hal_add_dst_iface(bool is_upstream,
 		strlcpy(dhc->dst_iface[i].iface, info->iface, IFNAMSIZ);
 		dhc->dst_iface[i].netdev =
 			dev_get_by_name(&init_net, info->iface);
-		if (dhc->dst_iface[i].netdev)
+		if (dhc->dst_iface[i].netdev) {
 			dhc->dst_iface[i].iface_set = true;
+			dev_put(dhc->dst_iface[i].netdev);
+		}
 
 		info->dst_ring = i;
 		return i;
@@ -354,7 +321,6 @@ static void dit_hal_remove_dst_iface(bool is_upstream,
 			continue;
 
 		dhc->dst_iface[i].iface_set = false;
-		dev_put(dhc->dst_iface[i].netdev);
 		break;
 	}
 }
@@ -540,7 +506,6 @@ static long dit_hal_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 {
 	struct iface_info info;
 	struct forward_stats stats;
-	struct forward_limit limit;
 	struct nat_local_addr local_addr;
 	struct nat_local_port local_port;
 	struct clat_info clat;
@@ -579,7 +544,7 @@ static long dit_hal_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 		dit_hal_set_event(INTERNAL_OFFLOAD_STOPPED);
 
 		/* init port table and take a delay for the prior kick */
-		dit_init(NULL, DIT_INIT_NORMAL, DIT_STORE_NONE);
+		dit_init(NULL, DIT_INIT_NORMAL);
 		msleep(100);
 		ret = dit_manage_rx_dst_data_buffers(false);
 		if (ret)
@@ -604,16 +569,7 @@ static long dit_hal_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 				sizeof(struct forward_stats)))
 			return -EFAULT;
 
-		if (!dit_hal_set_data_limit(&stats, NULL))
-			return -EINVAL;
-		break;
-	case OFFLOAD_IOCTL_SET_DATA_WARNING_LIMIT:
-		if (copy_from_user(&limit, (const void __user *)arg,
-				   sizeof(struct forward_limit)))
-			return -EFAULT;
-
-		if (!dit_hal_set_data_limit(NULL, &limit))
-			return -EINVAL;
+		dit_hal_set_data_limit(&stats);
 		break;
 	case OFFLOAD_IOCTL_SET_UPSTRM_PARAM:
 		if (copy_from_user(&info, (const void __user *)arg,
@@ -647,7 +603,6 @@ static long dit_hal_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 				sizeof(struct iface_info)))
 			return -EFAULT;
 
-		msleep(100);
 		dit_hal_remove_dst_iface(false, &info);
 		if (!dit_hal_check_ready_to_start())
 			dit_hal_set_event(OFFLOAD_STOPPED_ERROR);
@@ -714,7 +669,7 @@ int dit_hal_create(struct dit_ctrl_t *dc_ptr)
 	int ret = 0;
 
 	if (!dc_ptr) {
-		mif_err("dc not valid\n");
+		mif_err("dc not valid");
 		ret = -EINVAL;
 		goto error;
 	}
@@ -735,7 +690,7 @@ int dit_hal_create(struct dit_ctrl_t *dc_ptr)
 
 	ret = misc_register(&dit_misc);
 	if (ret) {
-		mif_err("misc register error\n");
+		mif_err("misc register error");
 		goto error;
 	}
 

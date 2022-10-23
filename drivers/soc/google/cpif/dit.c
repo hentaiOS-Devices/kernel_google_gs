@@ -349,7 +349,7 @@ int dit_enqueue_reg_value_with_ext_lock(u32 value, u32 offset)
 	struct dit_reg_value_item *reg_item;
 
 	if (dit_is_kicked_any() || !dc->init_done || !list_empty(&dc->reg_value_q)) {
-		reg_item = devm_kzalloc(dc->dev, sizeof(struct dit_reg_value_item), GFP_ATOMIC);
+		reg_item = kvzalloc(sizeof(struct dit_reg_value_item), GFP_ATOMIC);
 		if (!reg_item) {
 			mif_err("set reg value 0x%08X at 0x%08X enqueue failed\n", value, offset);
 			return -ENOMEM;
@@ -389,7 +389,7 @@ static void dit_clean_reg_value_with_ext_lock(void)
 		if (dit_is_reg_value_valid(reg_item->value, reg_item->offset))
 			WRITE_REG_VALUE(dc, reg_item->value, reg_item->offset);
 		list_del(&reg_item->list);
-		devm_kfree(dc->dev, reg_item);
+		kvfree(reg_item);
 	}
 }
 
@@ -709,7 +709,7 @@ static int dit_enqueue_src_desc_ring_internal(enum dit_direction dir,
 	else
 		src_desc->src_addr = virt_to_phys(src);
 	src_desc->length = len;
-	src_desc->ch_id = ch_id;
+	src_desc->ch_id = (ch_id & 0x1F);
 	src_desc->pre_csum = csum;
 	src_desc->udp_csum_zero = 0;
 	src_desc->control = 0;
@@ -830,12 +830,12 @@ static int dit_fill_rx_dst_data_buffer(enum dit_desc_ring ring_num, unsigned int
 
 	desc_info = &dc->desc_info[DIT_DIR_RX];
 
-	if (initial && desc_info->dst_skb_buf_filled[ring_num])
+	if (initial && desc_info->dst_skb_buf[ring_num])
 		return 0;
 
 	if (unlikely(!desc_info->dst_skb_buf[ring_num])) {
 		buf_size = sizeof(struct sk_buff *) * desc_info->dst_desc_ring_len;
-		desc_info->dst_skb_buf[ring_num] = devm_kzalloc(dc->dev, buf_size, GFP_KERNEL);
+		desc_info->dst_skb_buf[ring_num] = kvzalloc(buf_size, GFP_KERNEL);
 		if (!desc_info->dst_skb_buf[ring_num]) {
 			mif_err("dit dst[%d] skb container alloc failed\n", ring_num);
 			return -ENOMEM;
@@ -877,9 +877,6 @@ static int dit_fill_rx_dst_data_buffer(enum dit_desc_ring ring_num, unsigned int
 next:
 		dst_rp_pos = circ_new_ptr(desc_info->dst_desc_ring_len, dst_rp_pos, 1);
 	}
-
-	if (initial)
-		desc_info->dst_skb_buf_filled[ring_num] = true;
 
 	return 0;
 }
@@ -925,9 +922,8 @@ static int dit_free_dst_data_buffer(enum dit_direction dir, enum dit_desc_ring r
 	}
 
 	mif_info("free dst[%d] skb buffers\n", ring_num);
-	devm_kfree(dc->dev, dst_skb);
+	kvfree(dst_skb);
 	desc_info->dst_skb_buf[ring_num] = NULL;
-	desc_info->dst_skb_buf_filled[ring_num] = false;
 
 	return 0;
 }
@@ -1209,7 +1205,7 @@ irqreturn_t dit_irq_handler(int irq, void *arg)
 	spin_unlock(&dc->src_lock);
 
 	/* try init and kick again */
-	dit_init(NULL, DIT_INIT_RETRY, DIT_STORE_NONE);
+	dit_init(NULL, DIT_INIT_RETRY);
 	if (dir < DIT_DIR_MAX)
 		dit_kick(dir, true);
 
@@ -1370,22 +1366,31 @@ static bool dit_check_clat_enabled(void)
 static int dit_reg_backup_restore_internal(bool backup, const u16 *offset,
 	const u16 *size, void **buf, const unsigned int arr_len)
 {
+	unsigned long flags;
 	unsigned int i;
 	int ret = 0;
 
 	for (i = 0; i < arr_len; i++) {
 		if (!buf[i]) {
-			buf[i] = devm_kzalloc(dc->dev, size[i], GFP_KERNEL);
+			buf[i] = kvzalloc(size[i], GFP_KERNEL);
 			if (!buf[i]) {
 				ret = -ENOMEM;
 				goto exit;
 			}
 		}
 
+		spin_lock_irqsave(&dc->src_lock, flags);
+		if (dit_is_kicked_any() || !dc->init_done) {
+			ret = -EAGAIN;
+			spin_unlock_irqrestore(&dc->src_lock, flags);
+			goto exit;
+		}
+
 		if (backup)
 			BACKUP_REG_VALUE(dc, buf[i], offset[i], size[i]);
 		else
 			RESTORE_REG_VALUE(dc, buf[i], offset[i], size[i]);
+		spin_unlock_irqrestore(&dc->src_lock, flags);
 	}
 
 exit:
@@ -1555,7 +1560,7 @@ static int dit_init_desc(enum dit_direction dir)
 
 	if (!desc_info->src_skb_buf) {
 		buf_size = sizeof(struct sk_buff *) * desc_info->src_desc_ring_len;
-		buf = devm_kzalloc(dc->dev, buf_size, GFP_KERNEL);
+		buf = kvzalloc(buf_size, GFP_KERNEL);
 		if (!buf) {
 			mif_err("dit dir[%d] src skb container alloc failed\n", dir);
 			return -ENOMEM;
@@ -1634,7 +1639,7 @@ static int dit_init_desc(enum dit_direction dir)
 	return 0;
 }
 
-int dit_init(struct link_device *ld, enum dit_init_type type, enum dit_store_type store)
+int dit_init(struct link_device *ld, enum dit_init_type type)
 {
 	unsigned long flags;
 	unsigned int dir;
@@ -1672,12 +1677,6 @@ int dit_init(struct link_device *ld, enum dit_init_type type, enum dit_store_typ
 	dc->init_done = false;
 	spin_unlock_irqrestore(&dc->src_lock, flags);
 
-	if (store == DIT_STORE_BACKUP) {
-		ret = dit_reg_backup_restore(true);
-		if (ret)
-			goto exit;
-	}
-
 	if (type == DIT_INIT_DEINIT)
 		goto exit;
 
@@ -1693,12 +1692,6 @@ int dit_init(struct link_device *ld, enum dit_init_type type, enum dit_store_typ
 	if (ret) {
 		mif_err("dit hw init failed\n");
 		goto exit;
-	}
-
-	if (store == DIT_STORE_RESTORE) {
-		ret = dit_reg_backup_restore(false);
-		if (ret)
-			goto exit;
 	}
 
 	ret = dit_net_init(dc);
@@ -1813,11 +1806,11 @@ static ssize_t status_show(struct device *dev, struct device_attribute *attr, ch
 			count += scnprintf(&buf[count], PAGE_SIZE - count,
 				"  wp: %u, rp: %u\n", wp, rp);
 			count += scnprintf(&buf[count], PAGE_SIZE - count,
-				"  kicked head: %d, tail: %d, packets: %llu\n",
+				"  kicked head: %d, tail: %d, packets: %lu\n",
 				snapshot[dir][ring_num].head, snapshot[dir][ring_num].tail,
 				snapshot[dir][ring_num].packets);
 			count += scnprintf(&buf[count], PAGE_SIZE - count,
-				"  total packets: %llu, clat: %llu\n",
+				"  total packets: %lu, clat: %lu\n",
 				snapshot[dir][ring_num].total_packets,
 				snapshot[dir][ring_num].clat_packets);
 		}
@@ -1922,7 +1915,7 @@ static ssize_t debug_set_local_addr_store(struct device *dev,
 	/* for example, "0 D6CFEB352CF4 C0A82A5D 2AAD159CDE96" is for packets
 	 * from D6CFEB352CF4(rndis0) to 192.168.42.93/2AAD159CDE96(neigh)
 	 */
-	ret = sscanf(buf, "%u %12s %x %12s", &index, eth_src_str, &ip_addr, eth_dst_str);
+	ret = sscanf(buf, "%u %12s %lx %12s", &index, eth_src_str, &ip_addr, eth_dst_str);
 	if (ret < 1)
 		return -EINVAL;
 
@@ -2210,7 +2203,7 @@ int dit_set_pktproc_base(enum dit_direction dir, phys_addr_t base)
 
 	desc_info = &dc->desc_info[dir];
 	desc_info->pktproc_pbase = base;
-	mif_info("dir:%d base:%pap\n", dir, &desc_info->pktproc_pbase);
+	mif_info("dir:%d base:0x%lX\n", dir, desc_info->pktproc_pbase);
 
 	return 0;
 }
@@ -2437,7 +2430,13 @@ static int dit_suspend(struct device *dev)
 	if (unlikely(!dc) || unlikely(!dc->ld))
 		return 0;
 
-	ret = dit_init(NULL, DIT_INIT_DEINIT, DIT_STORE_BACKUP);
+	ret = dit_reg_backup_restore(true);
+	if (ret) {
+		mif_err("reg backup failed ret:%d\n", ret);
+		return ret;
+	}
+
+	ret = dit_init(NULL, DIT_INIT_DEINIT);
 	if (ret) {
 		mif_err("deinit failed ret:%d\n", ret);
 		return ret;
@@ -2464,13 +2463,19 @@ static int dit_resume(struct device *dev)
 
 	dit_set_irq_affinity(dc->irq_affinity);
 
-	ret = dit_init(NULL, DIT_INIT_NORMAL, DIT_STORE_RESTORE);
+	ret = dit_init(NULL, DIT_INIT_NORMAL);
 	if (ret) {
 		mif_err("init failed ret:%d\n", ret);
 		for (dir = 0; dir < DIT_DIR_MAX; dir++) {
 			if (dit_is_busy(dir))
 				mif_err("busy (dir:%d)\n", dir);
 		}
+		return ret;
+	}
+
+	ret = dit_reg_backup_restore(false);
+	if (ret) {
+		mif_err("reg restore failed ret:%d\n", ret);
 		return ret;
 	}
 
