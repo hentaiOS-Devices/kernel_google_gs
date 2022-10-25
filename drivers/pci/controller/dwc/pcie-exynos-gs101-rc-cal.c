@@ -246,23 +246,34 @@ void exynos_pcie_rc_pcie_phy_config(struct exynos_pcie *exynos_pcie, int ch_num)
 		writel(0x00, phy_base_regs + 0x820); /* [3:0] */
 
 		/* RX tuning */
-		writel(0x3D, phy_base_regs + 0x928);
-		writel(0xCA, phy_base_regs + 0x920);
-		writel(0x2F, phy_base_regs + 0xA08);
-		writel(0xB8, phy_base_regs + 0x92C);
+		writel(0x80, phy_base_regs + 0x8FC);
 		writel(0xF4, phy_base_regs + 0x914);
-		writel(0x55, phy_base_regs + 0x96C);
-		writel(0x78, phy_base_regs + 0x988);
+		writel(0xD3, phy_base_regs + 0x91C);
+		writel(0xCA, phy_base_regs + 0x920);
+		writel(0x3D, phy_base_regs + 0x928);
+		writel(0xB8, phy_base_regs + 0x92C);
+		writel(0x41, phy_base_regs + 0x930);
 		writel(0x17, phy_base_regs + 0x934);
 		writel(0x4C, phy_base_regs + 0x93C);
-		writel(0x3B, phy_base_regs + 0x994);
 		writel(0x73, phy_base_regs + 0x948);
-		writel(0x3F, phy_base_regs + 0xB9C);
-		writel(0x20, phy_base_regs + 0x9C8);
+		writel(0xFC, phy_base_regs + 0x94C);
+		writel(0x55, phy_base_regs + 0x96C);
+		writel(0x78, phy_base_regs + 0x988);
+		writel(0x3B, phy_base_regs + 0x994);
+		writel(0xF6, phy_base_regs + 0x9B4);
 		writel(0xFF, phy_base_regs + 0x9C4);
-		writel(0x05, phy_base_regs + 0xC08);
-		writel(0x04, phy_base_regs + 0xC3C);
+		writel(0x20, phy_base_regs + 0x9C8);
+		writel(0x2F, phy_base_regs + 0xA08);
+		writel(0x3F, phy_base_regs + 0xB9C);
+
+		/* Auto FBB */
+		writel(0x00, phy_base_regs + 0xC08);
+		writel(0x09, phy_base_regs + 0xC10);
 		writel(0x04, phy_base_regs + 0xC40);
+		writel(0x00, phy_base_regs + 0xC70);
+
+		/* DFE */
+		writel(0x76, phy_base_regs + 0x9B4);
 	}
 
 	/* PCS setting: pcie_pcs_setting() in F/W code */
@@ -299,6 +310,9 @@ void exynos_pcie_rc_pcie_phy_config(struct exynos_pcie *exynos_pcie, int ch_num)
 		writel(val, phy_pcs_base_regs + 0x808);
 	}
 
+	/* PLL & BIAS EN off delay */
+	writel(0x100B0808, phy_pcs_base_regs + 0x190);
+
 	/* PHY CMN_RST, PORT_RST Release */
 	writel(0x1, elbi_base_regs + 0x1400);
 	writel(0x1, elbi_base_regs + 0x1408);
@@ -309,7 +323,8 @@ void exynos_pcie_rc_pcie_phy_config(struct exynos_pcie *exynos_pcie, int ch_num)
 	val |= (0x1 << 4);
 	val &= ~(0x1 << 3);
 	writel(val, phy_base_regs + 0x5D0);
-	pr_debug("XO clock configuration : 0x%x\n", readl(phy_base_regs + 0x5D0));
+	dev_dbg(exynos_pcie->pci->dev, "[%s] XO clock configuration : 0x%x\n",
+			__func__, readl(phy_base_regs + 0x5D0));
 
 	/* AFC cal mode by default uses the calibrated value from a previous
 	 * run. However on some devices this causes a CDR failure because
@@ -360,11 +375,16 @@ int exynos_pcie_rc_eom(struct device *dev, void *phy_base_regs)
 	/* eom_result[lane_num][test_cnt] */
 	eom_result = kcalloc(1, sizeof(struct pcie_eom_result *) * lane_width, GFP_KERNEL);
 	for (i = 0; i < lane_width; i++) {
-		eom_result[i] = kcalloc(1, sizeof(*eom_result[i]) *
+		eom_result[i] = devm_kzalloc(dev, sizeof(*eom_result[i]) *
 				EOM_PH_SEL_MAX * EOM_DEF_VREF_MAX, GFP_KERNEL);
 	}
-	if (!eom_result)
-		return -ENOMEM;
+	for (i = 0; i < lane_width; i++) {
+		if (!eom_result[i]) {
+			dev_err(dev, "[%s] failed to alloc 'eom_result[%d]\n",
+				       __func__, i);
+			return -ENOMEM;
+		}
+	}
 
 	exynos_pcie->eom_result = eom_result;
 
@@ -374,7 +394,8 @@ int exynos_pcie_rc_eom(struct device *dev, void *phy_base_regs)
 	if (speed_rate == 1 || speed_rate == 2) {
 		dev_err(dev, "[%s] speed_rate(GEN%d) is not GEN3 or GEN4\n", __func__, speed_rate);
 		/* memory free 'eom_result' */
-		kfree(eom_result);
+		for (i = 0; i < lane_width; i++)
+			devm_kfree(dev, eom_result[i]);
 
 		return -EINVAL;
 	}
