@@ -3217,12 +3217,6 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 			__func__, exynos_pcie->l1ss_ctrl_id_state, id);
 
 		return -1;
-	} else {
-		exynos_pcie->ep_l1ss_cap_off =
-			pci_find_ext_capability(exynos_pcie->ep_pci_dev, PCI_EXT_CAP_ID_L1SS);
-		exynos_pcie->ep_link_ctrl_off = exynos_pcie->ep_pci_dev->pcie_cap + PCI_EXP_LNKCTL;
-		exynos_pcie->ep_l1ss_ctrl1_off = exynos_pcie->ep_l1ss_cap_off + PCI_L1SS_CTL1;
-		exynos_pcie->ep_l1ss_ctrl2_off = exynos_pcie->ep_l1ss_cap_off + PCI_L1SS_CTL2;
 	}
 
 	/* get the domain_num & ep_pci_bus of EP device */
@@ -3273,7 +3267,7 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 				/* [EP] set TPOWERON */
 				/* Set TPOWERON value for EP: 90->130 usec */
 				exynos_pcie_rc_wr_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_l1ss_ctrl2_off, 4,
+							     PCIE_LINK_L1SS_CONTROL2, 4,
 							     PORT_LINK_TPOWERON_130US);
 
 				/* [EP] set Entrance latency */
@@ -3287,10 +3281,10 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 
 				/* 2) [EP] enable L1SS */
 				exynos_pcie_rc_rd_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_l1ss_ctrl1_off, 4, &val);
+							     PCIE_LINK_L1SS_CONTROL, 4, &val);
 				val |= PORT_LINK_L1SS_ENABLE;
 				exynos_pcie_rc_wr_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_l1ss_ctrl1_off, 4, val);
+							     PCIE_LINK_L1SS_CONTROL, 4, val);
 				dev_dbg(dev, "CPen:2EP:L1SS_CTRL(0x19C)=0x%x\n", val);
 
 				/* 3) [RC] enable ASPM */
@@ -3304,11 +3298,11 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 
 				/* 4) [EP] enable ASPM */
 				exynos_pcie_rc_rd_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_link_ctrl_off, 4, &val);
+							     PCIE_LINK_CTRL_STAT, 4, &val);
 				val |= PCI_EXP_LNKCTL_CCC | PCI_EXP_LNKCTL_CLKREQ_EN |
 					PCI_EXP_LNKCTL_ASPM_L1;
 				exynos_pcie_rc_wr_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_link_ctrl_off, 4, val);
+							     PCIE_LINK_CTRL_STAT, 4, val);
 				dev_dbg(dev, "CPen:4EP:ASPM(0x80)=0x%x\n", val);
 			} else if (exynos_pcie->ep_device_type == EP_BCM_WIFI ||
 				   exynos_pcie->ep_device_type == EP_QC_WIFI) {
@@ -3412,10 +3406,10 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 
 				/* 1) [EP] disable ASPM */
 				exynos_pcie_rc_rd_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_link_ctrl_off, 4, &val);
+							     PCIE_LINK_CTRL_STAT, 4, &val);
 				val &= ~(PCI_EXP_LNKCTL_ASPMC);
 				exynos_pcie_rc_wr_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_link_ctrl_off, 4, val);
+							     PCIE_LINK_CTRL_STAT, 4, val);
 				dev_dbg(dev, "CPdis:1EP:ASPM(0x80)=0x%x\n", val);
 
 				/* 2) [RC] disable ASPM */
@@ -3428,10 +3422,10 @@ static int exynos_pcie_rc_set_l1ss(int enable, struct pcie_port *pp, int id)
 
 				/* 3) [EP] disable L1SS */
 				exynos_pcie_rc_rd_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_l1ss_ctrl1_off, 4, &val);
+							     PCIE_LINK_L1SS_CONTROL, 4, &val);
 				val &= ~(PORT_LINK_L1SS_ENABLE);
 				exynos_pcie_rc_wr_other_conf(pp, ep_pci_bus, 0,
-							     exynos_pcie->ep_l1ss_ctrl1_off, 4, val);
+							     PCIE_LINK_L1SS_CONTROL, 4, val);
 				dev_dbg(dev, "CPdis:3EP:L1SS_CTRL(0x19C)=0x%x\n", val);
 
 				/* 4) [RC] disable L1SS */
