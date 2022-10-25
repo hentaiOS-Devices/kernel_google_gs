@@ -36,7 +36,7 @@
 				mif,link_type = <LINKDEV_PCIE>;
 				mif,link_name = "PCIE";
 				mif,link_attrs = <(
-					LINK_ATTR_XMIT_BTDLR_SPI |
+					LINK_ATTR_XMIT_BTDLR_PCIE |
 					LINK_ATTR_XMIT_BTDLR |
 					LINK_ATTR_DUMP_ALIGNED |
 					LINK_ATTR_BOOT_ALIGNED |
@@ -158,7 +158,7 @@
 				pktproc_dl_use_exclusive_irq = <0>;
 				/* H/W IO cache coherency */
 				pktproc_dl_use_hw_iocc = <1>;
-				pktproc_dl_max_packet_size = <2048>;
+				pktproc_dl_max_packet_size = <1584>;
 				pktproc_dl_use_dedicated_baaw = <0>;
 
 				/* Packet processor for UL */
@@ -166,12 +166,13 @@
 				pktproc_ul_info_rgn_offset = <0x06000000>;
 				pktproc_ul_info_rgn_size = <0x00001000>;
 				pktproc_ul_desc_rgn_offset = <0x06001000>;
-				pktproc_ul_desc_rgn_size = <0x00020000>;
-				pktproc_ul_buff_rgn_offset = <0x06021000>;
-				pktproc_ul_buff_rgn_size = <0x003DF000>;
+				pktproc_ul_desc_rgn_size = <0x0008F000>;
+				pktproc_ul_buff_rgn_offset = <0x06090000>;
+				pktproc_ul_buff_rgn_size = <0x00370000>;
 				pktproc_ul_padding_required = <1>; /* for s5123 EVT1 only */
 				pktproc_ul_num_queue = <2>;
 				pktproc_ul_max_packet_size = <2048>;
+				pktproc_ul_hiprio_ack_only = <1>;
 				pktproc_ul_info_rgn_cached = <1>;
 				pktproc_ul_desc_rgn_cached = <1>;
 				pktproc_ul_buff_rgn_cached = <1>;
@@ -282,7 +283,7 @@
 						boost_name = "IRQ_0";
 						target = <TPMON_TARGET_IRQ_PCIE>;
 						extra_idx = <3>;
-						level = <0x04 0x20>;
+						level = <0x0C 0x30>;
 
 						boost0 {
 							enable = <1>;
