@@ -911,28 +911,38 @@ static int uvc_ioctl_streamon(struct file *file, void *fh,
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_streaming *stream = handle->stream;
+	bool do_pm_put = false;
 	int ret;
 
 	if (!uvc_has_privileges(handle))
 		return -EBUSY;
 
-	mutex_lock(&stream->mutex);
+	/*
+	 * Cannot hold stream->mutex when entering uvc_pm_*
+	 */
+	ret = uvc_pm_get(stream);
+	if (ret)
+		return ret;
 
-	if (!handle->is_streaming) {
-		ret = uvc_pm_get(stream);
-		if (ret)
-			goto unlock;
+	mutex_lock(&stream->mutex);
+	if (handle->is_streaming) {
+		/*
+		 * Device was already on, return
+		 */
+		do_pm_put = true;
+		goto unlock;
 	}
 
 	ret = uvc_queue_streamon(&stream->queue, type);
-
-	if (ret && !handle->is_streaming)
-		uvc_pm_put(stream);
-
-	if (!ret)
+	if (ret)
+		do_pm_put = true;
+	else
 		handle->is_streaming = true;
 unlock:
 	mutex_unlock(&stream->mutex);
+
+	if (do_pm_put)
+		uvc_pm_put(stream);
 
 	return ret;
 }
@@ -942,6 +952,7 @@ static int uvc_ioctl_streamoff(struct file *file, void *fh,
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_streaming *stream = handle->stream;
+	bool do_pm_put = false;
 	int ret = 0;
 
 	if (!uvc_has_privileges(handle))
@@ -955,12 +966,18 @@ static int uvc_ioctl_streamoff(struct file *file, void *fh,
 	uvc_queue_streamoff(&stream->queue, type);
 	if (handle->is_streaming) {
 		handle->is_streaming = false;
-		uvc_pm_put(stream);
+		do_pm_put = true;
 	}
 unlock:
 	mutex_unlock(&stream->mutex);
 
-	return ret;
+	/*
+	 * Cannot hold stream->mutex when entering uvc_pm_*
+	 */
+	if (do_pm_put)
+		uvc_pm_put(stream);
+
+	return 0;
 }
 
 static int uvc_ioctl_enum_input(struct file *file, void *fh,
