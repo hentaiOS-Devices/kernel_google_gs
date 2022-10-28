@@ -2392,7 +2392,8 @@ static struct pci_driver sdhci_driver = {
 	.probe =	sdhci_pci_probe,
 	.remove =	sdhci_pci_remove,
 	.driver =	{
-		.pm =   &sdhci_pci_pm_ops
+		.pm =   &sdhci_pci_pm_ops,
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
