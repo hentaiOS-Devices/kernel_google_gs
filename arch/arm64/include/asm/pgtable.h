@@ -985,12 +985,6 @@ static inline bool arch_faults_on_old_pte(void)
 }
 #define arch_faults_on_old_pte arch_faults_on_old_pte
 
-static inline bool arch_has_hw_pte_young(void)
-{
-	return system_has_hw_af();
-}
-#define arch_has_hw_pte_young arch_has_hw_pte_young
-
 #endif /* !__ASSEMBLY__ */
 
 #endif /* __ASM_PGTABLE_H */
