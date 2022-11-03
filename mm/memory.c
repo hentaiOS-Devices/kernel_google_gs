@@ -4688,7 +4688,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	 * space.  Kernel faults are handled more gracefully.
 	 */
 	if (flags & FAULT_FLAG_USER)
-		task_enter_user_fault();
+		mem_cgroup_enter_user_fault();
 
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		ret = hugetlb_fault(vma->vm_mm, vma, address, flags);
@@ -4696,7 +4696,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 		ret = __handle_mm_fault(vma, address, flags);
 
 	if (flags & FAULT_FLAG_USER) {
-		task_exit_user_fault();
+		mem_cgroup_exit_user_fault();
 		/*
 		 * The task may have entered a memcg OOM situation but
 		 * if the allocation error was handled gracefully (no
