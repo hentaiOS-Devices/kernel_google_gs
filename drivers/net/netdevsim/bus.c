@@ -97,8 +97,6 @@ new_port_store(struct device *dev, struct device_attribute *attr,
 	       const char *buf, size_t count)
 {
 	struct nsim_bus_dev *nsim_bus_dev = to_nsim_bus_dev(dev);
-	struct nsim_dev *nsim_dev = dev_get_drvdata(dev);
-	struct devlink *devlink;
 	unsigned int port_index;
 	int ret;
 
@@ -108,8 +106,6 @@ new_port_store(struct device *dev, struct device_attribute *attr,
 	ret = kstrtouint(buf, 0, &port_index);
 	if (ret)
 		return ret;
-
-	devlink = priv_to_devlink(nsim_dev);
 
 	mutex_lock(&nsim_bus_dev->nsim_bus_reload_lock);
 	ret = nsim_dev_port_add(nsim_bus_dev, port_index);
@@ -124,8 +120,6 @@ del_port_store(struct device *dev, struct device_attribute *attr,
 	       const char *buf, size_t count)
 {
 	struct nsim_bus_dev *nsim_bus_dev = to_nsim_bus_dev(dev);
-	struct nsim_dev *nsim_dev = dev_get_drvdata(dev);
-	struct devlink *devlink;
 	unsigned int port_index;
 	int ret;
 
@@ -135,8 +129,6 @@ del_port_store(struct device *dev, struct device_attribute *attr,
 	ret = kstrtouint(buf, 0, &port_index);
 	if (ret)
 		return ret;
-
-	devlink = priv_to_devlink(nsim_dev);
 
 	mutex_lock(&nsim_bus_dev->nsim_bus_reload_lock);
 	ret = nsim_dev_port_del(nsim_bus_dev, port_index);
