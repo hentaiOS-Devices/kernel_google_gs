@@ -977,7 +977,7 @@ unlock:
 	if (do_pm_put)
 		uvc_pm_put(stream);
 
-	return 0;
+	return ret;
 }
 
 static int uvc_ioctl_enum_input(struct file *file, void *fh,
@@ -1912,4 +1912,3 @@ const struct v4l2_file_operations uvc_fops = {
 	.get_unmapped_area = uvc_v4l2_get_unmapped_area,
 #endif
 };
-
