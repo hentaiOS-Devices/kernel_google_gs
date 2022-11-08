@@ -190,6 +190,19 @@ void optc2_set_dsc_config(struct timing_generator *optc,
 		OPTC_DSC_SLICE_WIDTH, dsc_slice_width);
 }
 
+/* Get DSC-related configuration.
+ *   dsc_mode: 0 disables DSC, other values enable DSC in specified format
+ */
+void optc2_get_dsc_status(struct timing_generator *optc,
+					uint32_t *dsc_mode)
+{
+	struct optc *optc1 = DCN10TG_FROM_TG(optc);
+
+	REG_GET(OPTC_DATA_FORMAT_CONTROL,
+		OPTC_DSC_MODE, dsc_mode);
+}
+
+
 /*TEMP: Need to figure out inheritance model here.*/
 bool optc2_is_two_pixels_per_containter(const struct dc_crtc_timing *timing)
 {
@@ -464,7 +477,7 @@ void optc2_lock_doublebuffer_enable(struct timing_generator *optc)
 
 	REG_UPDATE_2(OTG_GLOBAL_CONTROL1,
 			MASTER_UPDATE_LOCK_DB_X,
-			h_blank_start - 200 - 1,
+			(h_blank_start - 200 - 1) / optc1->opp_count,
 			MASTER_UPDATE_LOCK_DB_Y,
 			v_blank_start - 1);
 }
@@ -574,6 +587,7 @@ static struct timing_generator_funcs dcn20_tg_funcs = {
 		.get_crc = optc1_get_crc,
 		.configure_crc = optc2_configure_crc,
 		.set_dsc_config = optc2_set_dsc_config,
+		.get_dsc_status = optc2_get_dsc_status,
 		.set_dwb_source = optc2_set_dwb_source,
 		.set_odm_bypass = optc2_set_odm_bypass,
 		.set_odm_combine = optc2_set_odm_combine,

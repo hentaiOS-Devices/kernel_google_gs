@@ -16,10 +16,10 @@
 #define MTK_DIP_CLK_NUM			2
 
 #define DIP_COMPOSING_MAX_NUM		3
-#define DIP_FRM_SZ			(84 * 1024)
+#define DIP_FRM_SZ			(100 * 1024)
 #define DIP_SUB_FRM_SZ			(20 * 1024)
 #define DIP_TUNING_SZ			(32 * 1024)
-#define DIP_COMP_SZ			(28 * 1024)
+#define DIP_COMP_SZ			(44 * 1024)
 #define DIP_FRAMEPARAM_SZ		(4 * 1024)
 
 #define DIP_TUNING_OFFSET		DIP_SUB_FRM_SZ

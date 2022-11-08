@@ -7,6 +7,7 @@
 
 #include <linux/init.h>
 #include <linux/arm-smccc.h>
+#include <linux/kernel.h>
 
 static u32 smccc_version = ARM_SMCCC_VERSION_1_0;
 static enum arm_smccc_conduit smccc_conduit = SMCCC_CONDUIT_NONE;

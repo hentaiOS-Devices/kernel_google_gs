@@ -79,6 +79,7 @@ obj-$(CONFIG_DM_ZONED)		+= dm-zoned.o
 obj-$(CONFIG_DM_WRITECACHE)	+= dm-writecache.o
 obj-$(CONFIG_DM_BOW)		+= dm-bow.o
 obj-$(CONFIG_DM_VERITY_CHROMEOS)	+= dm-verity-chromeos.o
+obj-$(CONFIG_SECURITY_LOADPIN_VERITY)	+= dm-verity-loadpin.o
 
 ifeq ($(CONFIG_DM_INIT),y)
 dm-mod-objs			+= dm-init.o

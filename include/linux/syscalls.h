@@ -68,6 +68,8 @@ union bpf_attr;
 struct io_uring_params;
 struct clone_args;
 struct open_how;
+struct landlock_ruleset_attr;
+enum landlock_rule_type;
 
 #include <linux/types.h>
 #include <linux/aio_abi.h>
@@ -1032,6 +1034,11 @@ asmlinkage long sys_pidfd_send_signal(int pidfd, int sig,
 				       siginfo_t __user *info,
 				       unsigned int flags);
 asmlinkage long sys_pidfd_getfd(int pidfd, int fd, unsigned int flags);
+asmlinkage long sys_landlock_create_ruleset(const struct landlock_ruleset_attr __user *attr,
+		size_t size, __u32 flags);
+asmlinkage long sys_landlock_add_rule(int ruleset_fd, enum landlock_rule_type rule_type,
+		const void __user *rule_attr, __u32 flags);
+asmlinkage long sys_landlock_restrict_self(int ruleset_fd, __u32 flags);
 
 /*
  * Architecture-specific system calls
@@ -1372,8 +1379,6 @@ int __sys_getsockopt(int fd, int level, int optname, char __user *optval,
 int __sys_setsockopt(int fd, int level, int optname, char __user *optval,
 		int optlen);
 
-#ifdef CONFIG_ALT_SYSCALL
-
 /* Only used with ALT_SYSCALL enabled */
 
 int ksys_prctl(int option, unsigned long arg2, unsigned long arg3,
@@ -1383,6 +1388,8 @@ int ksys_getpriority(int which, int who);
 int ksys_perf_event_open(
 		struct perf_event_attr __user *attr_uptr,
 		pid_t pid, int cpu, int group_fd, unsigned long flags);
+int ksys_kcmp(pid_t pid1, pid_t pid2, int type,
+		unsigned long idx1, unsigned long idx2);
 int ksys_clock_adjtime(const clockid_t which_clock, struct __kernel_timex __user * utx);
 int ksys_adjtimex(struct __kernel_timex __user *txc_p);
 int ksys_getcpu(unsigned __user *cpu, unsigned __user *node,
@@ -1390,6 +1397,5 @@ int ksys_getcpu(unsigned __user *cpu, unsigned __user *node,
 int ksys_clock_adjtime32(clockid_t which_clock,
 			 struct old_timex32 __user *utp);
 int ksys_adjtimex_time32(struct old_timex32 __user *utp);
-#endif /* CONFIG_ALT_SYSCALL */
 
 #endif

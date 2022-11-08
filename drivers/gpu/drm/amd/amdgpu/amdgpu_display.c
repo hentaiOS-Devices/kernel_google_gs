@@ -35,6 +35,7 @@
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <drm/drm_crtc_helper.h>
+#include <drm/drm_drv.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_fb_helper.h>
@@ -492,6 +493,11 @@ static const struct drm_framebuffer_funcs amdgpu_fb_funcs = {
 	.create_handle = drm_gem_fb_create_handle,
 };
 
+static const struct drm_framebuffer_funcs amdgpu_fb_funcs_atomic = {
+	.destroy = drm_gem_fb_destroy,
+	.create_handle = drm_gem_fb_create_handle,
+};
+
 uint32_t amdgpu_display_supported_domains(struct amdgpu_device *adev,
 					  uint64_t bo_flags)
 {
@@ -522,6 +528,7 @@ uint32_t amdgpu_display_supported_domains(struct amdgpu_device *adev,
 			break;
 		case CHIP_RENOIR:
 		case CHIP_VANGOGH:
+		case CHIP_YELLOW_CARP:
 			domain |= AMDGPU_GEM_DOMAIN_GTT;
 			break;
 
@@ -836,6 +843,28 @@ static int convert_tiling_flags_to_modifier(struct amdgpu_framebuffer *afb)
 	return 0;
 }
 
+/* Mirrors the is_displayable check in radeonsi's gfx6_compute_surface */
+static int check_tiling_flags_gfx6(struct amdgpu_framebuffer *afb)
+{
+	u64 micro_tile_mode;
+
+	/* Zero swizzle mode means linear */
+	if (AMDGPU_TILING_GET(afb->tiling_flags, SWIZZLE_MODE) == 0)
+		return 0;
+
+	micro_tile_mode = AMDGPU_TILING_GET(afb->tiling_flags, MICRO_TILE_MODE);
+	switch (micro_tile_mode) {
+	case 0: /* DISPLAY */
+	case 3: /* RENDER */
+		return 0;
+	default:
+		drm_dbg_kms(afb->base.dev,
+			    "Micro tile mode %llu not supported for scanout\n",
+			    micro_tile_mode);
+		return -EINVAL;
+	}
+}
+
 static void get_block_dimensions(unsigned int block_log2, unsigned int cpp,
 				 unsigned int *width, unsigned int *height)
 {
@@ -1086,7 +1115,10 @@ int amdgpu_display_gem_fb_verify_and_init(
 	if (ret)
 		goto err;
 
-	ret = drm_framebuffer_init(dev, &rfb->base, &amdgpu_fb_funcs);
+	if (drm_drv_uses_atomic_modeset(dev))
+		ret = drm_framebuffer_init(dev, &rfb->base, &amdgpu_fb_funcs_atomic);
+	else
+		ret = drm_framebuffer_init(dev, &rfb->base, &amdgpu_fb_funcs);
 	if (ret)
 		goto err;
 
@@ -1102,6 +1134,7 @@ int amdgpu_display_framebuffer_init(struct drm_device *dev,
 				    const struct drm_mode_fb_cmd2 *mode_cmd,
 				    struct drm_gem_object *obj)
 {
+	struct amdgpu_device *adev = drm_to_adev(dev);
 	int ret, i;
 
 	/*
@@ -1120,6 +1153,14 @@ int amdgpu_display_framebuffer_init(struct drm_device *dev,
 	ret = amdgpu_display_get_fb_info(rfb, &rfb->tiling_flags, &rfb->tmz_surface);
 	if (ret)
 		return ret;
+
+	if (!dev->mode_config.allow_fb_modifiers) {
+		drm_WARN_ONCE(dev, adev->family >= AMDGPU_FAMILY_AI,
+			      "GFX9+ requires FB check based on format modifier\n");
+		ret = check_tiling_flags_gfx6(rfb);
+		if (ret)
+			return ret;
+	}
 
 	if (dev->mode_config.allow_fb_modifiers &&
 	    !(rfb->base.flags & DRM_MODE_FB_MODIFIERS)) {

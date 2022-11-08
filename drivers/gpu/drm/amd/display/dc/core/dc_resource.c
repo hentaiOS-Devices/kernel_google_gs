@@ -41,6 +41,7 @@
 #include "set_mode_types.h"
 #include "virtual/virtual_stream_encoder.h"
 #include "dpcd_defs.h"
+#include "dc_link_dp.h"
 
 #if defined(CONFIG_DRM_AMD_DC_SI)
 #include "dce60/dce60_resource.h"
@@ -58,9 +59,7 @@
 #include "dcn301/dcn301_resource.h"
 #include "dcn302/dcn302_resource.h"
 #include "dcn303/dcn303_resource.h"
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
-#include "../dcn31/dcn31_resource.h"
-#endif
+#include "dcn31/dcn31_resource.h"
 #endif
 
 #define DC_LOGGER_INIT(logger)
@@ -141,9 +140,7 @@ enum dce_version resource_parse_asic_id(struct hw_asic_id asic_id)
 	case FAMILY_VGH:
 		dc_version = DCN_VERSION_3_01;
 		break;
-#endif
 
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case FAMILY_YELLOW_CARP:
 		if (ASICREV_IS_YELLOW_CARP(asic_id.hw_internal_rev))
 			dc_version = DCN_VERSION_3_1;
@@ -233,11 +230,9 @@ struct resource_pool *dc_create_resource_pool(struct dc  *dc,
 	case DCN_VERSION_3_03:
 		res_pool = dcn303_create_resource_pool(init_data, dc);
 		break;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	case DCN_VERSION_3_1:
 		res_pool = dcn31_create_resource_pool(init_data, dc);
 		break;
-#endif
 #endif
 	default:
 		break;
@@ -1036,7 +1031,7 @@ bool resource_build_scaling_params(struct pipe_ctx *pipe_ctx)
 
 	/* Timing borders are part of vactive that we are also supposed to skip in addition
 	 * to any stream dst offset. Since dm logic assumes dst is in addressable
-	 * space we need to add the the left and top borders to dst offsets temporarily.
+	 * space we need to add the left and top borders to dst offsets temporarily.
 	 * TODO: fix in DM, stream dst is supposed to be in vactive
 	 */
 	pipe_ctx->stream->dst.x += timing->h_border_left;
@@ -1057,6 +1052,11 @@ bool resource_build_scaling_params(struct pipe_ctx *pipe_ctx)
 	/* depends on scaling ratios and recout, does not calculate offset yet */
 	calculate_viewport_size(pipe_ctx);
 
+	/* Stopgap for validation of ODM + MPO on one side of screen case */
+	if (pipe_ctx->plane_res.scl_data.viewport.height < 1 ||
+			pipe_ctx->plane_res.scl_data.viewport.width < 1)
+		return false;
+
 	/*
 	 * LB calculations depend on vp size, h/v_active and scaling ratios
 	 * Setting line buffer pixel depth to 24bpp yields banding
@@ -1068,7 +1068,7 @@ bool resource_build_scaling_params(struct pipe_ctx *pipe_ctx)
 	 * so use only 30 bpp on DCE_VERSION_11_0. Testing with DCE 11.2 and 8.3
 	 * did not show such problems, so this seems to be the exception.
 	 */
-	if (plane_state->ctx->dce_version != DCE_VERSION_11_0)
+	if (plane_state->ctx->dce_version > DCE_VERSION_11_0)
 		pipe_ctx->plane_res.scl_data.lb_params.depth = LB_PIXEL_DEPTH_36BPP;
 	else
 		pipe_ctx->plane_res.scl_data.lb_params.depth = LB_PIXEL_DEPTH_30BPP;
@@ -1572,8 +1572,8 @@ bool dc_add_all_planes_for_stream(
 	return add_all_planes_for_stream(dc, stream, &set, 1, context);
 }
 
-static bool is_timing_changed(struct dc_stream_state *cur_stream,
-		struct dc_stream_state *new_stream)
+bool is_timing_changed(struct dc_stream_state *cur_stream,
+		       struct dc_stream_state *new_stream)
 {
 	if (cur_stream == NULL)
 		return true;
@@ -1600,6 +1600,9 @@ static bool are_stream_backends_same(
 	if (is_timing_changed(stream_a, stream_b))
 		return false;
 
+	if (stream_a->signal != stream_b->signal)
+		return false;
+
 	if (stream_a->dpms_off != stream_b->dpms_off)
 		return false;
 
@@ -1624,14 +1627,18 @@ bool dc_is_stream_unchanged(
 	if (old_stream->ignore_msa_timing_param != stream->ignore_msa_timing_param)
 		return false;
 
+	/*compare audio info*/
+	if (memcmp(&old_stream->audio_info, &stream->audio_info, sizeof(stream->audio_info)) != 0)
+		return false;
+
 	return true;
 }
 
 /*
  * dc_is_stream_scaling_unchanged() - Compare scaling rectangles of two streams.
  */
-bool dc_is_stream_scaling_unchanged(
-	struct dc_stream_state *old_stream, struct dc_stream_state *stream)
+bool dc_is_stream_scaling_unchanged(struct dc_stream_state *old_stream,
+				    struct dc_stream_state *stream)
 {
 	if (old_stream == stream)
 		return true;
@@ -2052,6 +2059,12 @@ enum dc_status resource_map_pool_resources(
 		pipe_ctx->stream_res.stream_enc,
 		true);
 
+	/* Decide link settings */
+	if (dc_is_dp_signal(stream->signal)) {
+		if (!decide_link_settings(stream, &pipe_ctx->link_config.dp_link_settings))
+			return DC_FAIL_DP_LINK_BANDWIDTH;
+	}
+
 	/* TODO: Add check if ASIC support and EDID audio */
 	if (!stream->converter_disable_audio &&
 	    dc_is_audio_capable_signal(pipe_ctx->stream->signal) &&
@@ -2142,7 +2155,7 @@ enum dc_status dc_validate_global_state(
 
 	if (!new_ctx)
 		return DC_ERROR_UNEXPECTED;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
+#if defined(CONFIG_DRM_AMD_DC_DCN)
 
 	/*
 	 * Update link encoder to stream assignment.

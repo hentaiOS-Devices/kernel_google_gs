@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018 MediaTek Inc.
+ * Copyright (c) 2021 MediaTek Inc.
  * Author: Ping-Hsun Wu <ping-hsun.wu@mediatek.com>
  */
 
@@ -13,6 +13,12 @@
 #include "mtk-mdp3-regs.h"
 
 #define MDP_MAX_CTRLS	10
+
+enum {
+	MDP_M2M_SRC = 0,
+	MDP_M2M_DST = 1,
+	MDP_M2M_MAX,
+};
 
 struct mdp_m2m_ctrls {
 	struct v4l2_ctrl	*hflip;
@@ -29,9 +35,11 @@ struct mdp_m2m_ctx {
 	struct v4l2_m2m_ctx		*m2m_ctx;
 	struct mdp_vpu_ctx		vpu;
 	struct work_struct		work;
-	u32				frame_count;
+	u32				frame_count[MDP_M2M_MAX];
 
 	struct mdp_frameparam		curr_param;
+	/* synchronization protect for mdp m2m context */
+	struct mutex			ctx_lock;
 };
 
 int mdp_m2m_device_register(struct mdp_dev *mdp);
@@ -39,4 +47,3 @@ void mdp_m2m_device_unregister(struct mdp_dev *mdp);
 void mdp_m2m_job_finish(struct mdp_m2m_ctx *ctx);
 
 #endif  /* __MTK_MDP3_M2M_H__ */
-

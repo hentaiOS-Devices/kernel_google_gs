@@ -83,22 +83,22 @@ static int bdw_format_to_drm(int format)
 	int bdw_pixel_formats_index = 6;
 
 	switch (format) {
-	case DISPPLANE_8BPP:
+	case DISP_FORMAT_8BPP:
 		bdw_pixel_formats_index = 0;
 		break;
-	case DISPPLANE_BGRX565:
+	case DISP_FORMAT_BGRX565:
 		bdw_pixel_formats_index = 1;
 		break;
-	case DISPPLANE_BGRX888:
+	case DISP_FORMAT_BGRX888:
 		bdw_pixel_formats_index = 2;
 		break;
-	case DISPPLANE_RGBX101010:
+	case DISP_FORMAT_RGBX101010:
 		bdw_pixel_formats_index = 3;
 		break;
-	case DISPPLANE_BGRX101010:
+	case DISP_FORMAT_BGRX101010:
 		bdw_pixel_formats_index = 4;
 		break;
-	case DISPPLANE_RGBX888:
+	case DISP_FORMAT_RGBX888:
 		bdw_pixel_formats_index = 5;
 		break;
 
@@ -211,14 +211,14 @@ int intel_vgpu_decode_primary_plane(struct intel_vgpu *vgpu,
 		return -ENODEV;
 
 	val = vgpu_vreg_t(vgpu, DSPCNTR(pipe));
-	plane->enabled = !!(val & DISPLAY_PLANE_ENABLE);
+	plane->enabled = !!(val & DISP_ENABLE);
 	if (!plane->enabled)
 		return -ENODEV;
 
 	if (GRAPHICS_VER(dev_priv) >= 9) {
 		plane->tiled = val & PLANE_CTL_TILED_MASK;
 		fmt = skl_format_to_drm(
-			val & PLANE_CTL_FORMAT_MASK,
+			val & PLANE_CTL_FORMAT_MASK_SKL,
 			val & PLANE_CTL_ORDER_RGBX,
 			val & PLANE_CTL_ALPHA_MASK,
 			val & PLANE_CTL_YUV422_ORDER_MASK);
@@ -231,8 +231,8 @@ int intel_vgpu_decode_primary_plane(struct intel_vgpu *vgpu,
 		plane->bpp = skl_pixel_formats[fmt].bpp;
 		plane->drm_format = skl_pixel_formats[fmt].drm_format;
 	} else {
-		plane->tiled = val & DISPPLANE_TILED;
-		fmt = bdw_format_to_drm(val & DISPPLANE_PIXFORMAT_MASK);
+		plane->tiled = val & DISP_TILED;
+		fmt = bdw_format_to_drm(val & DISP_FORMAT_MASK);
 		plane->bpp = bdw_pixel_formats[fmt].bpp;
 		plane->drm_format = bdw_pixel_formats[fmt].drm_format;
 	}
@@ -342,7 +342,7 @@ int intel_vgpu_decode_cursor_plane(struct intel_vgpu *vgpu,
 		return -ENODEV;
 
 	val = vgpu_vreg_t(vgpu, CURCNTR(pipe));
-	mode = val & MCURSOR_MODE;
+	mode = val & MCURSOR_MODE_MASK;
 	plane->enabled = (mode != MCURSOR_MODE_DISABLE);
 	if (!plane->enabled)
 		return -ENODEV;
@@ -427,10 +427,10 @@ int intel_vgpu_decode_sprite_plane(struct intel_vgpu *vgpu,
 
 	plane->tiled = !!(val & SPRITE_TILED);
 	color_order = !!(val & SPRITE_RGB_ORDER_RGBX);
-	yuv_order = (val & SPRITE_YUV_BYTE_ORDER_MASK) >>
+	yuv_order = (val & SPRITE_YUV_ORDER_MASK) >>
 				_SPRITE_YUV_ORDER_SHIFT;
 
-	fmt = (val & SPRITE_PIXFORMAT_MASK) >> _SPRITE_FMT_SHIFT;
+	fmt = (val & SPRITE_FORMAT_MASK) >> _SPRITE_FMT_SHIFT;
 	if (!sprite_pixel_formats[fmt].bpp) {
 		gvt_vgpu_err("Non-supported pixel format (0x%x)\n", fmt);
 		return -EINVAL;

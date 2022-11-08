@@ -15,6 +15,7 @@
 #define ETSI_WEATHER_RADAR_BAND_LOW		5590
 #define ETSI_WEATHER_RADAR_BAND_HIGH		5650
 #define ETSI_WEATHER_RADAR_BAND_CAC_TIMEOUT	600000
+#define ATH11K_MAX_REG_WAIT	(3 * HZ)
 
 static const struct ieee80211_regdomain ath11k_world_regd = {
 	.n_reg_rules = 3,
@@ -46,6 +47,7 @@ ath11k_reg_notifier(struct wiphy *wiphy, struct regulatory_request *request)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
 	struct wmi_init_country_params init_country_param;
+	struct wmi_set_current_country_params set_current_param = {};
 	struct ath11k *ar = hw->priv;
 	int ret;
 
@@ -74,21 +76,32 @@ ath11k_reg_notifier(struct wiphy *wiphy, struct regulatory_request *request)
 		return;
 	}
 
-	/* Set the country code to the firmware and wait for
+	/* Set the country code to the firmware and will receive
 	 * the WMI_REG_CHAN_LIST_CC EVENT for updating the
 	 * reg info
 	 */
-	init_country_param.flags = ALPHA_IS_SET;
-	memcpy(&init_country_param.cc_info.alpha2, request->alpha2, 2);
-	init_country_param.cc_info.alpha2[2] = 0;
+	if (ar->ab->hw_params.current_cc_support) {
+		memcpy(&set_current_param.alpha2, request->alpha2, 2);
+		ret = ath11k_wmi_send_set_current_country_cmd(ar, &set_current_param);
+		if (ret)
+			ath11k_warn(ar->ab,
+				    "failed set current country code: %d\n", ret);
+	} else {
+		init_country_param.flags = ALPHA_IS_SET;
+		memcpy(&init_country_param.cc_info.alpha2, request->alpha2, 2);
+		init_country_param.cc_info.alpha2[2] = 0;
 
-	ret = ath11k_wmi_send_init_country_cmd(ar, init_country_param);
-	if (ret)
-		ath11k_warn(ar->ab,
-			    "INIT Country code set to fw failed : %d\n", ret);
+		ret = ath11k_wmi_send_init_country_cmd(ar, init_country_param);
+		if (ret)
+			ath11k_warn(ar->ab,
+				    "INIT Country code set to fw failed : %d\n", ret);
+	}
+
+	ath11k_mac_11d_scan_stop(ar);
+	ar->regdom_set_by_user = true;
 }
 
-int ath11k_reg_update_chan_list(struct ath11k *ar)
+int ath11k_reg_update_chan_list(struct ath11k *ar, bool wait)
 {
 	struct ieee80211_supported_band **bands;
 	struct scan_chan_list_params *params;
@@ -97,8 +110,35 @@ int ath11k_reg_update_chan_list(struct ath11k *ar)
 	struct channel_param *ch;
 	enum nl80211_band band;
 	int num_channels = 0;
-	int params_len;
-	int i, ret;
+	int i, ret, left;
+
+	if (wait && ar->state_11d != ATH11K_11D_IDLE) {
+		left = wait_for_completion_timeout(&ar->completed_11d_scan,
+						   ATH11K_SCAN_TIMEOUT_HZ);
+		if (!left) {
+			ath11k_dbg(ar->ab, ATH11K_DBG_REG,
+				   "failed to receive 11d scan complete: timed out\n");
+			ar->state_11d = ATH11K_11D_IDLE;
+		}
+		ath11k_dbg(ar->ab, ATH11K_DBG_REG,
+			   "reg 11d scan wait left time %d\n", left);
+	}
+
+	if (wait &&
+	    (ar->scan.state == ATH11K_SCAN_STARTING ||
+	    ar->scan.state == ATH11K_SCAN_RUNNING)) {
+		left = wait_for_completion_timeout(&ar->scan.completed,
+						   ATH11K_SCAN_TIMEOUT_HZ);
+		if (!left)
+			ath11k_dbg(ar->ab, ATH11K_DBG_REG,
+				   "failed to receive hw scan complete: timed out\n");
+
+		ath11k_dbg(ar->ab, ATH11K_DBG_REG,
+			   "reg hw scan wait left time %d\n", left);
+	}
+
+	if (ar->state == ATH11K_STATE_RESTARTING)
+		return 0;
 
 	bands = hw->wiphy->bands;
 	for (band = 0; band < NUM_NL80211_BANDS; band++) {
@@ -117,10 +157,8 @@ int ath11k_reg_update_chan_list(struct ath11k *ar)
 	if (WARN_ON(!num_channels))
 		return -EINVAL;
 
-	params_len = sizeof(struct scan_chan_list_params) +
-			num_channels * sizeof(struct channel_param);
-	params = kzalloc(params_len, GFP_KERNEL);
-
+	params = kzalloc(struct_size(params, ch_param, num_channels),
+			 GFP_KERNEL);
 	if (!params)
 		return -ENOMEM;
 
@@ -198,18 +236,23 @@ static void ath11k_copy_regd(struct ieee80211_regdomain *regd_orig,
 		       sizeof(struct ieee80211_reg_rule));
 }
 
-int ath11k_regd_update(struct ath11k *ar, bool init)
+int ath11k_regd_update(struct ath11k *ar)
 {
 	struct ieee80211_regdomain *regd, *regd_copy = NULL;
 	int ret, regd_len, pdev_id;
 	struct ath11k_base *ab;
+	unsigned long before;
+	int acquired;
 
 	ab = ar->ab;
 	pdev_id = ar->pdev_idx;
 
 	spin_lock_bh(&ab->base_lock);
 
-	if (init) {
+	/* Prefer the latest regd update over default if it's available */
+	if (ab->new_regd[pdev_id]) {
+		regd = ab->new_regd[pdev_id];
+	} else {
 		/* Apply the regd received during init through
 		 * WMI_REG_CHAN_LIST_CC event. In case of failure to
 		 * receive the regd, initialize with a default world
@@ -222,8 +265,6 @@ int ath11k_regd_update(struct ath11k *ar, bool init)
 				    "failed to receive default regd during init\n");
 			regd = (struct ieee80211_regdomain *)&ath11k_world_regd;
 		}
-	} else {
-		regd = ab->new_regd[pdev_id];
 	}
 
 	if (!regd) {
@@ -246,7 +287,21 @@ int ath11k_regd_update(struct ath11k *ar, bool init)
 		goto err;
 	}
 
-	rtnl_lock();
+	before = jiffies;
+	while (true) {
+		acquired = rtnl_trylock();
+		if (!acquired)
+			cond_resched();
+		if (acquired || time_after(jiffies, before + ATH11K_MAX_REG_WAIT))
+			break;
+	}
+
+	if (!acquired) {
+		ret = -EBUSY;
+		ath11k_warn(ar->ab, "rtnl acquire failed\n");
+		goto err;
+	}
+
 	ret = regulatory_set_wiphy_regd_sync_rtnl(ar->hw->wiphy, regd_copy);
 	rtnl_unlock();
 
@@ -256,7 +311,7 @@ int ath11k_regd_update(struct ath11k *ar, bool init)
 		goto err;
 
 	if (ar->state == ATH11K_STATE_ON) {
-		ret = ath11k_reg_update_chan_list(ar);
+		ret = ath11k_reg_update_chan_list(ar, true);
 		if (ret)
 			goto err;
 	}
@@ -374,6 +429,10 @@ static void ath11k_reg_intersect_rules(struct ieee80211_reg_rule *rule1,
 
 	/* Use the flags of both the rules */
 	new_rule->flags = rule1->flags | rule2->flags;
+	if ((rule1->flags & NL80211_RRF_PSD) && (rule2->flags & NL80211_RRF_PSD))
+		new_rule->psd = min_t(s8, rule1->psd, rule2->psd);
+	else
+		new_rule->flags &= ~NL80211_RRF_PSD;
 
 	/* To be safe, lts use the max cac timeout of both rules */
 	new_rule->dfs_cac_ms = max_t(u32, rule1->dfs_cac_ms,
@@ -456,6 +515,9 @@ ath11k_reg_adjust_bw(u16 start_freq, u16 end_freq, u16 max_bw)
 {
 	u16 bw;
 
+	if (end_freq <= start_freq)
+		return 0;
+
 	bw = end_freq - start_freq;
 	bw = min_t(u16, bw, max_bw);
 
@@ -463,8 +525,10 @@ ath11k_reg_adjust_bw(u16 start_freq, u16 end_freq, u16 max_bw)
 		bw = 80;
 	else if (bw >= 40 && bw < 80)
 		bw = 40;
-	else if (bw < 40)
+	else if (bw >= 20 && bw < 40)
 		bw = 20;
+	else
+		bw = 0;
 
 	return bw;
 }
@@ -472,13 +536,14 @@ ath11k_reg_adjust_bw(u16 start_freq, u16 end_freq, u16 max_bw)
 static void
 ath11k_reg_update_rule(struct ieee80211_reg_rule *reg_rule, u32 start_freq,
 		       u32 end_freq, u32 bw, u32 ant_gain, u32 reg_pwr,
-		       u32 reg_flags)
+		       s8 psd, u32 reg_flags)
 {
 	reg_rule->freq_range.start_freq_khz = MHZ_TO_KHZ(start_freq);
 	reg_rule->freq_range.end_freq_khz = MHZ_TO_KHZ(end_freq);
 	reg_rule->freq_range.max_bandwidth_khz = MHZ_TO_KHZ(bw);
 	reg_rule->power_rule.max_antenna_gain = DBI_TO_MBI(ant_gain);
 	reg_rule->power_rule.max_eirp = DBM_TO_MBM(reg_pwr);
+	reg_rule->psd = psd;
 	reg_rule->flags = reg_flags;
 }
 
@@ -488,90 +553,142 @@ ath11k_reg_update_weather_radar_band(struct ath11k_base *ab,
 				     struct cur_reg_rule *reg_rule,
 				     u8 *rule_idx, u32 flags, u16 max_bw)
 {
+	u32 start_freq;
 	u32 end_freq;
 	u16 bw;
 	u8 i;
 
 	i = *rule_idx;
 
+	/* there might be situations when even the input rule must be dropped */
+	i--;
+
+	/* frequencies below weather radar */
 	bw = ath11k_reg_adjust_bw(reg_rule->start_freq,
 				  ETSI_WEATHER_RADAR_BAND_LOW, max_bw);
+	if (bw > 0) {
+		i++;
 
-	ath11k_reg_update_rule(regd->reg_rules + i, reg_rule->start_freq,
-			       ETSI_WEATHER_RADAR_BAND_LOW, bw,
-			       reg_rule->ant_gain, reg_rule->reg_power,
-			       flags);
+		ath11k_reg_update_rule(regd->reg_rules + i,
+				       reg_rule->start_freq,
+				       ETSI_WEATHER_RADAR_BAND_LOW, bw,
+				       reg_rule->ant_gain, reg_rule->reg_power,
+				       reg_rule->psd_eirp, flags);
 
-	ath11k_dbg(ab, ATH11K_DBG_REG,
-		   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
-		   i + 1, reg_rule->start_freq, ETSI_WEATHER_RADAR_BAND_LOW,
-		   bw, reg_rule->ant_gain, reg_rule->reg_power,
-		   regd->reg_rules[i].dfs_cac_ms,
-		   flags);
-
-	if (reg_rule->end_freq > ETSI_WEATHER_RADAR_BAND_HIGH)
-		end_freq = ETSI_WEATHER_RADAR_BAND_HIGH;
-	else
-		end_freq = reg_rule->end_freq;
-
-	bw = ath11k_reg_adjust_bw(ETSI_WEATHER_RADAR_BAND_LOW, end_freq,
-				  max_bw);
-
-	i++;
-
-	ath11k_reg_update_rule(regd->reg_rules + i,
-			       ETSI_WEATHER_RADAR_BAND_LOW, end_freq, bw,
-			       reg_rule->ant_gain, reg_rule->reg_power,
-			       flags);
-
-	regd->reg_rules[i].dfs_cac_ms = ETSI_WEATHER_RADAR_BAND_CAC_TIMEOUT;
-
-	ath11k_dbg(ab, ATH11K_DBG_REG,
-		   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
-		   i + 1, ETSI_WEATHER_RADAR_BAND_LOW, end_freq,
-		   bw, reg_rule->ant_gain, reg_rule->reg_power,
-		   regd->reg_rules[i].dfs_cac_ms,
-		   flags);
-
-	if (end_freq == reg_rule->end_freq) {
-		regd->n_reg_rules--;
-		*rule_idx = i;
-		return;
+		ath11k_dbg(ab, ATH11K_DBG_REG,
+			   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
+			   i + 1, reg_rule->start_freq,
+			   ETSI_WEATHER_RADAR_BAND_LOW, bw, reg_rule->ant_gain,
+			   reg_rule->reg_power, regd->reg_rules[i].dfs_cac_ms,
+			   flags);
 	}
 
+	/* weather radar frequencies */
+	start_freq = max_t(u32, reg_rule->start_freq,
+			   ETSI_WEATHER_RADAR_BAND_LOW);
+	end_freq = min_t(u32, reg_rule->end_freq, ETSI_WEATHER_RADAR_BAND_HIGH);
+
+	bw = ath11k_reg_adjust_bw(start_freq, end_freq, max_bw);
+	if (bw > 0) {
+		i++;
+
+		ath11k_reg_update_rule(regd->reg_rules + i, start_freq,
+				       end_freq, bw, reg_rule->ant_gain,
+				       reg_rule->reg_power, reg_rule->psd_eirp, flags);
+
+		regd->reg_rules[i].dfs_cac_ms = ETSI_WEATHER_RADAR_BAND_CAC_TIMEOUT;
+
+		ath11k_dbg(ab, ATH11K_DBG_REG,
+			   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
+			   i + 1, start_freq, end_freq, bw,
+			   reg_rule->ant_gain, reg_rule->reg_power,
+			   regd->reg_rules[i].dfs_cac_ms, flags);
+	}
+
+	/* frequencies above weather radar */
 	bw = ath11k_reg_adjust_bw(ETSI_WEATHER_RADAR_BAND_HIGH,
 				  reg_rule->end_freq, max_bw);
+	if (bw > 0) {
+		i++;
 
-	i++;
+		ath11k_reg_update_rule(regd->reg_rules + i,
+				       ETSI_WEATHER_RADAR_BAND_HIGH,
+				       reg_rule->end_freq, bw,
+				       reg_rule->ant_gain, reg_rule->reg_power,
+				       reg_rule->psd_eirp, flags);
 
-	ath11k_reg_update_rule(regd->reg_rules + i, ETSI_WEATHER_RADAR_BAND_HIGH,
-			       reg_rule->end_freq, bw,
-			       reg_rule->ant_gain, reg_rule->reg_power,
-			       flags);
-
-	ath11k_dbg(ab, ATH11K_DBG_REG,
-		   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
-		   i + 1, ETSI_WEATHER_RADAR_BAND_HIGH, reg_rule->end_freq,
-		   bw, reg_rule->ant_gain, reg_rule->reg_power,
-		   regd->reg_rules[i].dfs_cac_ms,
-		   flags);
+		ath11k_dbg(ab, ATH11K_DBG_REG,
+			   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
+			   i + 1, ETSI_WEATHER_RADAR_BAND_HIGH,
+			   reg_rule->end_freq, bw, reg_rule->ant_gain,
+			   reg_rule->reg_power, regd->reg_rules[i].dfs_cac_ms,
+			   flags);
+	}
 
 	*rule_idx = i;
 }
 
+enum wmi_reg_6g_ap_type
+ath11k_ieee80211_ap_pwr_type_convert(enum ieee80211_ap_reg_power power_type)
+{
+	switch (power_type) {
+	case IEEE80211_REG_LPI_AP:
+		return WMI_REG_INDOOR_AP;
+	case IEEE80211_REG_SP_AP:
+		return WMI_REG_STANDARD_POWER_AP;
+	case IEEE80211_REG_VLP_AP:
+		return WMI_REG_VERY_LOW_POWER_AP;
+	default:
+		return WMI_REG_MAX_AP_TYPE;
+	}
+}
+
 struct ieee80211_regdomain *
 ath11k_reg_build_regd(struct ath11k_base *ab,
-		      struct cur_regulatory_info *reg_info, bool intersect)
+		      struct cur_regulatory_info *reg_info, bool intersect,
+		      enum wmi_vdev_type vdev_type,
+		      enum ieee80211_ap_reg_power power_type)
 {
 	struct ieee80211_regdomain *tmp_regd, *default_regd, *new_regd = NULL;
-	struct cur_reg_rule *reg_rule;
-	u8 i = 0, j = 0;
+	struct cur_reg_rule *reg_rule, *reg_rule_6g;
+	u8 i = 0, j = 0, k = 0;
 	u8 num_rules;
 	u16 max_bw;
-	u32 flags;
+	u32 flags, reg_6g_number, max_bw_6g;
 	char alpha2[3];
 
 	num_rules = reg_info->num_5g_reg_rules + reg_info->num_2g_reg_rules;
+
+	/* FIXME: Currently taking reg rules for 6 GHz only from Indoor AP mode list.
+	 * This can be updated to choose the combination dynamically based on AP
+	 * type and client type, after complete 6 GHz regulatory support is added.
+	 */
+	if (reg_info->is_ext_reg_event) {
+		if (vdev_type == WMI_VDEV_TYPE_STA) {
+			enum wmi_reg_6g_ap_type ap_type;
+
+			ap_type = ath11k_ieee80211_ap_pwr_type_convert(power_type);
+
+			if (ap_type == WMI_REG_MAX_AP_TYPE)
+				ap_type = WMI_REG_INDOOR_AP;
+			reg_6g_number = reg_info->num_6g_reg_rules_client
+					[ap_type][WMI_REG_DEFAULT_CLIENT];
+			if (reg_6g_number == 0) {
+				ap_type = WMI_REG_INDOOR_AP;
+				reg_6g_number = reg_info->num_6g_reg_rules_client
+						[ap_type][WMI_REG_DEFAULT_CLIENT];
+			}
+			reg_rule_6g = reg_info->reg_rules_6g_client_ptr
+					[ap_type][WMI_REG_DEFAULT_CLIENT];
+			max_bw_6g = reg_info->max_bw_6g_client
+					[ap_type][WMI_REG_DEFAULT_CLIENT];
+		} else {
+			reg_6g_number = reg_info->num_6g_reg_rules_ap[WMI_REG_INDOOR_AP];
+			reg_rule_6g = reg_info->reg_rules_6g_ap_ptr[WMI_REG_INDOOR_AP];
+			max_bw_6g = reg_info->max_bw_6g_ap[WMI_REG_INDOOR_AP];
+		}
+		num_rules += reg_6g_number;
+	}
 
 	if (!num_rules)
 		goto ret;
@@ -618,6 +735,13 @@ ath11k_reg_build_regd(struct ath11k_base *ab,
 			 * per other BW rule flags we pass from here
 			 */
 			flags = NL80211_RRF_AUTO_BW;
+		} else if (reg_info->is_ext_reg_event && reg_6g_number &&
+			   (k < reg_6g_number)) {
+			reg_rule = reg_rule_6g + k++;
+			max_bw = min_t(u16, reg_rule->max_bw, max_bw_6g);
+			flags = NL80211_RRF_AUTO_BW;
+			if (reg_rule->psd_flag)
+				flags |= NL80211_RRF_PSD;
 		} else {
 			break;
 		}
@@ -628,7 +752,7 @@ ath11k_reg_build_regd(struct ath11k_base *ab,
 				       reg_rule->start_freq,
 				       reg_rule->end_freq, max_bw,
 				       reg_rule->ant_gain, reg_rule->reg_power,
-				       flags);
+				       reg_rule->psd_eirp, flags);
 
 		/* Update dfs cac timeout if the dfs domain is ETSI and the
 		 * new rule covers weather radar band.
@@ -645,12 +769,21 @@ ath11k_reg_build_regd(struct ath11k_base *ab,
 			continue;
 		}
 
-		ath11k_dbg(ab, ATH11K_DBG_REG,
-			   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
-			   i + 1, reg_rule->start_freq, reg_rule->end_freq,
-			   max_bw, reg_rule->ant_gain, reg_rule->reg_power,
-			   tmp_regd->reg_rules[i].dfs_cac_ms,
-			   flags);
+		if (reg_info->is_ext_reg_event) {
+			ath11k_dbg(ab, ATH11K_DBG_REG,
+				   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d) (%d, %d)\n",
+				   i + 1, reg_rule->start_freq, reg_rule->end_freq,
+				   max_bw, reg_rule->ant_gain, reg_rule->reg_power,
+				   tmp_regd->reg_rules[i].dfs_cac_ms, flags,
+				   reg_rule->psd_flag, reg_rule->psd_eirp);
+		} else {
+			ath11k_dbg(ab, ATH11K_DBG_REG,
+				   "\t%d. (%d - %d @ %d) (%d, %d) (%d ms) (FLAGS %d)\n",
+				   i + 1, reg_rule->start_freq, reg_rule->end_freq,
+				   max_bw, reg_rule->ant_gain, reg_rule->reg_power,
+				   tmp_regd->reg_rules[i].dfs_cac_ms,
+				   flags);
+		}
 	}
 
 	tmp_regd->n_reg_rules = i;
@@ -681,7 +814,7 @@ void ath11k_regd_update_work(struct work_struct *work)
 					 regd_update_work);
 	int ret;
 
-	ret = ath11k_regd_update(ar, false);
+	ret = ath11k_regd_update(ar);
 	if (ret) {
 		/* Firmware has already moved to the new regd. We need
 		 * to maintain channel consistency across FW, Host driver
@@ -701,6 +834,12 @@ void ath11k_reg_init(struct ath11k *ar)
 void ath11k_reg_free(struct ath11k_base *ab)
 {
 	int i;
+
+	for (i = 0; i < ab->num_radios; i++)
+		ath11k_reg_reset_info(&ab->reg_info_store[i]);
+
+	kfree(ab->reg_info_store);
+	ab->reg_info_store = NULL;
 
 	for (i = 0; i < ab->hw_params.max_radios; i++) {
 		kfree(ab->default_regd[i]);

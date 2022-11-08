@@ -30,7 +30,7 @@ static void snd_malloc_dev_pages(struct snd_dma_buffer *dmab, size_t size)
 
 	gfp_flags = GFP_KERNEL
 		| __GFP_COMP	/* compound page lets parts be mapped */
-		| __GFP_NORETRY /* don't trigger OOM-killer */
+		| __GFP_RETRY_MAYFAIL /* don't trigger OOM-killer */
 		| __GFP_NOWARN; /* no stack trace print - this call is non-critical */
 	dmab->area = dma_alloc_coherent(dmab->dev.dev, size, &dmab->addr,
 					gfp_flags);
@@ -133,6 +133,7 @@ int snd_dma_alloc_pages(int type, struct device *device, size_t size,
 	if (WARN_ON(!dmab))
 		return -ENXIO;
 
+	size = PAGE_ALIGN(size);
 	dmab->dev.type = type;
 	dmab->dev.dev = device;
 	dmab->bytes = 0;

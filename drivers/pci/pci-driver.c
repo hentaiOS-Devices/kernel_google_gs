@@ -20,6 +20,7 @@
 #include <linux/of_device.h>
 #include <linux/acpi.h>
 #include <linux/dma-map-ops.h>
+#include <linux/coiommu.h>
 #include "pci.h"
 #include "pcie/portdrv.h"
 
@@ -499,9 +500,9 @@ static void pci_device_shutdown(struct device *dev)
 		pci_clear_master(pci_dev);
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 
-/* Auxiliary functions used for system resume and run-time resume. */
+/* Auxiliary functions used for system resume */
 
 /**
  * pci_restore_standard_config - restore standard config registers of PCI device
@@ -521,16 +522,17 @@ static int pci_restore_standard_config(struct pci_dev *pci_dev)
 	pci_pme_restore(pci_dev);
 	return 0;
 }
+#endif /* CONFIG_PM_SLEEP */
+
+#ifdef CONFIG_PM
+
+/* Auxiliary functions used for system resume and run-time resume */
 
 static void pci_pm_default_resume(struct pci_dev *pci_dev)
 {
 	pci_fixup_device(pci_fixup_resume, pci_dev);
 	pci_enable_wake(pci_dev, PCI_D0, false);
 }
-
-#endif
-
-#ifdef CONFIG_PM_SLEEP
 
 static void pci_pm_default_resume_early(struct pci_dev *pci_dev)
 {
@@ -539,6 +541,10 @@ static void pci_pm_default_resume_early(struct pci_dev *pci_dev)
 	pci_restore_state(pci_dev);
 	pci_pme_restore(pci_dev);
 }
+
+#endif /* CONFIG_PM */
+
+#ifdef CONFIG_PM_SLEEP
 
 /*
  * Default "suspend" method for devices that have no driver provided suspend,
@@ -1289,7 +1295,7 @@ static int pci_pm_runtime_resume(struct device *dev)
 	 * to a driver because although we left it in D0, it may have gone to
 	 * D3cold when the bridge above it runtime suspended.
 	 */
-	pci_restore_standard_config(pci_dev);
+	pci_pm_default_resume_early(pci_dev);
 
 	if (!pci_dev->driver)
 		return 0;
@@ -1580,6 +1586,10 @@ static int pci_dma_configure(struct device *dev)
 {
 	struct device *bridge;
 	int ret = 0;
+
+	ret = coiommu_configure(dev);
+	if (ret)
+		return ret;
 
 	bridge = pci_get_host_bridge_device(to_pci_dev(dev));
 

@@ -118,11 +118,15 @@ correct. This prevents the situation where only some of the controls
 were set/get. Only low-level errors (e. g. a failed i2c command) can
 still cause this situation.
 
-.. tabularcolumns:: |p{1.2cm}|p{3.0cm}|p{1.5cm}|p{11.8cm}|
+.. tabularcolumns:: |p{6.8cm}|p{4.0cm}|p{6.5cm}|
 
 .. c:type:: v4l2_ext_control
 
-.. cssclass: longtable
+.. raw:: latex
+
+   \footnotesize
+
+.. cssclass:: longtable
 
 .. flat-table:: struct v4l2_ext_control
     :header-rows:  0
@@ -216,6 +220,50 @@ still cause this situation.
       - ``p_vp8_frame``
       - A pointer to a struct :c:type:`v4l2_ctrl_vp8_frame`. Valid if this control is
         of type ``V4L2_CTRL_TYPE_VP8_FRAME``.
+    * - struct :c:type:`v4l2_ctrl_mpeg2_sequence` *
+      - ``p_mpeg2_sequence``
+      - A pointer to a struct :c:type:`v4l2_ctrl_mpeg2_sequence`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_MPEG2_SEQUENCE``.
+    * - struct :c:type:`v4l2_ctrl_mpeg2_picture` *
+      - ``p_mpeg2_picture``
+      - A pointer to a struct :c:type:`v4l2_ctrl_mpeg2_picture`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_MPEG2_PICTURE``.
+    * - struct :c:type:`v4l2_ctrl_mpeg2_quantisation` *
+      - ``p_mpeg2_quantisation``
+      - A pointer to a struct :c:type:`v4l2_ctrl_mpeg2_quantisation`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_MPEG2_QUANTISATION``.
+    * - struct :c:type:`v4l2_ctrl_vp9_compressed_hdr` *
+      - ``p_vp9_compressed_hdr_probs``
+      - A pointer to a struct :c:type:`v4l2_ctrl_vp9_compressed_hdr`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR``.
+    * - struct :c:type:`v4l2_ctrl_vp9_frame` *
+      - ``p_vp9_frame``
+      - A pointer to a struct :c:type:`v4l2_ctrl_vp9_frame`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_VP9_FRAME``.
+    * - struct :c:type:`v4l2_ctrl_av1_sequence` *
+      - ``p_av1_sequence``
+      - A pointer to a struct :c:type:`v4l2_ctrl_av1_sequence`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_AV1_SEQUENCE``.
+    * - struct :c:type:`v4l2_ctrl_av1_tile_group_entry` *
+      - ``p_av1_tile_group_entry``
+      - A pointer to a struct :c:type:`v4l2_ctrl_av1_tile_group_entry`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY``.
+    * - struct :c:type:`v4l2_ctrl_av1_frame` *
+      - ``p_av1_frame``
+      - A pointer to a struct :c:type:`v4l2_ctrl_av1_frame`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_AV1_FRAME``.
+    * - struct :c:type:`v4l2_ctrl_av1_profile` *
+      - ``p_av1_profile``
+      - A pointer to a struct :c:type:`v4l2_ctrl_av1_profile`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_AV1_PROFILE``.
+    * - struct :c:type:`v4l2_ctrl_av1_level` *
+      - ``p_av1_level``
+      - A pointer to a struct :c:type:`v4l2_ctrl_av1_level`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_AV1_LEVEL``.
+    * - struct :c:type:`v4l2_ctrl_av1_film_grain` *
+      - ``p_av1_film_grain``
+      - A pointer to a struct :c:type:`v4l2_ctrl_av1_film_grain`. Valid if this control is
+        of type ``V4L2_CTRL_TYPE_AV1_FILM_GRAIN``.
     * - struct :c:type:`v4l2_ctrl_hdr10_cll_info` *
       - ``p_hdr10_cll``
       - A pointer to a struct :c:type:`v4l2_ctrl_hdr10_cll_info`. Valid if this control is
@@ -224,6 +272,26 @@ still cause this situation.
       - ``p_hdr10_mastering``
       - A pointer to a struct :c:type:`v4l2_ctrl_hdr10_mastering_display`. Valid if this control is
         of type ``V4L2_CTRL_TYPE_HDR10_MASTERING_DISPLAY``.
+    * - struct :c:type:`v4l2_ctrl_hevc_sps` *
+      - ``p_hevc_sps``
+      - A pointer to a struct :c:type:`v4l2_ctrl_hevc_sps`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_HEVC_SPS``.
+    * - struct :c:type:`v4l2_ctrl_hevc_pps` *
+      - ``p_hevc_pps``
+      - A pointer to a struct :c:type:`v4l2_ctrl_hevc_pps`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_HEVC_PPS``.
+    * - struct :c:type:`v4l2_ctrl_hevc_slice_params` *
+      - ``p_hevc_slice_params``
+      - A pointer to a struct :c:type:`v4l2_ctrl_hevc_slice_params`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_HEVC_SLICE_PARAMS``.
+    * - struct :c:type:`v4l2_ctrl_hevc_scaling_matrix` *
+      - ``p_hevc_scaling_matrix``
+      - A pointer to a struct :c:type:`v4l2_ctrl_hevc_scaling_matrix`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_HEVC_SCALING_MATRIX``.
+    * - struct :c:type:`v4l2_ctrl_hevc_decode_params` *
+      - ``p_hevc_decode_params``
+      - A pointer to a struct :c:type:`v4l2_ctrl_hevc_decode_params`. Valid if this
+        control is of type ``V4L2_CTRL_TYPE_HEVC_DECODE_PARAMS``.
     * - void *
       - ``ptr``
       - A pointer to a compound type which can be an N-dimensional array
@@ -233,7 +301,11 @@ still cause this situation.
     * - }
       -
 
-.. tabularcolumns:: |p{4.0cm}|p{2.2cm}|p{2.1cm}|p{8.2cm}|
+.. raw:: latex
+
+   \normalsize
+
+.. tabularcolumns:: |p{4.0cm}|p{2.5cm}|p{10.8cm}|
 
 .. c:type:: v4l2_ext_controls
 
@@ -346,9 +418,11 @@ still cause this situation.
 
 	Ignored if ``count`` equals zero.
 
-.. tabularcolumns:: |p{6.6cm}|p{2.2cm}|p{8.7cm}|
-
 .. _ctrl-class:
+
+.. tabularcolumns:: |p{7.3cm}|p{2.0cm}|p{8.0cm}|
+
+.. cssclass:: longtable
 
 .. flat-table:: Control classes
     :header-rows:  0
@@ -454,3 +528,6 @@ EACCES
 
     Or the ``which`` field was set to ``V4L2_CTRL_WHICH_REQUEST_VAL`` but the
     device does not support requests.
+
+    Or if there is an attempt to set an inactive control and the driver is
+    not capable of caching the new value until the control is active again.

@@ -95,9 +95,10 @@
 		reg = <0x58>;
 		pagesize = <32>;
 		vcc-supply = <&mt6358_vcama2_reg>;
+		device-id = <0>;
 	};
 
-	sensor_main: sensor_main {
+	sensor_main: sensor_main@10 {
 		status = "okay";
 		compatible = "ovti,ov8856";
 		reg = <0x10>;
@@ -133,7 +134,7 @@
 		};
 	};
 
-	camera_main_af: camera_main_af {
+	camera_main_af: camera_main_af@c {
 		compatible = "dongwoon,dw9768";
 		reg = <0x0c>;
 
@@ -149,14 +150,15 @@
 	clock-frequency = <400000>;
 	vbus-supply = <&mt6358_vcn18_reg>;
 
-	eeprom@54 {
+	eeprom@50 {
 		compatible = "atmel,24c32";
-		reg = <0x54>;
+		reg = <0x50>;
 		pagesize = <32>;
 		vcc-supply = <&mt6358_vcn18_reg>;
+		device-id = <0>;
 	};
 
-	sensor_sub: sensor_sub {
+	sensor_sub: sensor_sub@3d {
 		status = "okay";
 		compatible = "ovti,ov02a10";
 		reg = <0x3d>;
@@ -448,6 +450,12 @@
 			/* External pull-up. */
 			bias-disable;
 		};
+	};
+};
+
+&cros_ec {
+	keyboard-controller {
+		compatible = "google,cros-ec-keyb-switches";
 	};
 };
 

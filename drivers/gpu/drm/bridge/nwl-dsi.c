@@ -48,12 +48,6 @@ enum transfer_direction {
 #define NWL_DSI_ENDPOINT_LCDIF 0
 #define NWL_DSI_ENDPOINT_DCSS 1
 
-struct nwl_dsi_plat_clk_config {
-	const char *id;
-	struct clk *clk;
-	bool present;
-};
-
 struct nwl_dsi_transfer {
 	const struct mipi_dsi_msg *msg;
 	struct mipi_dsi_packet packet;
@@ -196,7 +190,7 @@ static u32 ps2bc(struct nwl_dsi *dsi, unsigned long long ps)
 	u32 bpp = mipi_dsi_pixel_format_to_bpp(dsi->format);
 
 	return DIV64_U64_ROUND_UP(ps * dsi->mode.clock * bpp,
-				  dsi->lanes * 8 * NSEC_PER_SEC);
+				  dsi->lanes * 8ULL * NSEC_PER_SEC);
 }
 
 /*
@@ -1177,6 +1171,7 @@ static int nwl_dsi_probe(struct platform_device *pdev)
 
 	ret = nwl_dsi_select_input(dsi);
 	if (ret < 0) {
+		pm_runtime_disable(dev);
 		mipi_dsi_host_unregister(&dsi->dsi_host);
 		return ret;
 	}

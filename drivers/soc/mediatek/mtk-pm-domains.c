@@ -16,9 +16,11 @@
 #include <linux/regulator/consumer.h>
 #include <linux/soc/mediatek/infracfg.h>
 
+#include "mt8167-pm-domains.h"
 #include "mt8173-pm-domains.h"
 #include "mt8183-pm-domains.h"
 #include "mt8192-pm-domains.h"
+#include "mt8195-pm-domains.h"
 
 #define MTK_POLL_DELAY_US		10
 #define MTK_POLL_TIMEOUT		USEC_PER_SEC
@@ -59,10 +61,10 @@ static bool scpsys_domain_is_on(struct scpsys_domain *pd)
 	struct scpsys *scpsys = pd->scpsys;
 	u32 status, status2;
 
-	regmap_read(scpsys->base, scpsys->soc_data->pwr_sta_offs, &status);
+	regmap_read(scpsys->base, pd->data->pwr_sta_offs, &status);
 	status &= pd->data->sta_mask;
 
-	regmap_read(scpsys->base, scpsys->soc_data->pwr_sta2nd_offs, &status2);
+	regmap_read(scpsys->base, pd->data->pwr_sta2nd_offs, &status2);
 	status2 &= pd->data->sta_mask;
 
 	/* A domain is on when both status bits are set. */
@@ -271,9 +273,9 @@ static int scpsys_power_off(struct generic_pm_domain *genpd)
 	clk_bulk_disable_unprepare(pd->num_subsys_clks, pd->subsys_clks);
 
 	/* subsys power off */
-	regmap_clear_bits(scpsys->base, pd->data->ctl_offs, PWR_RST_B_BIT);
 	regmap_set_bits(scpsys->base, pd->data->ctl_offs, PWR_ISO_BIT);
 	regmap_set_bits(scpsys->base, pd->data->ctl_offs, PWR_CLK_DIS_BIT);
+	regmap_clear_bits(scpsys->base, pd->data->ctl_offs, PWR_RST_B_BIT);
 	regmap_clear_bits(scpsys->base, pd->data->ctl_offs, PWR_ON_2ND_BIT);
 	regmap_clear_bits(scpsys->base, pd->data->ctl_offs, PWR_ON_BIT);
 
@@ -442,6 +444,9 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	pd->genpd.power_off = scpsys_power_off;
 	pd->genpd.power_on = scpsys_power_on;
 
+	if (MTK_SCPD_CAPS(pd, MTK_SCPD_ACTIVE_WAKEUP))
+		pd->genpd.flags |= GENPD_FLAG_ACTIVE_WAKEUP;
+
 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))
 		pm_genpd_init(&pd->genpd, NULL, true);
 	else
@@ -483,8 +488,9 @@ static int scpsys_add_subdomain(struct scpsys *scpsys, struct device_node *paren
 
 		child_pd = scpsys_add_one_domain(scpsys, child);
 		if (IS_ERR(child_pd)) {
-			dev_err_probe(scpsys->dev, PTR_ERR(child_pd),
-				      "%pOF: failed to get child domain id\n", child);
+			ret = PTR_ERR(child_pd);
+			dev_err_probe(scpsys->dev, ret, "%pOF: failed to get child domain id\n",
+				      child);
 			goto err_put_node;
 		}
 
@@ -549,6 +555,10 @@ static void scpsys_domain_cleanup(struct scpsys *scpsys)
 
 static const struct of_device_id scpsys_of_match[] = {
 	{
+		.compatible = "mediatek,mt8167-power-controller",
+		.data = &mt8167_scpsys_data,
+	},
+	{
 		.compatible = "mediatek,mt8173-power-controller",
 		.data = &mt8173_scpsys_data,
 	},
@@ -559,6 +569,10 @@ static const struct of_device_id scpsys_of_match[] = {
 	{
 		.compatible = "mediatek,mt8192-power-controller",
 		.data = &mt8192_scpsys_data,
+	},
+	{
+		.compatible = "mediatek,mt8195-power-controller",
+		.data = &mt8195_scpsys_data,
 	},
 	{ }
 };

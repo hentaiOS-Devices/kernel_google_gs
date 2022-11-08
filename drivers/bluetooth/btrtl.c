@@ -49,6 +49,7 @@ enum btrtl_chip_id {
 	CHIP_ID_8822C = 13,
 	CHIP_ID_8761B,
 	CHIP_ID_8852A = 18,
+	CHIP_ID_8852C = 25,
 };
 
 struct id_table {
@@ -70,6 +71,7 @@ struct btrtl_device_info {
 	int fw_len;
 	u8 *cfg_data;
 	int cfg_len;
+	bool drop_fw;
 	int project_id;
 };
 
@@ -164,6 +166,13 @@ static const struct id_table ic_id_table[] = {
 	  .has_rom_version = true,
 	  .fw_name  = "rtl_bt/rtl8852au_fw.bin",
 	  .cfg_name = "rtl_bt/rtl8852au_config" },
+
+	/* 8852C */
+	{ IC_INFO(RTL_ROM_LMP_8852A, 0xc, 0xc, HCI_USB),
+	  .config_needed = false,
+	  .has_rom_version = true,
+	  .fw_name  = "rtl_bt/rtl8852cu_fw.bin",
+	  .cfg_name = "rtl_bt/rtl8852cu_config" },
 	};
 
 static const struct id_table *btrtl_match_ic(u16 lmp_subver, u16 hci_rev,
@@ -272,6 +281,7 @@ static int rtlbt_parse_firmware(struct hci_dev *hdev,
 		{ RTL_ROM_LMP_8822B, 13 },	/* 8822C */
 		{ RTL_ROM_LMP_8761A, 14 },	/* 8761B */
 		{ RTL_ROM_LMP_8852A, 18 },	/* 8852A */
+		{ RTL_ROM_LMP_8852A, 25 },	/* 8852C */
 	};
 
 	min_size = sizeof(struct rtl_epatch_header) + sizeof(extension_sig) + 3;
@@ -562,6 +572,8 @@ struct btrtl_device_info *btrtl_initialize(struct hci_dev *hdev,
 	u16 hci_rev, lmp_subver;
 	u8 hci_ver;
 	int ret;
+	u16 opcode;
+	u8 cmd[2];
 
 	btrtl_dev = kzalloc(sizeof(*btrtl_dev), GFP_KERNEL);
 	if (!btrtl_dev) {
@@ -583,10 +595,55 @@ struct btrtl_device_info *btrtl_initialize(struct hci_dev *hdev,
 	hci_ver = resp->hci_ver;
 	hci_rev = le16_to_cpu(resp->hci_rev);
 	lmp_subver = le16_to_cpu(resp->lmp_subver);
-	kfree_skb(skb);
 
 	btrtl_dev->ic_info = btrtl_match_ic(lmp_subver, hci_rev, hci_ver,
 					    hdev->bus);
+
+	if (!btrtl_dev->ic_info)
+		btrtl_dev->drop_fw = true;
+
+	if (btrtl_dev->drop_fw) {
+		opcode = hci_opcode_pack(0x3f, 0x66);
+		cmd[0] = opcode & 0xff;
+		cmd[1] = opcode >> 8;
+
+		skb = bt_skb_alloc(sizeof(cmd), GFP_KERNEL);
+		if (!skb)
+			goto out_free;
+
+		skb_put_data(skb, cmd, sizeof(cmd));
+		hci_skb_pkt_type(skb) = HCI_COMMAND_PKT;
+
+		hdev->send(hdev, skb);
+
+		/* Ensure the above vendor command is sent to controller and
+		 * process has done.
+		 */
+		msleep(200);
+
+		/* Read the local version again. Expect to have the vanilla
+		 * version as cold boot.
+		 */
+		skb = btrtl_read_local_version(hdev);
+		if (IS_ERR(skb)) {
+			ret = PTR_ERR(skb);
+			goto err_free;
+		}
+
+		resp = (struct hci_rp_read_local_version *)skb->data;
+		rtl_dev_info(hdev, "examining hci_ver=%02x hci_rev=%04x lmp_ver=%02x lmp_subver=%04x",
+			     resp->hci_ver, resp->hci_rev,
+			     resp->lmp_ver, resp->lmp_subver);
+
+		hci_ver = resp->hci_ver;
+		hci_rev = le16_to_cpu(resp->hci_rev);
+		lmp_subver = le16_to_cpu(resp->lmp_subver);
+
+		btrtl_dev->ic_info = btrtl_match_ic(lmp_subver, hci_rev, hci_ver,
+						    hdev->bus);
+	}
+out_free:
+	kfree_skb(skb);
 
 	if (!btrtl_dev->ic_info) {
 		rtl_dev_info(hdev, "unknown IC info, lmp subver %04x, hci rev %04x, hci ver %04x",
@@ -628,15 +685,10 @@ struct btrtl_device_info *btrtl_initialize(struct hci_dev *hdev,
 		}
 	}
 
-	/* The following chips supports the Microsoft vendor extension,
-	 * therefore set the corresponding VsMsftOpCode.
+	/* Both RTL8822B and RTL8852A support only one tracking device
+	 * per condition in firmware, the use of MSFT HCI extension is
+	 * eliminated. See b/200993792 for more details.
 	 */
-	switch (lmp_subver) {
-	case RTL_ROM_LMP_8822B:
-	case RTL_ROM_LMP_8852A:
-		hci_set_msft_opcode(hdev, 0xFCF0);
-		break;
-	}
 
 	return btrtl_dev;
 
@@ -677,17 +729,8 @@ int btrtl_download_firmware(struct hci_dev *hdev,
 }
 EXPORT_SYMBOL_GPL(btrtl_download_firmware);
 
-int btrtl_setup_realtek(struct hci_dev *hdev)
+void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev)
 {
-	struct btrtl_device_info *btrtl_dev;
-	int ret;
-
-	btrtl_dev = btrtl_initialize(hdev, NULL);
-	if (IS_ERR(btrtl_dev))
-		return PTR_ERR(btrtl_dev);
-
-	ret = btrtl_download_firmware(hdev, btrtl_dev);
-
 	/* Enable controller to do both LE scan and BR/EDR inquiry
 	 * simultaneously.
 	 */
@@ -700,14 +743,51 @@ int btrtl_setup_realtek(struct hci_dev *hdev)
 	switch (btrtl_dev->project_id) {
 	case CHIP_ID_8822C:
 	case CHIP_ID_8852A:
+	case CHIP_ID_8852C:
 		set_bit(HCI_QUIRK_VALID_LE_STATES, &hdev->quirks);
 		set_bit(HCI_QUIRK_WIDEBAND_SPEECH_SUPPORTED, &hdev->quirks);
+		btrealtek_set_flag(hdev, REALTEK_WBS_FILTER);
+
+		/* RTL8852C needs to transmit mSBC data continuously without
+		 * the zero length of USB packets for the ALT 6 supported chips
+		 */
+		if (btrtl_dev->project_id == CHIP_ID_8852C)
+			btrealtek_set_flag(hdev, REALTEK_ALT6_CONTINUOUS_TX_CHIP);
+
+		hci_set_aosp_capable(hdev);
 		break;
 	default:
 		rtl_dev_dbg(hdev, "Central-peripheral role not enabled.");
 		rtl_dev_dbg(hdev, "WBS supported not enabled.");
 		break;
 	}
+
+	/* Disallow RTL8822 to remote wakeup, in order to enter
+	 * global suspend and save power.
+	 */
+	if (CHIP_ID_8822C)
+		set_bit(HCI_QUIRK_DISABLE_REMOTE_WAKE, &hdev->quirks);
+
+	/* Force RTL8852A to enable remote wakeup in order to prevent it from
+	 * resetting itself and taking longer to resume from suspend
+	 */
+	if (CHIP_ID_8852A)
+		set_bit(HCI_QUIRK_FORCE_REMOTE_WAKE, &hdev->quirks);
+}
+EXPORT_SYMBOL_GPL(btrtl_set_quirks);
+
+int btrtl_setup_realtek(struct hci_dev *hdev)
+{
+	struct btrtl_device_info *btrtl_dev;
+	int ret;
+
+	btrtl_dev = btrtl_initialize(hdev, NULL);
+	if (IS_ERR(btrtl_dev))
+		return PTR_ERR(btrtl_dev);
+
+	ret = btrtl_download_firmware(hdev, btrtl_dev);
+
+	btrtl_set_quirks(hdev, btrtl_dev);
 
 	btrtl_free(btrtl_dev);
 	return ret;
@@ -842,6 +922,33 @@ int btrtl_get_uart_settings(struct hci_dev *hdev,
 }
 EXPORT_SYMBOL_GPL(btrtl_get_uart_settings);
 
+int btrtl_usb_recv_isoc(u16 pos, u8 *data, u8 *p, int len,
+			u16 wMaxPacketSize)
+{
+	u8 *prev;
+
+	if (pos >= HCI_SCO_HDR_SIZE && pos >= wMaxPacketSize &&
+	    len == wMaxPacketSize && !(pos % wMaxPacketSize) &&
+	    wMaxPacketSize >= 10 && p[0] == data[0] && p[1] == data[1]) {
+		prev = data + (pos - wMaxPacketSize);
+
+		/* Detect the sco data of usb isoc pkt duplication. */
+		if (!memcmp(p + 2, prev + 2, 8))
+			return -EILSEQ;
+
+		if (wMaxPacketSize >= 12 &&
+		    p[2] == prev[6] && p[3] == prev[7] &&
+		    p[4] == prev[4] && p[5] == prev[5] &&
+		    p[6] == prev[10] && p[7] == prev[11] &&
+		    p[8] == prev[8] && p[9] == prev[9]) {
+			return -EILSEQ;
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(btrtl_usb_recv_isoc);
+
 MODULE_AUTHOR("Daniel Drake <drake@endlessm.com>");
 MODULE_DESCRIPTION("Bluetooth support for Realtek devices ver " VERSION);
 MODULE_VERSION(VERSION);
@@ -861,3 +968,5 @@ MODULE_FIRMWARE("rtl_bt/rtl8822b_fw.bin");
 MODULE_FIRMWARE("rtl_bt/rtl8822b_config.bin");
 MODULE_FIRMWARE("rtl_bt/rtl8852au_fw.bin");
 MODULE_FIRMWARE("rtl_bt/rtl8852au_config.bin");
+MODULE_FIRMWARE("rtl_bt/rtl8852cu_fw.bin");
+MODULE_FIRMWARE("rtl_bt/rtl8852cu_config.bin");

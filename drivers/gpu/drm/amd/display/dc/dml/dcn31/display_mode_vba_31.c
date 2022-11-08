@@ -23,7 +23,6 @@
  *
  */
 
-#ifdef CONFIG_DRM_AMD_DC_DCN3_1
 #include "dc.h"
 #include "dc_link.h"
 #include "../display_mode_lib.h"
@@ -3035,10 +3034,9 @@ static void DISPCLKDPPCLKDCFCLKDeepSleepPrefetchParametersWatermarksAndPerforman
 		}
 
 		v->PrefetchAndImmediateFlipSupported =
-				(v->PrefetchModeSupported == true
-						&& ((!v->ImmediateFlipSupport && !v->HostVMEnable
-								&& v->ImmediateFlipRequirement != dm_immediate_flip_required) || v->ImmediateFlipSupported)) ?
-						true : false;
+				(v->PrefetchModeSupported == true && ((!v->ImmediateFlipSupport && !v->HostVMEnable
+				&& v->ImmediateFlipRequirement[0] != dm_immediate_flip_required) ||
+				v->ImmediateFlipSupported)) ? true : false;
 #ifdef __DML_VBA_DEBUG__
 		dml_print("DML::%s: PrefetchModeSupported %d\n", __func__, v->PrefetchModeSupported);
 		dml_print("DML::%s: ImmediateFlipRequirement %d\n", __func__, v->ImmediateFlipRequirement == dm_immediate_flip_required);
@@ -5100,7 +5098,7 @@ void dml31_ModeSupportAndSystemConfigurationFull(struct display_mode_lib *mode_l
 				v->HostVMMinPageSize,
 				v->HostVMMaxNonCachedPageTableLevels,
 				v->DynamicMetadataVMEnabled,
-				v->ImmediateFlipRequirement,
+				v->ImmediateFlipRequirement[0],
 				v->ProgressiveToInterlaceUnitInOPP,
 				v->MaxAveragePercentOfIdealFabricAndSDPPortBWDisplayCanUseInNormalSystemOperation,
 				v->PercentOfIdealFabricAndSDPPortBWReceivedAfterUrgLatency,
@@ -5396,9 +5394,9 @@ void dml31_ModeSupportAndSystemConfigurationFull(struct display_mode_lib *mode_l
 
 					v->MaximumReadBandwidthWithPrefetch =
 							v->MaximumReadBandwidthWithPrefetch
-									+ dml_max4(
-											v->VActivePixelBandwidth[i][j][k],
-											v->VActiveCursorBandwidth[i][j][k]
+									+ dml_max3(
+											v->VActivePixelBandwidth[i][j][k]
+													+ v->VActiveCursorBandwidth[i][j][k]
 													+ v->NoOfDPP[i][j][k]
 															* (v->meta_row_bandwidth[i][j][k]
 																	+ v->dpte_row_bandwidth[i][j][k]),
@@ -5539,7 +5537,8 @@ void dml31_ModeSupportAndSystemConfigurationFull(struct display_mode_lib *mode_l
 				}
 				v->NextPrefetchMode = v->NextPrefetchMode + 1;
 			} while (!((v->PrefetchSupported[i][j] == true && v->DynamicMetadataSupported[i][j] == true && v->VRatioInPrefetchSupported[i][j] == true
-					&& ((v->HostVMEnable == false && v->ImmediateFlipRequirement != dm_immediate_flip_required)
+					&& ((v->HostVMEnable == false &&
+							v->ImmediateFlipRequirement[0] != dm_immediate_flip_required)
 							|| v->ImmediateFlipSupportedForState[i][j] == true))
 					|| (v->NextMaxVStartup == v->MaxMaxVStartup[i][j] && NextPrefetchModeState > MaxPrefetchMode)));
 
@@ -5699,7 +5698,8 @@ void dml31_ModeSupportAndSystemConfigurationFull(struct display_mode_lib *mode_l
 					&& v->PrefetchSupported[i][j] == true && v->DynamicMetadataSupported[i][j] == true
 					&& v->TotalVerticalActiveBandwidthSupport[i][j] == true && v->VRatioInPrefetchSupported[i][j] == true
 					&& v->PTEBufferSizeNotExceeded[i][j] == true && v->NonsupportedDSCInputBPC == false
-					&& ((v->HostVMEnable == false && v->ImmediateFlipRequirement != dm_immediate_flip_required)
+					&& ((v->HostVMEnable == false
+					&& v->ImmediateFlipRequirement[0] != dm_immediate_flip_required)
 							|| v->ImmediateFlipSupportedForState[i][j] == true)
 					&& FMTBufferExceeded == false) {
 				v->ModeSupport[i][j] = true;
@@ -7505,4 +7505,3 @@ static bool UnboundedRequest(enum unbounded_requesting_policy UseUnboundedReques
 	return (ret_val);
 }
 
-#endif /* CONFIG_DRM_AMD_DC_DCN3_1 */

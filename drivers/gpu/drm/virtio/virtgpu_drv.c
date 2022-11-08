@@ -29,6 +29,8 @@
 #include <linux/module.h>
 #include <linux/console.h>
 #include <linux/pci.h>
+#include <linux/poll.h>
+#include <linux/wait.h>
 
 #include <drm/drm.h>
 #include <drm/drm_aperture.h>
@@ -57,7 +59,7 @@ static int virtio_gpu_pci_quirk(struct drm_device *dev, struct virtio_device *vd
 		 vga ? "virtio-vga" : "virtio-gpu-pci",
 		 pname);
 	if (vga) {
-		ret = drm_aperture_remove_conflicting_pci_framebuffers(pdev, "virtiodrmfb");
+		ret = drm_aperture_remove_conflicting_pci_framebuffers(pdev, &driver);
 		if (ret)
 			return ret;
 	}

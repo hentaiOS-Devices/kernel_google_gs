@@ -1285,7 +1285,8 @@ EXPORT_SYMBOL(drm_mode_prune_invalid);
  * Negative if @lh_a is better than @lh_b, zero if they're equivalent, or
  * positive if @lh_b is better than @lh_a.
  */
-static int drm_mode_compare(void *priv, struct list_head *lh_a, struct list_head *lh_b)
+static int drm_mode_compare(void *priv, const struct list_head *lh_a,
+			    const struct list_head *lh_b)
 {
 	struct drm_display_mode *a = list_entry(lh_a, struct drm_display_mode, head);
 	struct drm_display_mode *b = list_entry(lh_b, struct drm_display_mode, head);
@@ -1541,7 +1542,7 @@ static int drm_mode_parse_cmdline_int(const char *delim, unsigned int *int_ret)
 
 	/*
 	 * delim must point to the '=', otherwise it is a syntax error and
-	 * if delim points to the terminating zero, then delim + 1 wil point
+	 * if delim points to the terminating zero, then delim + 1 will point
 	 * past the end of the string.
 	 */
 	if (*delim != '=')
@@ -1971,7 +1972,7 @@ int drm_mode_convert_umode(struct drm_device *dev,
 	out->flags = in->flags;
 	/*
 	 * Old xf86-video-vmware (possibly others too) used to
-	 * leave 'type' unititialized. Just ignore any bits we
+	 * leave 'type' uninitialized. Just ignore any bits we
 	 * don't like. It's a just hint after all, and more
 	 * useful for the kernel->userspace direction anyway.
 	 */

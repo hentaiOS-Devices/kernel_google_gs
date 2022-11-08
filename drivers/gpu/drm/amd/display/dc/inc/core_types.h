@@ -322,6 +322,10 @@ struct plane_resource {
 	struct dcn_fe_bandwidth bw;
 };
 
+
+struct link_config {
+	struct dc_link_settings dp_link_settings;
+};
 union pipe_update_flags {
 	struct {
 		uint32_t enable : 1;
@@ -338,9 +342,7 @@ union pipe_update_flags {
 		uint32_t scaler : 1;
 		uint32_t viewport : 1;
 		uint32_t plane_changed : 1;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 		uint32_t det_size : 1;
-#endif
 	} bits;
 	uint32_t raw;
 };
@@ -356,6 +358,13 @@ struct pipe_ctx {
 
 	struct pll_settings pll_settings;
 
+	/* link config records software decision for what link config should be
+	 * enabled given current link capability and stream during hw resource
+	 * mapping. This is to decouple the dependency on link capability during
+	 * dc commit or update.
+	 */
+	struct link_config link_config;
+
 	uint8_t pipe_idx;
 
 	struct pipe_ctx *top_pipe;
@@ -368,10 +377,11 @@ struct pipe_ctx {
 	struct _vcs_dpi_display_ttu_regs_st ttu_regs;
 	struct _vcs_dpi_display_rq_regs_st rq_regs;
 	struct _vcs_dpi_display_pipe_dest_params_st pipe_dlg_param;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
+	struct _vcs_dpi_display_rq_params_st dml_rq_param;
+	struct _vcs_dpi_display_dlg_sys_params_st dml_dlg_sys_param;
+	struct _vcs_dpi_display_e2e_pipe_params_st dml_input;
 	int det_buffer_size_kb;
 	bool unbounded_req;
-#endif
 #endif
 	union pipe_update_flags update_flags;
 	struct dwbc *dwbc;
@@ -422,9 +432,7 @@ struct dcn_bw_output {
 	struct dc_clocks clk;
 	struct dcn_watermark_set watermarks;
 	struct dcn_bw_writeback bw_writeback;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_1)
 	int compbuf_size_kb;
-#endif
 };
 
 union bw_output {

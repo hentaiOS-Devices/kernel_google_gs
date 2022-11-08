@@ -6,6 +6,7 @@
  * Copyright 2019 Google LLC
  */
 
+#include <linux/dmi.h>
 #include <linux/init.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -17,6 +18,24 @@
 #include <linux/types.h>
 
 #define DRV_NAME		"cros-ec-sensorhub"
+
+static const struct dmi_system_id sensor_override_table[] = {
+	{
+		.ident = "Chromebook Reef/Electro",
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_NAME, "Reef"),
+			DMI_MATCH(DMI_SYS_VENDOR, "Google"),
+		},
+	},
+	{
+		.ident = "Chromebook Snappy",
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_NAME, "Snappy"),
+			DMI_MATCH(DMI_SYS_VENDOR, "HP"),
+		},
+	},
+	{ }
+};
 
 static void cros_ec_sensorhub_free_sensor(void *arg)
 {
@@ -82,6 +101,8 @@ static int cros_ec_sensorhub_register(struct device *dev,
 			name = "cros-ec-gyro";
 			break;
 		case MOTIONSENSE_TYPE_MAG:
+			if (dmi_check_system(sensor_override_table))
+				continue;
 			name = "cros-ec-mag";
 			break;
 		case MOTIONSENSE_TYPE_PROX:
@@ -114,13 +135,6 @@ static int cros_ec_sensorhub_register(struct device *dev,
 
 	if (sensor_type[MOTIONSENSE_TYPE_ACCEL] >= 2)
 		ec->has_kb_wake_angle = true;
-
-	if (IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING) &&
-	    cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
-		ret = cros_ec_sensorhub_allocate_sensor(dev, "cros-ec-ring", 0);
-		if (ret)
-			return ret;
-	}
 
 	if (cros_ec_check_features(ec,
 				   EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS)) {

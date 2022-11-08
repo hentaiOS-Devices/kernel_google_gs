@@ -112,6 +112,12 @@
 #define TDM_SLAVE_MODE 0x10
 #define I2S_SLAVE_MODE 0x08
 
+#define HPD_DET_TIMER_BIT0_7   0xea
+#define HPD_DET_TIMER_BIT8_15  0xeb
+#define HPD_DET_TIMER_BIT16_23 0xec
+/* HPD debounce time 2ms for 27M clock */
+#define HPD_TIME               54000
+
 #define AUDIO_CONTROL_REGISTER 0xe6
 #define TDM_TIMING_MODE 0x08
 
@@ -210,7 +216,9 @@
 #define  MIPI_VIDEO_STABLE_CNT           0x0A
 
 #define  MIPI_LANE_CTRL_10               0x0F
-#define  MIPI_DIGITAL_ADJ_1   0x1B
+#define  MIPI_DIGITAL_ADJ_1     0x1B
+#define  IVO_MID0               0x26
+#define  IVO_MID1               0xCF
 
 #define  MIPI_PLL_M_NUM_23_16   0x1E
 #define  MIPI_PLL_M_NUM_15_8    0x1F
@@ -385,6 +393,7 @@ struct anx7625_data {
 	struct drm_bridge bridge;
 	u8 bridge_attached;
 	struct mipi_dsi_device *dsi;
+	struct device_link *link;
 };
 
 #endif  /* __ANX7625_H__ */
