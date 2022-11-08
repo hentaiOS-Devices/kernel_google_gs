@@ -13,6 +13,7 @@
 #define IGC_MDICNFG		0x00E04  /* MDC/MDIO Configuration - RW */
 #define IGC_CONNSW		0x00034  /* Copper/Fiber switch control - RW */
 #define IGC_I225_PHPM		0x00E14  /* I225 PHY Power Management */
+#define IGC_GPHY_VERSION	0x0001E  /* I225 gPHY Firmware Version */
 
 /* Internal Packet Buffer Size Registers */
 #define IGC_RXPBS		0x02404  /* Rx Packet Buffer Size - RW */
@@ -66,6 +67,9 @@
 
 /* Filtering Registers */
 #define IGC_ETQF(_n)		(0x05CB0 + (4 * (_n))) /* EType Queue Fltr */
+#define IGC_FHFT(_n)		(0x09000 + (256 * (_n))) /* Flexible Host Filter */
+#define IGC_FHFT_EXT(_n)	(0x09A00 + (256 * (_n))) /* Flexible Host Filter Extended */
+#define IGC_FHFTSL		0x05804 /* Flex Filter indirect table select */
 
 /* ETQF register bit definitions */
 #define IGC_ETQF_FILTER_ENABLE	BIT(26)
@@ -73,6 +77,19 @@
 #define IGC_ETQF_QUEUE_SHIFT	16
 #define IGC_ETQF_QUEUE_MASK	0x00070000
 #define IGC_ETQF_ETYPE_MASK	0x0000FFFF
+
+/* FHFT register bit definitions */
+#define IGC_FHFT_LENGTH_MASK	GENMASK(7, 0)
+#define IGC_FHFT_QUEUE_SHIFT	8
+#define IGC_FHFT_QUEUE_MASK	GENMASK(10, 8)
+#define IGC_FHFT_PRIO_SHIFT	16
+#define IGC_FHFT_PRIO_MASK	GENMASK(18, 16)
+#define IGC_FHFT_IMM_INT	BIT(24)
+#define IGC_FHFT_DROP		BIT(25)
+
+/* FHFTSL register bit definitions */
+#define IGC_FHFTSL_FTSL_SHIFT	0
+#define IGC_FHFTSL_FTSL_MASK	GENMASK(1, 0)
 
 /* Redirection Table - RW Array */
 #define IGC_RETA(_i)		(0x05C00 + ((_i) * 4))
@@ -229,6 +246,7 @@
 #define IGC_WUFC	0x05808  /* Wakeup Filter Control - RW */
 #define IGC_WUS		0x05810  /* Wakeup Status - R/W1C */
 #define IGC_WUPL	0x05900  /* Wakeup Packet Length - RW */
+#define IGC_WUFC_EXT	0x0580C  /* Wakeup Filter Control Register Extended - RW */
 
 /* Wake Up packet memory */
 #define IGC_WUPM_REG(_i)	(0x05A00 + ((_i) * 4))
@@ -252,7 +270,8 @@ u32 igc_rd32(struct igc_hw *hw, u32 reg);
 #define wr32(reg, val) \
 do { \
 	u8 __iomem *hw_addr = READ_ONCE((hw)->hw_addr); \
-	writel((val), &hw_addr[(reg)]); \
+	if (!IGC_REMOVED(hw_addr)) \
+		writel((val), &hw_addr[(reg)]); \
 } while (0)
 
 #define rd32(reg) (igc_rd32(hw, reg))
@@ -263,5 +282,7 @@ do { \
 	wr32((reg) + ((offset) << 2), (value))
 
 #define array_rd32(reg, offset) (igc_rd32(hw, (reg) + ((offset) << 2)))
+
+#define IGC_REMOVED(h) unlikely(!(h))
 
 #endif

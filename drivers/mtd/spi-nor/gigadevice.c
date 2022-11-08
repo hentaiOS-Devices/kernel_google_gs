@@ -23,6 +23,23 @@ static struct spi_nor_fixups gd25q256_fixups = {
 	.default_init = gd25q256_default_init,
 };
 
+
+static int
+gd25lq64c_post_bfpt_fixups(struct spi_nor *nor,
+			   const struct sfdp_parameter_header *bfpt_header,
+			   const struct sfdp_bfpt *bfpt,
+			   struct spi_nor_flash_parameter *params)
+{
+	/* To use WP pin, quad mode can't be enabled. */
+	nor->params->quad_enable = NULL;
+
+	return 0;
+}
+
+static struct spi_nor_fixups gd25lq64c_fixups = {
+	.post_bfpt = gd25lq64c_post_bfpt_fixups,
+};
+
 static const struct flash_info gigadevice_parts[] = {
 	{ "gd25q16", INFO(0xc84015, 0, 64 * 1024,  32,
 			  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
@@ -38,7 +55,8 @@ static const struct flash_info gigadevice_parts[] = {
 			  SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB) },
 	{ "gd25lq64c", INFO(0xc86017, 0, 64 * 1024, 128,
 			    SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
-			    SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB) },
+			    SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
+		.fixups = &gd25lq64c_fixups },
 	{ "gd25lq128d", INFO(0xc86018, 0, 64 * 1024, 256,
 			     SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
 			     SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB) },

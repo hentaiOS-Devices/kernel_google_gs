@@ -219,8 +219,18 @@ static void dip_mdp_cb_func(struct cmdq_cb_data data)
 		       __func__);
 		return;
 	}
+	if (data.sta < 0) {
+		pr_err("%s: callback data return error\n",
+		       __func__);
+		return;
+	}
 
 	req = data.data;
+	if (!req->dip_pipe) {
+		pr_err("%s: req->dip_pipe is NULL\n", __func__);
+		return;
+	}
+	pr_info("req(0x%px), req->dip_pipe(0x%px)\n", req, req->dip_pipe);
 	dip_dev = req->dip_pipe->dip_dev;
 
 	dev_dbg(dip_dev->dev, "%s: req(%p), idx(%d), no(%d), s(%d), n_in(%d), n_out(%d)\n",
@@ -230,7 +240,7 @@ static void dip_mdp_cb_func(struct cmdq_cb_data data)
 		req->img_fparam.frameparam.num_inputs,
 		req->img_fparam.frameparam.num_outputs);
 
-	if (data.sta != CMDQ_CB_NORMAL) {
+	if (data.sta < 0) {
 		dev_err(dip_dev->dev, "%s: frame no(%d) HW timeout\n",
 			__func__, req->img_fparam.frameparam.frame_no);
 		req->img_fparam.frameparam.state = FRAME_STATE_HW_TIMEOUT;
@@ -249,6 +259,7 @@ static void dip_runner_func(struct work_struct *work)
 	struct img_config *config_data =
 		(struct img_config *)req->working_buf->config_data.vaddr;
 
+	dev_info(dip_dev->dev, "req(0x%px), req->dip_pipe(0x%px)\n", req, req->dip_pipe);
 	/*
 	 * Call MDP/GCE API to do HW excecution
 	 * Pass the framejob to MDP driver

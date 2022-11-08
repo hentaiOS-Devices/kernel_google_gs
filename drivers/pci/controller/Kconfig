@@ -242,19 +242,18 @@ config PCIE_MEDIATEK
 	  Say Y here if you want to enable PCIe controller support on
 	  MediaTek SoCs.
 
-config PCIE_TANGO_SMP8759
-	bool "Tango SMP8759 PCIe controller (DANGEROUS)"
-	depends on ARCH_TANGO && PCI_MSI && OF
-	depends on BROKEN
-	select PCI_HOST_COMMON
+config PCIE_MEDIATEK_GEN3
+	tristate "MediaTek Gen3 PCIe controller"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on PCI_MSI_IRQ_DOMAIN
 	help
-	  Say Y here to enable PCIe controller support for Sigma Designs
-	  Tango SMP8759-based systems.
+	  Adds support for PCIe Gen3 MAC controller for MediaTek SoCs.
+	  This PCIe controller is compatible with Gen3, Gen2 and Gen1 speed,
+	  and support up to 256 MSI interrupt numbers for
+	  multi-function devices.
 
-	  Note: The SMP8759 controller multiplexes PCI config and MMIO
-	  accesses, and Linux doesn't provide a way to serialize them.
-	  This can lead to data corruption if drivers perform concurrent
-	  config and MMIO accesses.
+	  Say Y here if you want to enable Gen3 PCIe controller support on
+	  MediaTek SoCs.
 
 config VMD
 	depends on PCI_MSI && X86_64 && SRCU
@@ -297,6 +296,16 @@ config PCI_LOONGSON
 	help
 	  Say Y here if you want to enable PCI controller support on
 	  Loongson systems.
+
+config PCIE_MICROCHIP_HOST
+	bool "Microchip AXI PCIe host bridge support"
+	depends on PCI_MSI && OF
+	select PCI_MSI_IRQ_DOMAIN
+	select GENERIC_MSI_IRQ_DOMAIN
+	select PCI_HOST_COMMON
+	help
+	  Say Y here if you want kernel to support the Microchip AXI PCIe
+	  Host Bridge driver.
 
 config PCIE_HISI_ERR
 	depends on ACPI_APEI_GHES && (ARM64 || COMPILE_TEST)

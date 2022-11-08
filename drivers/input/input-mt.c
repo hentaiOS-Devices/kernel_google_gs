@@ -8,6 +8,7 @@
 #include <linux/input/mt.h>
 #include <linux/export.h>
 #include <linux/slab.h>
+#include "input-core-private.h"
 
 #define TRKID_SGN	((TRKID_MAX + 1) >> 1)
 
@@ -197,6 +198,7 @@ void input_mt_report_pointer_emulation(struct input_dev *dev, bool use_count)
 	struct input_mt *mt = dev->mt;
 	struct input_mt_slot *oldest;
 	int oldid, count, i;
+	int p, reported_p = 0;
 
 	if (!mt)
 		return;
@@ -214,6 +216,13 @@ void input_mt_report_pointer_emulation(struct input_dev *dev, bool use_count)
 		if ((id - oldid) & TRKID_SGN) {
 			oldest = ps;
 			oldid = id;
+		}
+		if (test_bit(ABS_MT_PRESSURE, dev->absbit)) {
+			p = input_mt_get_value(ps, ABS_MT_PRESSURE);
+			if (mt->flags & INPUT_MT_TOTAL_FORCE)
+				reported_p += p;
+			else if (oldid == id)
+				reported_p = p;
 		}
 		count++;
 	}
@@ -244,10 +253,8 @@ void input_mt_report_pointer_emulation(struct input_dev *dev, bool use_count)
 		input_event(dev, EV_ABS, ABS_X, x);
 		input_event(dev, EV_ABS, ABS_Y, y);
 
-		if (test_bit(ABS_MT_PRESSURE, dev->absbit)) {
-			int p = input_mt_get_value(oldest, ABS_MT_PRESSURE);
-			input_event(dev, EV_ABS, ABS_PRESSURE, p);
-		}
+		if (test_bit(ABS_MT_PRESSURE, dev->absbit))
+			input_event(dev, EV_ABS, ABS_PRESSURE, reported_p);
 	} else {
 		if (test_bit(ABS_MT_PRESSURE, dev->absbit))
 			input_event(dev, EV_ABS, ABS_PRESSURE, 0);
@@ -259,10 +266,13 @@ static void __input_mt_drop_unused(struct input_dev *dev, struct input_mt *mt)
 {
 	int i;
 
+	lockdep_assert_held(&dev->event_lock);
+
 	for (i = 0; i < mt->num_slots; i++) {
-		if (!input_mt_is_used(mt, &mt->slots[i])) {
-			input_mt_slot(dev, i);
-			input_event(dev, EV_ABS, ABS_MT_TRACKING_ID, -1);
+		if (input_mt_is_active(&mt->slots[i]) &&
+		    !input_mt_is_used(mt, &mt->slots[i])) {
+			input_handle_event(dev, EV_ABS, ABS_MT_SLOT, i);
+			input_handle_event(dev, EV_ABS, ABS_MT_TRACKING_ID, -1);
 		}
 	}
 }
@@ -278,11 +288,42 @@ void input_mt_drop_unused(struct input_dev *dev)
 	struct input_mt *mt = dev->mt;
 
 	if (mt) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&dev->event_lock, flags);
+
 		__input_mt_drop_unused(dev, mt);
 		mt->frame++;
+
+		spin_unlock_irqrestore(&dev->event_lock, flags);
 	}
 }
 EXPORT_SYMBOL(input_mt_drop_unused);
+
+/**
+ * input_mt_release_slots() - Deactivate all slots
+ * @dev: input device with allocated MT slots
+ *
+ * Lift all active slots.
+ */
+void input_mt_release_slots(struct input_dev *dev)
+{
+	struct input_mt *mt = dev->mt;
+
+	lockdep_assert_held(&dev->event_lock);
+
+	if (mt) {
+		/* This will effectively mark all slots unused. */
+		mt->frame++;
+
+		__input_mt_drop_unused(dev, mt);
+
+		if (test_bit(ABS_PRESSURE, dev->absbit))
+			input_handle_event(dev, EV_ABS, ABS_PRESSURE, 0);
+
+		mt->frame++;
+	}
+}
 
 /**
  * input_mt_sync_frame() - synchronize mt frame
@@ -300,8 +341,13 @@ void input_mt_sync_frame(struct input_dev *dev)
 	if (!mt)
 		return;
 
-	if (mt->flags & INPUT_MT_DROP_UNUSED)
+	if (mt->flags & INPUT_MT_DROP_UNUSED) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&dev->event_lock, flags);
 		__input_mt_drop_unused(dev, mt);
+		spin_unlock_irqrestore(&dev->event_lock, flags);
+	}
 
 	if ((mt->flags & INPUT_MT_POINTER) && !(mt->flags & INPUT_MT_SEMI_MT))
 		use_count = true;

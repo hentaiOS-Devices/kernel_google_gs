@@ -40,12 +40,16 @@
  * coherency.  It does not prevent other processes or devices from
  * accessing the memory at the same time.  If synchronization with a GPU or
  * other device driver is required, it is the client's responsibility to
- * wait for buffer to be ready for reading or writing.  If the driver or
- * API with which the client is interacting uses implicit synchronization,
- * this can be done via poll() on the DMA buffer file descriptor.  If the
- * driver or API requires explicit synchronization, the client may have to
- * wait on a sync_file or other synchronization primitive outside the scope
- * of the DMA buffer API.
+ * wait for buffer to be ready for reading or writing before calling this
+ * ioctl with DMA_BUF_SYNC_START.  Likewise, the client must ensure that
+ * follow-up work is not submitted to GPU or other device driver until
+ * after this ioctl has been called with DMA_BUF_SYNC_END?
+ *
+ * If the driver or API with which the client is interacting uses implicit
+ * synchronization, waiting for prior work to complete can be done via
+ * poll() on the DMA buffer file descriptor.  If the driver or API requires
+ * explicit synchronization, the client may have to wait on a sync_file or
+ * other synchronization primitive outside the scope of the DMA buffer API.
  */
 struct dma_buf_sync {
 	/**
@@ -122,8 +126,8 @@ struct dma_buf_export_sync_file {
  * between them in actual uapi, they're just different numbers.
  */
 #define DMA_BUF_SET_NAME	_IOW(DMA_BUF_BASE, 1, const char *)
-#define DMA_BUF_SET_NAME_A	_IOW(DMA_BUF_BASE, 1, u32)
-#define DMA_BUF_SET_NAME_B	_IOW(DMA_BUF_BASE, 1, u64)
 #define DMA_BUF_IOCTL_EXPORT_SYNC_FILE	_IOWR(DMA_BUF_BASE, 2, struct dma_buf_export_sync_file)
+#define DMA_BUF_SET_NAME_A	_IOW(DMA_BUF_BASE, 1, __u32)
+#define DMA_BUF_SET_NAME_B	_IOW(DMA_BUF_BASE, 1, __u64)
 
 #endif

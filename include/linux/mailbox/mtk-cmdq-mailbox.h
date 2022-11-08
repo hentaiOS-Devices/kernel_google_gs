@@ -65,14 +65,10 @@ enum cmdq_code {
 	CMDQ_CODE_LOGIC = 0xa0,
 };
 
-enum cmdq_cb_status {
-	CMDQ_CB_NORMAL = 0,
-	CMDQ_CB_ERROR
-};
-
 struct cmdq_cb_data {
-	enum cmdq_cb_status	sta;
+	int			sta;
 	void			*data;
+	struct cmdq_pkt		*pkt;
 };
 
 typedef void (*cmdq_async_flush_cb)(struct cmdq_cb_data data);
@@ -90,7 +86,6 @@ struct cmdq_pkt {
 	struct cmdq_task_cb	cb;
 	struct cmdq_task_cb	async_cb;
 	void			*cl;
-	void			*crtc;
 };
 
 u8 cmdq_get_shift_pa(struct mbox_chan *chan);

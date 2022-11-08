@@ -25,6 +25,7 @@ struct cmdq_client_reg {
 struct cmdq_client {
 	struct mbox_client client;
 	struct mbox_chan *chan;
+	struct mutex mutex;
 };
 
 /**

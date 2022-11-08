@@ -24,9 +24,9 @@
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-vmalloc.h>
 
-#include "hantro_v4l2.h"
 #include "hantro.h"
 #include "hantro_hw.h"
+#include "hantro_v4l2.h"
 
 #define DRIVER_NAME "hantro-vpu"
 
@@ -56,6 +56,10 @@ dma_addr_t hantro_get_ref(struct hantro_ctx *ctx, u64 ts)
 	return hantro_get_dec_buf_addr(ctx, buf);
 }
 
+static const struct v4l2_event hantro_eos_event = {
+	.type = V4L2_EVENT_EOS
+};
+
 static void hantro_job_finish_no_pm(struct hantro_dev *vpu,
 				    struct hantro_ctx *ctx,
 				    enum vb2_buffer_state result)
@@ -72,6 +76,12 @@ static void hantro_job_finish_no_pm(struct hantro_dev *vpu,
 
 	src->sequence = ctx->sequence_out++;
 	dst->sequence = ctx->sequence_cap++;
+
+	if (v4l2_m2m_is_last_draining_src_buf(ctx->fh.m2m_ctx, src)) {
+		dst->flags |= V4L2_BUF_FLAG_LAST;
+		v4l2_event_queue_fh(&ctx->fh, &hantro_eos_event);
+		v4l2_m2m_mark_stopped(ctx->fh.m2m_ctx);
+	}
 
 	v4l2_m2m_buf_done_and_job_finish(ctx->dev->m2m_dev, ctx->fh.m2m_ctx,
 					 result);
@@ -172,7 +182,9 @@ static void device_run(void *priv)
 
 	v4l2_m2m_buf_copy_metadata(src, dst, true);
 
-	ctx->codec_ops->run(ctx);
+	if (ctx->codec_ops->run(ctx))
+		goto err_cancel_job;
+
 	return;
 
 err_cancel_job:
@@ -191,6 +203,9 @@ queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 
 	src_vq->type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	src_vq->io_modes = VB2_MMAP | VB2_DMABUF;
+	if (ctx->is_encoder)
+		src_vq->io_modes |= VB2_USERPTR;
+
 	src_vq->drv_priv = ctx;
 	src_vq->ops = &hantro_queue_ops;
 	src_vq->mem_ops = &vb2_dma_contig_memops;
@@ -212,21 +227,16 @@ queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	if (ret)
 		return ret;
 
+	dst_vq->bidirectional = true;
+	dst_vq->mem_ops = &vb2_dma_contig_memops;
+	dst_vq->dma_attrs = DMA_ATTR_ALLOC_SINGLE_PAGES;
 	/*
-	 * When encoding, the CAPTURE queue doesn't need dma memory,
-	 * as the CPU needs to create the JPEG frames, from the
-	 * hardware-produced JPEG payload.
-	 *
-	 * For the DMA destination buffer, we use a bounce buffer.
+	 * The Kernel needs access to the JPEG destination buffer for the
+	 * JPEG encoder to fill in the JPEG headers, and for the VP8 encoder
+	 * to reassemble the VP8 bitstream.
 	 */
-	if (ctx->is_encoder) {
-		dst_vq->mem_ops = &vb2_vmalloc_memops;
-	} else {
-		dst_vq->bidirectional = true;
-		dst_vq->mem_ops = &vb2_dma_contig_memops;
-		dst_vq->dma_attrs = DMA_ATTR_ALLOC_SINGLE_PAGES |
-				    DMA_ATTR_NO_KERNEL_MAPPING;
-	}
+	if (!ctx->is_encoder)
+		dst_vq->dma_attrs |= DMA_ATTR_NO_KERNEL_MAPPING;
 
 	dst_vq->type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	dst_vq->io_modes = VB2_MMAP | VB2_DMABUF;
@@ -278,13 +288,50 @@ static int hantro_jpeg_s_ctrl(struct v4l2_ctrl *ctrl)
 	return 0;
 }
 
+static int hantro_enc_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct hantro_ctx *ctx;
+
+	ctx = container_of(ctrl->handler, struct hantro_ctx, ctrl_handler);
+
+	/* The only volatile ctrl is V4L2_CID_PRIVATE_HANTRO_RET_PARAMS. */
+	vpu_debug(4, "ctrl id %d\n", ctrl->id);
+
+	if (ctx->vpu_dst_fmt->codec_mode == HANTRO_MODE_H264_ENC) {
+		/* Encoder not initialized yet. */
+		if (!ctx->h264_enc.feedback.cpu)
+			return -EIO;
+
+		/* Only sizeof(struct hantro_h264_enc_feedback) is used */
+		memcpy(ctrl->p_new.p, ctx->h264_enc.feedback.cpu,
+		       HANTRO_VP8_RET_PARAMS_SIZE);
+
+		return 0;
+	}
+
+	/* Encoder not initialized yet. */
+	if (!ctx->vp8_enc.priv_dst.cpu)
+		return -EIO;
+
+	memcpy(ctrl->p_new.p, ctx->vp8_enc.priv_dst.cpu,
+	       HANTRO_VP8_RET_PARAMS_SIZE);
+
+	return 0;
+}
+
 static const struct v4l2_ctrl_ops hantro_ctrl_ops = {
 	.try_ctrl = hantro_try_ctrl,
+	.g_volatile_ctrl = hantro_enc_g_volatile_ctrl,
 };
 
 static const struct v4l2_ctrl_ops hantro_jpeg_ctrl_ops = {
 	.s_ctrl = hantro_jpeg_s_ctrl,
 };
+
+#define HANTRO_JPEG_ACTIVE_MARKERS	(V4L2_JPEG_ACTIVE_MARKER_APP0 | \
+					 V4L2_JPEG_ACTIVE_MARKER_COM | \
+					 V4L2_JPEG_ACTIVE_MARKER_DQT | \
+					 V4L2_JPEG_ACTIVE_MARKER_DHT)
 
 static const struct hantro_ctrl controls[] = {
 	{
@@ -298,14 +345,213 @@ static const struct hantro_ctrl controls[] = {
 			.ops = &hantro_jpeg_ctrl_ops,
 		},
 	}, {
-		.codec = HANTRO_MPEG2_DECODER,
+		.codec = HANTRO_JPEG_ENCODER,
 		.cfg = {
-			.id = V4L2_CID_MPEG_VIDEO_MPEG2_SLICE_PARAMS,
+			.id = V4L2_CID_JPEG_ACTIVE_MARKER,
+			.max = HANTRO_JPEG_ACTIVE_MARKERS,
+			.def = HANTRO_JPEG_ACTIVE_MARKERS,
+			/*
+			 * Changing the set of active markers/segments also
+			 * messes up the alignment of the JPEG header, which
+			 * is needed to allow the hardware to write directly
+			 * to the output buffer. Implementing this introduces
+			 * a lot of complexity for little gain, as the markers
+			 * enabled is already the minimum required set.
+			 */
+			.flags = V4L2_CTRL_FLAG_READ_ONLY,
+		},
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_PRIVATE_HANTRO_HEADER,
+			.name = "Hantro Private Header",
+			.type = V4L2_CTRL_TYPE_PRIVATE,
+			.elem_size = HANTRO_VP8_HEADER_SIZE,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_PRIVATE_HANTRO_REG_PARAMS,
+			.name = "Hantro Private Reg Params",
+			.type = V4L2_CTRL_TYPE_PRIVATE,
+			.elem_size = sizeof(struct hantro_reg_params),
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_PRIVATE_HANTRO_HW_PARAMS,
+			.name = "Hantro Private Hw Params",
+			.type = V4L2_CTRL_TYPE_PRIVATE,
+			.elem_size = HANTRO_VP8_HW_PARAMS_SIZE,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_PRIVATE_HANTRO_RET_PARAMS,
+			.name = "Hantro Private Ret Params",
+			.flags = V4L2_CTRL_FLAG_VOLATILE |
+				V4L2_CTRL_FLAG_READ_ONLY,
+			.type = V4L2_CTRL_TYPE_PRIVATE,
+			.ops = &hantro_ctrl_ops,
+			.elem_size = HANTRO_VP8_RET_PARAMS_SIZE,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_FRAME_RC_ENABLE,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.max = 1,
+			.step = 1,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_BITRATE,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.min = 10000,
+			.max = 288000000,
+			.step = 1,
+			.def = 2097152,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_MB_RC_ENABLE,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.max = 1,
+			.step = 1,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.min = 1,
+			.max = 150,
+			.step = 1,
+			.def = 30,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_MFC51_VIDEO_RC_REACTION_COEFF,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Rate Control Reaction Coeff.",
+			.min = 1,
+			.max = (1 << 16) - 1,
+			.step = 1,
+			.def = 1,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_MFC51_VIDEO_RC_FIXED_TARGET_BIT,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.name = "Fixed Target Bit Enable",
+			.max = 1,
+			.step = 1,
+			.menu_skip_mask = 0,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_FORCE_KEY_FRAME,
+			.type = V4L2_CTRL_TYPE_BUTTON,
+		}
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_LEVEL,
+			.min = V4L2_MPEG_VIDEO_H264_LEVEL_1_0,
+			.max = V4L2_MPEG_VIDEO_H264_LEVEL_4_1,
+			.def = V4L2_MPEG_VIDEO_H264_LEVEL_1_0,
+		}
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP,
+			.max = 51,
+			.step = 1,
+			.def = 30,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP,
+			.max = 51,
+			.step = 1,
+			.def = 18,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_8X8_TRANSFORM,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_CPB_SIZE,
+			.max = 288000,
+			.step = 1,
+			.def = 30000,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_SEI_FRAME_PACKING,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.max = 1,
+			.step = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_B_FRAMES,
+			.max = 2,
+			.step = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_B_FRAME_QP,
+			.max = 51,
+			.step = 1,
+			.def = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_PREPEND_SPSPPS_TO_IDR,
+			.max = 1,
+			.step = 1,
+			.def = 0,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_LOOP_FILTER_MODE,
+			.max = 1,
+		},
+	}, {
+		.codec = HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE,
+			.max = 1,
 		},
 	}, {
 		.codec = HANTRO_MPEG2_DECODER,
 		.cfg = {
-			.id = V4L2_CID_MPEG_VIDEO_MPEG2_QUANTIZATION,
+			.id = V4L2_CID_STATELESS_MPEG2_SEQUENCE,
+		},
+	}, {
+		.codec = HANTRO_MPEG2_DECODER,
+		.cfg = {
+			.id = V4L2_CID_STATELESS_MPEG2_PICTURE,
+		},
+	}, {
+		.codec = HANTRO_MPEG2_DECODER,
+		.cfg = {
+			.id = V4L2_CID_STATELESS_MPEG2_QUANTISATION,
 		},
 	}, {
 		.codec = HANTRO_VP8_DECODER,
@@ -350,7 +596,7 @@ static const struct hantro_ctrl controls[] = {
 			.max = V4L2_STATELESS_H264_START_CODE_ANNEX_B,
 		},
 	}, {
-		.codec = HANTRO_H264_DECODER,
+		.codec = HANTRO_H264_DECODER | HANTRO_H264_ENCODER,
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE,
 			.min = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE,
@@ -358,6 +604,15 @@ static const struct hantro_ctrl controls[] = {
 			.menu_skip_mask =
 			BIT(V4L2_MPEG_VIDEO_H264_PROFILE_EXTENDED),
 			.def = V4L2_MPEG_VIDEO_H264_PROFILE_MAIN,
+		}
+	}, {
+		.codec = HANTRO_VP8_ENCODER | HANTRO_H264_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE,
+			.min = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR,
+			.max = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR,
+			.menu_skip_mask = 0,
+			.def = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR,
 		}
 	}, {
 	},
@@ -658,10 +913,13 @@ static int hantro_add_func(struct hantro_dev *vpu, unsigned int funcid)
 	snprintf(vfd->name, sizeof(vfd->name), "%s-%s", match->compatible,
 		 funcid == MEDIA_ENT_F_PROC_VIDEO_ENCODER ? "enc" : "dec");
 
-	if (funcid == MEDIA_ENT_F_PROC_VIDEO_ENCODER)
+	if (funcid == MEDIA_ENT_F_PROC_VIDEO_ENCODER) {
 		vpu->encoder = func;
-	else
+	} else {
 		vpu->decoder = func;
+		v4l2_disable_ioctl(vfd, VIDIOC_TRY_ENCODER_CMD);
+		v4l2_disable_ioctl(vfd, VIDIOC_ENCODER_CMD);
+	}
 
 	video_set_drvdata(vfd, vpu);
 
@@ -829,7 +1087,7 @@ static int hantro_probe(struct platform_device *pdev)
 	ret = clk_bulk_prepare(vpu->variant->num_clocks, vpu->clocks);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to prepare clocks\n");
-		return ret;
+		goto err_pm_disable;
 	}
 
 	ret = v4l2_device_register(&pdev->dev, &vpu->v4l2_dev);
@@ -885,6 +1143,7 @@ err_v4l2_unreg:
 	v4l2_device_unregister(&vpu->v4l2_dev);
 err_clk_unprepare:
 	clk_bulk_unprepare(vpu->variant->num_clocks, vpu->clocks);
+err_pm_disable:
 	pm_runtime_dont_use_autosuspend(vpu->dev);
 	pm_runtime_disable(vpu->dev);
 	return ret;

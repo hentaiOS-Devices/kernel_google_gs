@@ -194,7 +194,6 @@ int dpaa2_eth_dl_register(struct dpaa2_eth_priv *priv)
 	struct net_device *net_dev = priv->net_dev;
 	struct device *dev = net_dev->dev.parent;
 	struct dpaa2_eth_devlink_priv *dl_priv;
-	int err;
 
 	priv->devlink = devlink_alloc(&dpaa2_eth_devlink_ops, sizeof(*dl_priv));
 	if (!priv->devlink) {
@@ -204,18 +203,8 @@ int dpaa2_eth_dl_register(struct dpaa2_eth_priv *priv)
 	dl_priv = devlink_priv(priv->devlink);
 	dl_priv->dpaa2_priv = priv;
 
-	err = devlink_register(priv->devlink, dev);
-	if (err) {
-		dev_err(dev, "devlink_register() = %d\n", err);
-		goto devlink_free;
-	}
-
+	devlink_register(priv->devlink, dev);
 	return 0;
-
-devlink_free:
-	devlink_free(priv->devlink);
-
-	return err;
 }
 
 void dpaa2_eth_dl_unregister(struct dpaa2_eth_priv *priv)

@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  */
 
+#include "i915_drv.h"
 #include "intel_display_types.h"
 #include "intel_dp.h"
 #include "intel_dp_link_training.h"
@@ -64,6 +65,7 @@ static u8 *intel_dp_lttpr_phy_caps(struct intel_dp *intel_dp,
 }
 
 static void intel_dp_read_lttpr_phy_caps(struct intel_dp *intel_dp,
+					 const u8 dpcd[DP_RECEIVER_CAP_SIZE],
 					 enum drm_dp_phy dp_phy)
 {
 	u8 *phy_caps = intel_dp_lttpr_phy_caps(intel_dp, dp_phy);
@@ -71,7 +73,7 @@ static void intel_dp_read_lttpr_phy_caps(struct intel_dp *intel_dp,
 
 	intel_dp_phy_name(dp_phy, phy_name, sizeof(phy_name));
 
-	if (drm_dp_read_lttpr_phy_caps(&intel_dp->aux, dp_phy, phy_caps) < 0) {
+	if (drm_dp_read_lttpr_phy_caps(&intel_dp->aux, dpcd, dp_phy, phy_caps) < 0) {
 		drm_dbg_kms(&dp_to_i915(intel_dp)->drm,
 			    "failed to read the PHY caps for %s\n",
 			    phy_name);
@@ -85,22 +87,14 @@ static void intel_dp_read_lttpr_phy_caps(struct intel_dp *intel_dp,
 		    phy_caps);
 }
 
-static bool intel_dp_read_lttpr_common_caps(struct intel_dp *intel_dp)
+static bool intel_dp_read_lttpr_common_caps(struct intel_dp *intel_dp,
+					    const u8 dpcd[DP_RECEIVER_CAP_SIZE])
 {
-	struct drm_i915_private *i915 = dp_to_i915(intel_dp);
+	int ret;
 
-	if (intel_dp_is_edp(intel_dp))
-		return false;
-
-	/*
-	 * Detecting LTTPRs must be avoided on platforms with an AUX timeout
-	 * period < 3.2ms. (see DP Standard v2.0, 2.11.2, 3.6.6.1).
-	 */
-	if (DISPLAY_VER(i915) < 10 || IS_GEMINILAKE(i915))
-		return false;
-
-	if (drm_dp_read_lttpr_common_caps(&intel_dp->aux,
-					  intel_dp->lttpr_common_caps) < 0)
+	ret = drm_dp_read_lttpr_common_caps(&intel_dp->aux, dpcd,
+					    intel_dp->lttpr_common_caps);
+	if (ret < 0)
 		goto reset_caps;
 
 	drm_dbg_kms(&dp_to_i915(intel_dp)->drm,
@@ -128,12 +122,12 @@ intel_dp_set_lttpr_transparent_mode(struct intel_dp *intel_dp, bool enable)
 	return drm_dp_dpcd_write(&intel_dp->aux, DP_PHY_REPEATER_MODE, &val, 1) == 1;
 }
 
-static int intel_dp_init_lttpr(struct intel_dp *intel_dp)
+static int intel_dp_init_lttpr(struct intel_dp *intel_dp, const u8 dpcd[DP_RECEIVER_CAP_SIZE])
 {
 	int lttpr_count;
 	int i;
 
-	if (!intel_dp_read_lttpr_common_caps(intel_dp))
+	if (!intel_dp_read_lttpr_common_caps(intel_dp, dpcd))
 		return 0;
 
 	lttpr_count = drm_dp_lttpr_count(intel_dp->lttpr_common_caps);
@@ -171,7 +165,7 @@ static int intel_dp_init_lttpr(struct intel_dp *intel_dp)
 	}
 
 	for (i = 0; i < lttpr_count; i++)
-		intel_dp_read_lttpr_phy_caps(intel_dp, DP_PHY_LTTPR(i));
+		intel_dp_read_lttpr_phy_caps(intel_dp, dpcd, DP_PHY_LTTPR(i));
 
 	return lttpr_count;
 }
@@ -196,9 +190,30 @@ static int intel_dp_init_lttpr(struct intel_dp *intel_dp)
  */
 int intel_dp_init_lttpr_and_dprx_caps(struct intel_dp *intel_dp)
 {
-	int lttpr_count = intel_dp_init_lttpr(intel_dp);
+	struct drm_i915_private *i915 = dp_to_i915(intel_dp);
+	int lttpr_count = 0;
 
-	/* The DPTX shall read the DPRX caps after LTTPR detection. */
+	/*
+	 * Detecting LTTPRs must be avoided on platforms with an AUX timeout
+	 * period < 3.2ms. (see DP Standard v2.0, 2.11.2, 3.6.6.1).
+	 */
+	if (!intel_dp_is_edp(intel_dp) &&
+	    (DISPLAY_VER(i915) >= 10 && !IS_GEMINILAKE(i915))) {
+		u8 dpcd[DP_RECEIVER_CAP_SIZE];
+
+		if (drm_dp_dpcd_probe(&intel_dp->aux, DP_LT_TUNABLE_PHY_REPEATER_FIELD_DATA_STRUCTURE_REV))
+			return -EIO;
+
+		if (drm_dp_read_dpcd_caps(&intel_dp->aux, dpcd))
+			return -EIO;
+
+		lttpr_count = intel_dp_init_lttpr(intel_dp, dpcd);
+	}
+
+	/*
+	 * The DPTX shall read the DPRX caps after LTTPR detection, so re-read
+	 * it here.
+	 */
 	if (drm_dp_read_dpcd_caps(&intel_dp->aux, intel_dp->dpcd)) {
 		intel_dp_reset_lttpr_common_caps(intel_dp);
 		return -EIO;
@@ -206,7 +221,6 @@ int intel_dp_init_lttpr_and_dprx_caps(struct intel_dp *intel_dp)
 
 	return lttpr_count;
 }
-EXPORT_SYMBOL(intel_dp_init_lttpr_and_dprx_caps);
 
 static u8 dp_voltage_max(u8 preemph)
 {
@@ -302,21 +316,33 @@ static u8 intel_dp_phy_preemph_max(struct intel_dp *intel_dp,
 	return preemph_max;
 }
 
-void
-intel_dp_get_adjust_train(struct intel_dp *intel_dp,
-			  const struct intel_crtc_state *crtc_state,
-			  enum drm_dp_phy dp_phy,
-			  const u8 link_status[DP_LINK_STATUS_SIZE])
+static bool has_per_lane_signal_levels(struct intel_dp *intel_dp,
+				       enum drm_dp_phy dp_phy)
+{
+	return !intel_dp_phy_is_downstream_of_source(intel_dp, dp_phy);
+}
+
+static u8 intel_dp_get_lane_adjust_train(struct intel_dp *intel_dp,
+					 const struct intel_crtc_state *crtc_state,
+					 enum drm_dp_phy dp_phy,
+					 const u8 link_status[DP_LINK_STATUS_SIZE],
+					 int lane)
 {
 	u8 v = 0;
 	u8 p = 0;
-	int lane;
 	u8 voltage_max;
 	u8 preemph_max;
 
-	for (lane = 0; lane < crtc_state->lane_count; lane++) {
-		v = max(v, drm_dp_get_adjust_request_voltage(link_status, lane));
-		p = max(p, drm_dp_get_adjust_request_pre_emphasis(link_status, lane));
+	if (has_per_lane_signal_levels(intel_dp, dp_phy)) {
+		lane = min(lane, crtc_state->lane_count - 1);
+
+		v = drm_dp_get_adjust_request_voltage(link_status, lane);
+		p = drm_dp_get_adjust_request_pre_emphasis(link_status, lane);
+	} else {
+		for (lane = 0; lane < crtc_state->lane_count; lane++) {
+			v = max(v, drm_dp_get_adjust_request_voltage(link_status, lane));
+			p = max(p, drm_dp_get_adjust_request_pre_emphasis(link_status, lane));
+		}
 	}
 
 	preemph_max = intel_dp_phy_preemph_max(intel_dp, dp_phy);
@@ -329,8 +355,21 @@ intel_dp_get_adjust_train(struct intel_dp *intel_dp,
 	if (v >= voltage_max)
 		v = voltage_max | DP_TRAIN_MAX_SWING_REACHED;
 
+	return v | p;
+}
+
+void
+intel_dp_get_adjust_train(struct intel_dp *intel_dp,
+			  const struct intel_crtc_state *crtc_state,
+			  enum drm_dp_phy dp_phy,
+			  const u8 link_status[DP_LINK_STATUS_SIZE])
+{
+	int lane;
+
 	for (lane = 0; lane < 4; lane++)
-		intel_dp->train_set[lane] = v | p;
+		intel_dp->train_set[lane] =
+			intel_dp_get_lane_adjust_train(intel_dp, crtc_state,
+						       dp_phy, link_status, lane);
 }
 
 static int intel_dp_training_pattern_set_reg(struct intel_dp *intel_dp,
@@ -395,25 +434,43 @@ intel_dp_program_link_training_pattern(struct intel_dp *intel_dp,
 	intel_dp->set_link_train(intel_dp, crtc_state, dp_train_pat);
 }
 
+#define TRAIN_SET_FMT "%d%s/%d%s/%d%s/%d%s"
+#define _TRAIN_SET_VSWING_ARGS(train_set) \
+	((train_set) & DP_TRAIN_VOLTAGE_SWING_MASK) >> DP_TRAIN_VOLTAGE_SWING_SHIFT, \
+	(train_set) & DP_TRAIN_MAX_SWING_REACHED ? "(max)" : ""
+#define TRAIN_SET_VSWING_ARGS(train_set) \
+	_TRAIN_SET_VSWING_ARGS((train_set)[0]), \
+	_TRAIN_SET_VSWING_ARGS((train_set)[1]), \
+	_TRAIN_SET_VSWING_ARGS((train_set)[2]), \
+	_TRAIN_SET_VSWING_ARGS((train_set)[3])
+#define _TRAIN_SET_PREEMPH_ARGS(train_set) \
+	((train_set) & DP_TRAIN_PRE_EMPHASIS_MASK) >> DP_TRAIN_PRE_EMPHASIS_SHIFT, \
+	(train_set) & DP_TRAIN_MAX_PRE_EMPHASIS_REACHED ? "(max)" : ""
+#define TRAIN_SET_PREEMPH_ARGS(train_set) \
+	_TRAIN_SET_PREEMPH_ARGS((train_set)[0]), \
+	_TRAIN_SET_PREEMPH_ARGS((train_set)[1]), \
+	_TRAIN_SET_PREEMPH_ARGS((train_set)[2]), \
+	_TRAIN_SET_PREEMPH_ARGS((train_set)[3])
+
 void intel_dp_set_signal_levels(struct intel_dp *intel_dp,
 				const struct intel_crtc_state *crtc_state,
 				enum drm_dp_phy dp_phy)
 {
-	struct drm_i915_private *dev_priv = dp_to_i915(intel_dp);
-	u8 train_set = intel_dp->train_set[0];
+	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
+	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	char phy_name[10];
 
-	drm_dbg_kms(&dev_priv->drm, "Using vswing level %d%s, pre-emphasis level %d%s, at %s\n",
-		    train_set & DP_TRAIN_VOLTAGE_SWING_MASK,
-		    train_set & DP_TRAIN_MAX_SWING_REACHED ? " (max)" : "",
-		    (train_set & DP_TRAIN_PRE_EMPHASIS_MASK) >>
-		    DP_TRAIN_PRE_EMPHASIS_SHIFT,
-		    train_set & DP_TRAIN_MAX_PRE_EMPHASIS_REACHED ?
-		    " (max)" : "",
+	drm_dbg_kms(&dev_priv->drm, "[ENCODER:%d:%s] lanes: %d, "
+		    "vswing levels: " TRAIN_SET_FMT ", "
+		    "pre-emphasis levels: " TRAIN_SET_FMT ", at %s\n",
+		    encoder->base.base.id, encoder->base.name,
+		    crtc_state->lane_count,
+		    TRAIN_SET_VSWING_ARGS(intel_dp->train_set),
+		    TRAIN_SET_PREEMPH_ARGS(intel_dp->train_set),
 		    intel_dp_phy_name(dp_phy, phy_name, sizeof(phy_name)));
 
 	if (intel_dp_phy_is_downstream_of_source(intel_dp, dp_phy))
-		intel_dp->set_signal_levels(intel_dp, crtc_state);
+		encoder->set_signal_levels(encoder, crtc_state);
 }
 
 static bool
@@ -475,6 +532,28 @@ intel_dp_prepare_link_train(struct intel_dp *intel_dp,
 
 	intel_dp_compute_rate(intel_dp, crtc_state->port_clock,
 			      &link_bw, &rate_select);
+
+	/*
+	 * WaEdpLinkRateDataReload
+	 *
+	 * Parade PS8461E MUX (used on varius TGL+ laptops) needs
+	 * to snoop the link rates reported by the sink when we
+	 * use LINK_RATE_SET in order to operate in jitter cleaning
+	 * mode (as opposed to redriver mode). Unfortunately it
+	 * loses track of the snooped link rates when powered down,
+	 * so we need to make it re-snoop often. Without this high
+	 * link rates are not stable.
+	 */
+	if (!link_bw) {
+		struct intel_connector *connector = intel_dp->attached_connector;
+		__le16 sink_rates[DP_MAX_SUPPORTED_RATES];
+
+		drm_dbg_kms(&i915->drm, "[CONNECTOR:%d:%s] Reloading eDP link rates\n",
+			    connector->base.base.id, connector->base.name);
+
+		drm_dp_dpcd_read(&intel_dp->aux, DP_SUPPORTED_LINK_RATES,
+				 sink_rates, sizeof(sink_rates));
+	}
 
 	if (link_bw)
 		drm_dbg_kms(&i915->drm,
@@ -849,7 +928,7 @@ intel_dp_link_train_all_phys(struct intel_dp *intel_dp,
 	}
 
 	if (ret)
-		intel_dp_link_train_phy(intel_dp, crtc_state, DP_PHY_DPRX);
+		ret = intel_dp_link_train_phy(intel_dp, crtc_state, DP_PHY_DPRX);
 
 	if (intel_dp->set_idle_link_train)
 		intel_dp->set_idle_link_train(intel_dp, crtc_state);

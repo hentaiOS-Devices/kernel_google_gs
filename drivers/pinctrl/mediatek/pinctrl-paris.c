@@ -96,20 +96,16 @@ static int mtk_pinconf_get(struct pinctrl_dev *pctldev,
 			err = hw->soc->bias_get_combo(hw, desc, &pullup, &ret);
 			if (err)
 				goto out;
+			if (ret == MTK_PUPD_SET_R1R0_00)
+				ret = MTK_DISABLE;
 			if (param == PIN_CONFIG_BIAS_DISABLE) {
-				if (ret == MTK_PUPD_SET_R1R0_00)
-					ret = MTK_DISABLE;
+				if (ret != MTK_DISABLE)
+					err = -EINVAL;
 			} else if (param == PIN_CONFIG_BIAS_PULL_UP) {
-				/* When desire to get pull-up value, return
-				 *  error if current setting is pull-down
-				 */
-				if (!pullup)
+				if (!pullup || ret == MTK_DISABLE)
 					err = -EINVAL;
 			} else if (param == PIN_CONFIG_BIAS_PULL_DOWN) {
-				/* When desire to get pull-down value, return
-				 *  error if current setting is pull-up
-				 */
-				if (pullup)
+				if (pullup || ret == MTK_DISABLE)
 					err = -EINVAL;
 			}
 		} else {
@@ -188,8 +184,7 @@ out:
 }
 
 static int mtk_pinconf_set(struct pinctrl_dev *pctldev, unsigned int pin,
-			   enum pin_config_param param,
-			   enum pin_config_param arg)
+			   enum pin_config_param param, u32 arg)
 {
 	struct mtk_pinctrl *hw = pinctrl_dev_get_drvdata(pctldev);
 	const struct mtk_pin_desc *desc;
@@ -577,12 +572,16 @@ static int mtk_hw_get_value_wrap(struct mtk_pinctrl *hw, unsigned int gpio, int 
 	mtk_hw_get_value_wrap(hw, gpio, PINCTRL_PIN_REG_DRV)
 
 ssize_t mtk_pctrl_show_one_pin(struct mtk_pinctrl *hw,
-	unsigned int gpio, char *buf, unsigned int bufLen)
+	unsigned int gpio, char *buf, unsigned int buf_len)
 {
-	int pinmux, pullup, pullen, len = 0, r1 = -1, r0 = -1;
+	int pinmux, pullup, pullen, len = 0, r1 = -1, r0 = -1, rsel = -1;
 	const struct mtk_pin_desc *desc;
+	u32 try_all_type = 0;
 
 	if (gpio >= hw->soc->npins)
+		return -EINVAL;
+
+	if (mtk_is_virt_gpio(hw, gpio))
 		return -EINVAL;
 
 	desc = (const struct mtk_pin_desc *)&hw->soc->pins[gpio];
@@ -591,26 +590,41 @@ ssize_t mtk_pctrl_show_one_pin(struct mtk_pinctrl *hw,
 		pinmux -= hw->soc->nfuncs;
 
 	mtk_pinconf_bias_get_combo(hw, desc, &pullup, &pullen);
-	if (pullen == MTK_PUPD_SET_R1R0_00) {
-		pullen = 0;
-		r1 = 0;
-		r0 = 0;
-	} else if (pullen == MTK_PUPD_SET_R1R0_01) {
+
+	if (hw->soc->pull_type)
+		try_all_type = hw->soc->pull_type[desc->number];
+
+	if (hw->rsel_si_unit && (try_all_type & MTK_PULL_RSEL_TYPE)) {
+		rsel = pullen;
 		pullen = 1;
-		r1 = 0;
-		r0 = 1;
-	} else if (pullen == MTK_PUPD_SET_R1R0_10) {
-		pullen = 1;
-		r1 = 1;
-		r0 = 0;
-	} else if (pullen == MTK_PUPD_SET_R1R0_11) {
-		pullen = 1;
-		r1 = 1;
-		r0 = 1;
-	} else if (pullen != MTK_DISABLE && pullen != MTK_ENABLE) {
-		pullen = 0;
+	} else {
+		/* Case for: R1R0 */
+		if (pullen == MTK_PUPD_SET_R1R0_00) {
+			pullen = 0;
+			r1 = 0;
+			r0 = 0;
+		} else if (pullen == MTK_PUPD_SET_R1R0_01) {
+			pullen = 1;
+			r1 = 0;
+			r0 = 1;
+		} else if (pullen == MTK_PUPD_SET_R1R0_10) {
+			pullen = 1;
+			r1 = 1;
+			r0 = 0;
+		} else if (pullen == MTK_PUPD_SET_R1R0_11) {
+			pullen = 1;
+			r1 = 1;
+			r0 = 1;
+		}
+
+		/* Case for: RSEL */
+		if (pullen >= MTK_PULL_SET_RSEL_000 &&
+		    pullen <= MTK_PULL_SET_RSEL_111) {
+			rsel = pullen - MTK_PULL_SET_RSEL_000;
+			pullen = 1;
+		}
 	}
-	len += scnprintf(buf + len, bufLen - len,
+	len += scnprintf(buf + len, buf_len - len,
 			"%03d: %1d%1d%1d%1d%02d%1d%1d%1d%1d",
 			gpio,
 			pinmux,
@@ -623,12 +637,10 @@ ssize_t mtk_pctrl_show_one_pin(struct mtk_pinctrl *hw,
 			pullen,
 			pullup);
 
-	if (r1 != -1) {
-		len += scnprintf(buf + len, bufLen - len, " (%1d %1d)\n",
-			r1, r0);
-	} else {
-		len += scnprintf(buf + len, bufLen - len, "\n");
-	}
+	if (r1 != -1)
+		len += scnprintf(buf + len, buf_len - len, " (%1d %1d)", r1, r0);
+	else if (rsel != -1)
+		len += scnprintf(buf + len, buf_len - len, " (%1d)", rsel);
 
 	return len;
 }
@@ -719,10 +731,10 @@ static int mtk_pconf_group_get(struct pinctrl_dev *pctldev, unsigned group,
 			       unsigned long *config)
 {
 	struct mtk_pinctrl *hw = pinctrl_dev_get_drvdata(pctldev);
+	struct mtk_pinctrl_group *grp = &hw->groups[group];
 
-	*config = hw->groups[group].config;
-
-	return 0;
+	 /* One pin per group only */
+	return mtk_pinconf_get(pctldev, grp->pin, config);
 }
 
 static int mtk_pconf_group_set(struct pinctrl_dev *pctldev, unsigned group,
@@ -738,8 +750,6 @@ static int mtk_pconf_group_set(struct pinctrl_dev *pctldev, unsigned group,
 				      pinconf_to_config_argument(configs[i]));
 		if (ret < 0)
 			return ret;
-
-		grp->config = configs[i];
 	}
 
 	return 0;
@@ -891,8 +901,8 @@ static int mtk_build_gpiochip(struct mtk_pinctrl *hw, struct device_node *np)
 	chip->direction_output	= mtk_gpio_direction_output;
 	chip->get		= mtk_gpio_get;
 	chip->set		= mtk_gpio_set;
-	chip->to_irq		= mtk_gpio_to_irq,
-	chip->set_config	= mtk_gpio_set_config,
+	chip->to_irq		= mtk_gpio_to_irq;
+	chip->set_config	= mtk_gpio_set_config;
 	chip->base		= -1;
 	chip->ngpio		= hw->soc->npins;
 	chip->of_node		= np;
@@ -969,6 +979,14 @@ int mtk_paris_pinctrl_probe(struct platform_device *pdev,
 	}
 
 	hw->nbase = hw->soc->nbase_names;
+
+	if (of_find_property(hw->dev->of_node,
+			     "mediatek,rsel-resistance-in-si-unit", NULL))
+		hw->rsel_si_unit = true;
+	else
+		hw->rsel_si_unit = false;
+
+	spin_lock_init(&hw->lock);
 
 	err = mtk_pctrl_build_state(pdev);
 	if (err) {

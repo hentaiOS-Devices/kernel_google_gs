@@ -7,7 +7,13 @@ Compressed Formats
 
 .. _compressed-formats:
 
-.. tabularcolumns:: |p{6.6cm}|p{2.2cm}|p{8.7cm}|
+.. raw:: latex
+
+    \small
+
+.. tabularcolumns:: |p{5.8cm}|p{1.2cm}|p{10.3cm}|
+
+.. cssclass:: longtable
 
 .. flat-table:: Compressed Image Formats
     :header-rows:  1
@@ -106,12 +112,13 @@ Compressed Formats
       - 'MG2S'
       - MPEG-2 parsed slice data, as extracted from the MPEG-2 bitstream.
 	This format is adapted for stateless video decoders that implement a
-	MPEG-2 pipeline (using the :ref:`mem2mem` and :ref:`media-request-api`).
+	MPEG-2 pipeline with the :ref:`stateless_decoder`.
 	Metadata associated with the frame to decode is required to be passed
-	through the ``V4L2_CID_MPEG_VIDEO_MPEG2_SLICE_PARAMS`` control and
-	quantization matrices can optionally be specified through the
-	``V4L2_CID_MPEG_VIDEO_MPEG2_QUANTIZATION`` control.
-	See the :ref:`associated Codec Control IDs <v4l2-mpeg-mpeg2>`.
+	through the ``V4L2_CID_STATELESS_MPEG2_SEQUENCE`` and
+        ``V4L2_CID_STATELESS_MPEG2_PICTURE`` controls.
+        Quantisation matrices can optionally be specified through the
+	``V4L2_CID_STATELESS_MPEG2_QUANTISATION`` control.
+	See the :ref:`associated Codec Control IDs <v4l2-codec-stateless-mpeg2>`.
 	Exactly one output and one capture buffer must be provided for use with
 	this pixel format. The output buffer must contain the appropriate number
 	of macroblocks to decode a full corresponding frame to the matching
@@ -165,6 +172,21 @@ Compressed Formats
       - VP9 compressed video frame. The encoder generates one
 	compressed frame per buffer, and the decoder requires one
 	compressed frame per buffer.
+    * .. _V4L2-PIX-FMT-VP9-FRAME:
+
+      - ``V4L2_PIX_FMT_VP9_FRAME``
+      - 'VP9F'
+      - VP9 parsed frame, including the frame header, as extracted from the container.
+	This format is adapted for stateless video decoders that implement a
+	VP9 pipeline with the :ref:`stateless_decoder`.
+	Metadata associated with the frame to decode is required to be passed
+	through the ``V4L2_CID_STATELESS_VP9_FRAME`` and
+	the ``V4L2_CID_STATELESS_VP9_COMPRESSED_HDR`` controls.
+	See the :ref:`associated Codec Control IDs <v4l2-codec-stateless-vp9>`.
+	Exactly one output and one capture buffer must be provided for use with
+	this pixel format. The output buffer must contain the appropriate number
+	of macroblocks to decode a full corresponding frame to the matching
+	capture buffer.
     * .. _V4L2-PIX-FMT-HEVC:
 
       - ``V4L2_PIX_FMT_HEVC``
@@ -186,18 +208,13 @@ Compressed Formats
 	through the ``V4L2_CID_MPEG_VIDEO_HEVC_DECODE_MODE``
         and ``V4L2_CID_MPEG_VIDEO_HEVC_START_CODE`` controls.
 	Metadata associated with the frame to decode is required to be passed
-	through the following controls :
-        * ``V4L2_CID_MPEG_VIDEO_HEVC_SPS``
-        * ``V4L2_CID_MPEG_VIDEO_HEVC_PPS``
-        * ``V4L2_CID_MPEG_VIDEO_HEVC_SLICE_PARAMS``
-	See the :ref:`associated Codec Control IDs <v4l2-mpeg-hevc>`.
+	through the following controls:
+        ``V4L2_CID_MPEG_VIDEO_HEVC_SPS``,
+        ``V4L2_CID_MPEG_VIDEO_HEVC_PPS``, and
+        ``V4L2_CID_MPEG_VIDEO_HEVC_SLICE_PARAMS``.
+	See the :ref:`associated Codec Control IDs <v4l2-codec-stateless-hevc>`.
 	Buffers associated with this pixel format must contain the appropriate
 	number of macroblocks to decode a full corresponding frame.
-
-	.. note::
-
-	   This format is not yet part of the public kernel API and it
-	   is expected to change.
     * .. _V4L2-PIX-FMT-FWHT:
 
       - ``V4L2_PIX_FMT_FWHT``
@@ -215,3 +232,23 @@ Compressed Formats
         Metadata associated with the frame to decode is required to be passed
         through the ``V4L2_CID_STATELESS_FWHT_PARAMS`` control.
 	See the :ref:`associated Codec Control ID <codec-stateless-fwht>`.
+
+    * .. _V4L2-PIX-FMT-AV1-FRAME:
+
+      - ``V4L2_PIX_FMT_AV1_FRAME``
+      - 'AV1F'
+      - AV1 parsed frame, including the frame header, as extracted from the container.
+        This format is adapted for stateless video decoders that implement a AV1
+        pipeline with the :ref:`stateless_decoder`. Metadata associated with the
+        frame to decode is required to be passed through the
+        ``V4L2_CID_STATELESS_AV1_SEQUENCE``, ``V4L2_CID_STATELESS_AV1_FRAME``,
+        and ``V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY`` controls.
+        See the :ref:`associated Codec Control IDs <v4l2-codec-stateless-av1>`.
+        Exactly one output and one capture buffer must be provided for use with
+        this pixel format. The output buffer must contain the appropriate number
+        of macroblocks to decode a full corresponding frame to the matching
+        capture buffer.
+
+.. raw:: latex
+
+    \normalsize

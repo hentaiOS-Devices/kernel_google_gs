@@ -117,4 +117,8 @@ struct av_sync_data {
 	uint8_t aud_del_ins3;/* DPCD 0002Dh */
 };
 
+
+/*MST Dock*/
+static const uint8_t SYNAPTICS_DEVICE_ID[] = "SYNA";
+
 #endif /* __DAL_DDC_SERVICE_TYPES_H__ */

@@ -380,14 +380,12 @@ int mlx5_devlink_register(struct devlink *devlink, struct device *dev)
 {
 	int err;
 
-	err = devlink_register(devlink, dev);
-	if (err)
-		return err;
-
+	devlink_register(devlink, dev);
 	err = devlink_params_register(devlink, mlx5_devlink_params,
 				      ARRAY_SIZE(mlx5_devlink_params));
 	if (err)
 		goto params_reg_err;
+	devlink_set_features(devlink, DEVLINK_F_RELOAD);
 	mlx5_devlink_set_params_init_values(devlink);
 	devlink_params_publish(devlink);
 	return 0;
@@ -399,6 +397,7 @@ params_reg_err:
 
 void mlx5_devlink_unregister(struct devlink *devlink)
 {
+	devlink_params_unpublish(devlink);
 	devlink_params_unregister(devlink, mlx5_devlink_params,
 				  ARRAY_SIZE(mlx5_devlink_params));
 	devlink_unregister(devlink);

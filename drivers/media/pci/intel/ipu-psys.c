@@ -295,9 +295,8 @@ static struct sg_table *ipu_dma_buf_map(struct dma_buf_attachment *attach,
 		return NULL;
 
 	attrs = DMA_ATTR_SKIP_CPU_SYNC;
-	ret = dma_map_sg_attrs(attach->dev, ipu_attach->sgt->sgl,
-			       ipu_attach->sgt->orig_nents, dir, attrs);
-	if (ret < ipu_attach->sgt->orig_nents) {
+	ret = dma_map_sgtable(attach->dev, ipu_attach->sgt, dir, attrs);
+	if (ret < 0) {
 		ipu_psys_put_userpages(ipu_attach);
 		dev_dbg(attach->dev, "buf map failed\n");
 
@@ -315,11 +314,11 @@ static struct sg_table *ipu_dma_buf_map(struct dma_buf_attachment *attach,
 }
 
 static void ipu_dma_buf_unmap(struct dma_buf_attachment *attach,
-			      struct sg_table *sg, enum dma_data_direction dir)
+			      struct sg_table *sgt, enum dma_data_direction dir)
 {
 	struct ipu_dma_buf_attach *ipu_attach = attach->priv;
 
-	dma_unmap_sg(attach->dev, sg->sgl, sg->orig_nents, dir);
+	dma_unmap_sgtable(attach->dev, sgt, dir, DMA_ATTR_SKIP_CPU_SYNC);
 	ipu_psys_put_userpages(ipu_attach);
 }
 
@@ -543,15 +542,15 @@ static int ipu_psys_getbuf(struct ipu_psys_buffer *buf, struct ipu_psys_fh *fh)
 
 	ret = dma_buf_fd(dbuf, 0);
 	if (ret < 0) {
-		kfree(kbuf);
 		dma_buf_put(dbuf);
 		return ret;
 	}
 
 	kbuf->fd = ret;
 	buf->base.fd = ret;
-	kbuf->flags = buf->flags &= ~IPU_BUFFER_FLAG_USERPTR;
-	kbuf->flags = buf->flags |= IPU_BUFFER_FLAG_DMA_HANDLE;
+	buf->flags &= ~IPU_BUFFER_FLAG_USERPTR;
+	buf->flags |= IPU_BUFFER_FLAG_DMA_HANDLE;
+	kbuf->flags = buf->flags;
 
 	mutex_lock(&fh->mutex);
 	list_add(&kbuf->list, &fh->bufmap);
@@ -666,7 +665,6 @@ kbuf_map_fail:
 	list_del(&kbuf->list);
 	if (!kbuf->userptr)
 		kfree(kbuf);
-	return ret;
 
 mapbuf_fail:
 	dma_buf_put(dbuf);
@@ -1243,7 +1241,7 @@ static int ipu_psys_fw_init(struct ipu_psys *psys)
 	int i;
 
 	size = IPU6SE_FW_PSYS_N_PSYS_CMD_QUEUE_ID;
-	if (ipu_ver == IPU_VER_6 || ipu_ver == IPU_VER_6EP)
+	if (ipu_ver == IPU_VER_6 || ipu_ver == IPU_VER_6EP || ipu_ver == IPU_VER_6EP_MTL)
 		size = IPU6_FW_PSYS_N_PSYS_CMD_QUEUE_ID;
 
 	queue_cfg = devm_kzalloc(&psys->adev->dev, sizeof(*queue_cfg) * size,
@@ -1340,7 +1338,6 @@ static int ipu_psys_probe(struct ipu_bus_device *adev)
 	INIT_LIST_HEAD(&psys->fhs);
 	INIT_LIST_HEAD(&psys->pgs);
 	INIT_LIST_HEAD(&psys->started_kcmds_list);
-	INIT_WORK(&psys->watchdog_work, ipu_psys_watchdog_work);
 
 	init_waitqueue_head(&psys->sched_cmd_wq);
 	atomic_set(&psys->wakeup_count, 0);
@@ -1360,18 +1357,11 @@ static int ipu_psys_probe(struct ipu_bus_device *adev)
 
 	ipu_bus_set_drvdata(adev, psys);
 
-	rval = ipu_psys_resource_pool_init(&psys->resource_pool_started);
-	if (rval < 0) {
-		dev_err(&psys->dev,
-			"unable to alloc process group resources\n");
-		goto out_mutex_destroy;
-	}
-
 	rval = ipu_psys_resource_pool_init(&psys->resource_pool_running);
 	if (rval < 0) {
 		dev_err(&psys->dev,
 			"unable to alloc process group resources\n");
-		goto out_resources_started_free;
+		goto out_mutex_destroy;
 	}
 
 	ipu6_psys_hw_res_variant_init();
@@ -1459,8 +1449,6 @@ out_free_pgs:
 	}
 
 	ipu_psys_resource_pool_cleanup(&psys->resource_pool_running);
-out_resources_started_free:
-	ipu_psys_resource_pool_cleanup(&psys->resource_pool_started);
 out_mutex_destroy:
 	mutex_destroy(&psys->mutex);
 	cdev_del(&psys->cdev);
@@ -1489,8 +1477,6 @@ static void ipu_psys_remove(struct ipu_bus_device *adev)
 		debugfs_remove_recursive(psys->debugfsdir);
 #endif
 
-	flush_workqueue(IPU_PSYS_WORK_QUEUE);
-
 	if (psys->sched_cmd_thread) {
 		kthread_stop(psys->sched_cmd_thread);
 		psys->sched_cmd_thread = NULL;
@@ -1514,7 +1500,6 @@ static void ipu_psys_remove(struct ipu_bus_device *adev)
 
 	ipu_trace_uninit(&adev->dev);
 
-	ipu_psys_resource_pool_cleanup(&psys->resource_pool_started);
 	ipu_psys_resource_pool_cleanup(&psys->resource_pool_running);
 
 	device_unregister(&psys->dev);
@@ -1608,7 +1593,10 @@ static void __exit ipu_psys_exit(void)
 static const struct pci_device_id ipu_pci_tbl[] = {
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6_PCI_ID)},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6SE_PCI_ID)},
-	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_ADL_P_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_ADL_N_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_RPL_P_PCI_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, IPU6EP_MTL_PCI_ID)},
 	{0,}
 };
 MODULE_DEVICE_TABLE(pci, ipu_pci_tbl);

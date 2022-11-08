@@ -239,6 +239,7 @@ struct genfs {
 struct policydb {
 	int mls_enabled;
 	int android_netlink_route;
+	int android_netlink_getneigh;
 
 	/* symbol tables */
 	struct symtab symtab[SYM_NUM];
@@ -336,6 +337,7 @@ extern struct role_trans_datum *policydb_roletr_search(
 
 #define POLICYDB_CONFIG_MLS    1
 #define POLICYDB_CONFIG_ANDROID_NETLINK_ROUTE    (1 << 31)
+#define POLICYDB_CONFIG_ANDROID_NETLINK_GETNEIGH (1 << 30)
 
 /* the config flags related to unknown classes/perms are bits 2 and 3 */
 #define REJECT_UNKNOWN	0x00000002
@@ -372,6 +374,8 @@ static inline int put_entry(const void *buf, size_t bytes, int num, struct polic
 {
 	size_t len = bytes * num;
 
+	if (len > fp->len)
+		return -EINVAL;
 	memcpy(fp->data, buf, len);
 	fp->data += len;
 	fp->len -= len;

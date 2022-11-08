@@ -28,6 +28,7 @@
 #include <drm/drm_atomic_state_helper.h>
 #include <drm/drm_bridge.h>
 #include <drm/drm_encoder.h>
+#include <drm/drm_print.h>
 
 #include "drm_crtc_internal.h"
 
@@ -225,6 +226,15 @@ err_reset_bridge:
 	bridge->dev = NULL;
 	bridge->encoder = NULL;
 	list_del(&bridge->chain_node);
+
+#ifdef CONFIG_OF
+	DRM_ERROR("failed to attach bridge %pOF to encoder %s: %d\n",
+		  bridge->of_node, encoder->name, ret);
+#else
+	DRM_ERROR("failed to attach bridge to encoder %s: %d\n",
+		  encoder->name, ret);
+#endif
+
 	return ret;
 }
 EXPORT_SYMBOL(drm_bridge_attach);
@@ -753,8 +763,8 @@ static int select_bus_fmt_recursive(struct drm_bridge *first_bridge,
 				    struct drm_connector_state *conn_state,
 				    u32 out_bus_fmt)
 {
+	unsigned int i, num_in_bus_fmts = 0;
 	struct drm_bridge_state *cur_state;
-	unsigned int num_in_bus_fmts, i;
 	struct drm_bridge *prev_bridge;
 	u32 *in_bus_fmts;
 	int ret;
@@ -875,7 +885,7 @@ drm_atomic_bridge_chain_select_bus_fmts(struct drm_bridge *bridge,
 	struct drm_connector *conn = conn_state->connector;
 	struct drm_encoder *encoder = bridge->encoder;
 	struct drm_bridge_state *last_bridge_state;
-	unsigned int i, num_out_bus_fmts;
+	unsigned int i, num_out_bus_fmts = 0;
 	struct drm_bridge *last_bridge;
 	u32 *out_bus_fmts;
 	int ret = 0;
@@ -972,7 +982,7 @@ drm_atomic_bridge_propagate_bus_flags(struct drm_bridge *bridge,
 	bridge_state->output_bus_cfg.flags = output_flags;
 
 	/*
-	 * Propage the output flags to the input end of the bridge. Again, it's
+	 * Propagate the output flags to the input end of the bridge. Again, it's
 	 * not necessarily what all bridges want, but that's what most of them
 	 * do, and by doing that by default we avoid forcing drivers to
 	 * duplicate the "dummy propagation" logic.

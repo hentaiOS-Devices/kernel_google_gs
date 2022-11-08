@@ -85,6 +85,7 @@ struct drm_clip_rect evdi_framebuffer_sanitize_rect(
 	return rect;
 }
 
+#ifdef CONFIG_FB
 static int evdi_handle_damage(struct evdi_framebuffer *fb,
 		       int x, int y, int width, int height)
 {
@@ -104,7 +105,6 @@ static int evdi_handle_damage(struct evdi_framebuffer *fb,
 	return 0;
 }
 
-#ifdef CONFIG_FB
 static int evdi_fb_mmap(struct fb_info *info, struct vm_area_struct *vma)
 {
 	unsigned long start = vma->vm_start;
@@ -319,7 +319,7 @@ static void evdi_user_framebuffer_destroy(struct drm_framebuffer *fb)
 
 	EVDI_CHECKPT();
 	if (efb->obj)
-#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE || defined(EL8)
 		drm_gem_object_put(&efb->obj->base);
 #else
 		drm_gem_object_put_unlocked(&efb->obj->base);
@@ -441,7 +441,7 @@ static int evdifb_create(struct drm_fb_helper *helper,
 
 	return ret;
  out_gfree:
-#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE || defined(EL8)
 	drm_gem_object_put(&efbdev->efb.obj->base);
 #else
 	drm_gem_object_put_unlocked(&efbdev->efb.obj->base);
@@ -471,7 +471,7 @@ static void evdi_fbdev_destroy(__always_unused struct drm_device *dev,
 	if (efbdev->efb.obj) {
 		drm_framebuffer_unregister_private(&efbdev->efb.base);
 		drm_framebuffer_cleanup(&efbdev->efb.base);
-#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE || defined(EL8)
 		drm_gem_object_put(&efbdev->efb.obj->base);
 #else
 		drm_gem_object_put_unlocked(&efbdev->efb.obj->base);
@@ -493,7 +493,7 @@ int evdi_fbdev_init(struct drm_device *dev)
 	evdi->fbdev = efbdev;
 	drm_fb_helper_prepare(dev, &efbdev->helper, &evdi_fb_helper_funcs);
 
-#if KERNEL_VERSION(5, 7, 0) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 7, 0) <= LINUX_VERSION_CODE || defined(EL8)
 	ret = drm_fb_helper_init(dev, &efbdev->helper);
 #else
 	ret = drm_fb_helper_init(dev, &efbdev->helper, 1);
@@ -503,7 +503,7 @@ int evdi_fbdev_init(struct drm_device *dev)
 		return ret;
 	}
 
-#if KERNEL_VERSION(5, 7, 0) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 7, 0) <= LINUX_VERSION_CODE || defined(EL8)
 #else
 	drm_fb_helper_single_add_all_connectors(&efbdev->helper);
 #endif

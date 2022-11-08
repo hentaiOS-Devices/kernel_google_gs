@@ -17,7 +17,20 @@ struct drm_i915_gem_object *alloc_pt_lmem(struct i915_address_space *vm, int sz)
 {
 	struct drm_i915_gem_object *obj;
 
-	obj = i915_gem_object_create_lmem(vm->i915, sz, 0);
+	/*
+	 * To avoid severe over-allocation when dealing with min_page_size
+	 * restrictions, we override that behaviour here by allowing an object
+	 * size and page layout which can be smaller. In practice this should be
+	 * totally fine, since GTT paging structures are not typically inserted
+	 * into the GTT.
+	 *
+	 * Note that we also hit this path for the scratch page, and for this
+	 * case it might need to be 64K, but that should work fine here since we
+	 * used the passed in size for the page size, which should ensure it
+	 * also has the same alignment.
+	 */
+	obj = __i915_gem_object_create_lmem_with_ps(vm->i915, sz, sz,
+						    vm->lmem_pt_obj_flags);
 	/*
 	 * Ensure all paging structures for this vm share the same dma-resv
 	 * object underneath, with the idea that one object_lock() will lock
@@ -415,7 +428,7 @@ static void tgl_setup_private_ppat(struct intel_uncore *uncore)
 	intel_uncore_write(uncore, GEN12_PAT_INDEX(7), GEN8_PPAT_WB);
 }
 
-static void cnl_setup_private_ppat(struct intel_uncore *uncore)
+static void icl_setup_private_ppat(struct intel_uncore *uncore)
 {
 	intel_uncore_write(uncore,
 			   GEN10_PAT_INDEX(0),
@@ -515,8 +528,8 @@ void setup_private_pat(struct intel_uncore *uncore)
 
 	if (GRAPHICS_VER(i915) >= 12)
 		tgl_setup_private_ppat(uncore);
-	else if (GRAPHICS_VER(i915) >= 10)
-		cnl_setup_private_ppat(uncore);
+	else if (GRAPHICS_VER(i915) >= 11)
+		icl_setup_private_ppat(uncore);
 	else if (IS_CHERRYVIEW(i915) || IS_GEN9_LP(i915))
 		chv_setup_private_ppat(uncore);
 	else

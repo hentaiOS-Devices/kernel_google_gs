@@ -123,6 +123,8 @@ static const struct nlmsg_perm nlmsg_xfrm_perms[] =
 	{ XFRM_MSG_NEWSPDINFO,	NETLINK_XFRM_SOCKET__NLMSG_WRITE },
 	{ XFRM_MSG_GETSPDINFO,	NETLINK_XFRM_SOCKET__NLMSG_READ  },
 	{ XFRM_MSG_MAPPING,	NETLINK_XFRM_SOCKET__NLMSG_READ  },
+	{ XFRM_MSG_SETDEFAULT,	NETLINK_XFRM_SOCKET__NLMSG_WRITE },
+	{ XFRM_MSG_GETDEFAULT,	NETLINK_XFRM_SOCKET__NLMSG_READ  },
 };
 
 static const struct nlmsg_perm nlmsg_audit_perms[] =
@@ -186,7 +188,7 @@ int selinux_nlmsg_lookup(u16 sclass, u16 nlmsg_type, u32 *perm)
 		 * structures at the top of this file with the new mappings
 		 * before updating the BUILD_BUG_ON() macro!
 		 */
-		BUILD_BUG_ON(XFRM_MSG_MAX != XFRM_MSG_MAPPING);
+		BUILD_BUG_ON(XFRM_MSG_MAX != XFRM_MSG_GETDEFAULT);
 		err = nlmsg_perm(nlmsg_type, perm, nlmsg_xfrm_perms,
 				 sizeof(nlmsg_xfrm_perms));
 		break;
@@ -212,12 +214,12 @@ int selinux_nlmsg_lookup(u16 sclass, u16 nlmsg_type, u32 *perm)
 	return err;
 }
 
-static void nlmsg_set_getlink_perm(u32 perm)
+static void nlmsg_set_perm_for_type(u32 perm, u16 type)
 {
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(nlmsg_route_perms); i++) {
-		if (nlmsg_route_perms[i].nlmsg_type == RTM_GETLINK) {
+		if (nlmsg_route_perms[i].nlmsg_type == type) {
 			nlmsg_route_perms[i].perm = perm;
 			break;
 		}
@@ -227,11 +229,27 @@ static void nlmsg_set_getlink_perm(u32 perm)
 /**
  * Use nlmsg_readpriv as the permission for RTM_GETLINK messages if the
  * netlink_route_getlink policy capability is set. Otherwise use nlmsg_read.
+ * Similarly, use nlmsg_getneigh for RTM_GETNEIGH and RTM_GETNEIGHTBL if the
+ * netlink_route_getneigh policy capability is set. Otherwise use nlmsg_read.
  */
 void selinux_nlmsg_init(void)
 {
 	if (selinux_android_nlroute_getlink())
-		nlmsg_set_getlink_perm(NETLINK_ROUTE_SOCKET__NLMSG_READPRIV);
+		nlmsg_set_perm_for_type(NETLINK_ROUTE_SOCKET__NLMSG_READPRIV,
+					RTM_GETLINK);
 	else
-		nlmsg_set_getlink_perm(NETLINK_ROUTE_SOCKET__NLMSG_READ);
+		nlmsg_set_perm_for_type(NETLINK_ROUTE_SOCKET__NLMSG_READ,
+					RTM_GETLINK);
+
+	if (selinux_android_nlroute_getneigh()) {
+		nlmsg_set_perm_for_type(NETLINK_ROUTE_SOCKET__NLMSG_GETNEIGH,
+					RTM_GETNEIGH);
+		nlmsg_set_perm_for_type(NETLINK_ROUTE_SOCKET__NLMSG_GETNEIGH,
+					RTM_GETNEIGHTBL);
+	} else {
+		nlmsg_set_perm_for_type(NETLINK_ROUTE_SOCKET__NLMSG_READ,
+					RTM_GETNEIGH);
+		nlmsg_set_perm_for_type(NETLINK_ROUTE_SOCKET__NLMSG_READ,
+					RTM_GETNEIGHTBL);
+	}
 }
