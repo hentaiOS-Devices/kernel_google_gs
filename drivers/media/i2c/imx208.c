@@ -1012,11 +1012,8 @@ static int imx208_probe(struct i2c_client *client)
 		/* Check module identity */
 		ret = imx208_identify_module(imx208);
 		if (ret) {
-			/*
-			 * TODO(b/252843545): Don't ignore probing once we
-			 * know why it does not work on Atlas
-			 */
-			dev_err(&client->dev, "failed to find sensor: %d, continuing anyway", ret);
+			dev_err(&client->dev, "failed to find sensor: %d", ret);
+			goto error_probe;
 		}
 	}
 
