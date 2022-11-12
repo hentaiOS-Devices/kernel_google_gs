@@ -981,12 +981,10 @@ static int glk_emmc_probe_slot(struct sdhci_pci_slot *slot)
 		slot->host->mmc->caps2 |= MMC_CAP2_CQE;
 
 	if (slot->chip->pdev->device != PCI_DEVICE_ID_INTEL_GLK_EMMC) {
-		if (jsl_broken_hs400es(slot)) {
-			slot->host->mmc->caps2 |= MMC_CAP2_HS400;
-		} else {
+		if (!jsl_broken_hs400es(slot)) {
 			slot->host->mmc->caps2 |= MMC_CAP2_HS400_ES;
 			slot->host->mmc_host_ops.hs400_enhanced_strobe =
-						intel_hs400_enhanced_strobe;
+							intel_hs400_enhanced_strobe;
 		}
 		slot->host->mmc->caps2 |= MMC_CAP2_CQE_DCMD;
 	}
