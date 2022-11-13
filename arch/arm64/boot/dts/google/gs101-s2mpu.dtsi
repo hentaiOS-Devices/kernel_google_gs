@@ -39,12 +39,6 @@
 		interrupts = <GIC_SPI IRQ_SYSMMU_HSI2_S2_HSI2 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
-	s2mpu_apm: s2mpu_apm@17590000 {
-		compatible = "google,s2mpu";
-		reg = <0x0 0x17590000 0x10000>;
-		power-domain-id = <0x17410204>; // TODO move this to power domain
-	};
-
 	s2mpu_bo: s2mpu_bo@1CA60000 {
 		compatible = "google,s2mpu";
 		reg = <0x0 0x1CA60000 0x10000>;
