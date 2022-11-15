@@ -14,7 +14,7 @@ void intel_pxp_suspend_prepare(struct intel_pxp *pxp)
 	if (!intel_pxp_is_enabled(pxp))
 		return;
 
-	pxp->arb_session.is_valid = false;
+	intel_pxp_end(pxp);
 }
 
 void intel_pxp_suspend(struct intel_pxp *pxp)
