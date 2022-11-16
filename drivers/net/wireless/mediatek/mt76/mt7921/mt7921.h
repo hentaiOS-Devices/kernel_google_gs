@@ -222,6 +222,8 @@ struct mt7921_dev {
 	struct mt76_connac_pm pm;
 	struct mt76_connac_coredump coredump;
 	const struct mt7921_hif_ops *hif_ops;
+
+	enum environment_cap country_ie_env;
 };
 
 enum {
