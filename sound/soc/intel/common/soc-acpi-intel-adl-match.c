@@ -290,6 +290,11 @@ static const struct snd_soc_acpi_codecs adl_max98360a_amp = {
 	.codecs = {"MX98360A"}
 };
 
+static const struct snd_soc_acpi_codecs adl_rt1015p_amp = {
+	.num_codecs = 1,
+	.codecs = {"RTL1015"}
+};
+
 static const struct snd_soc_acpi_codecs adl_rt1019p_amp = {
 	.num_codecs = 1,
 	.codecs = {"RTL1019"}
@@ -356,6 +361,13 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_machines[] = {
 		.machine_quirk = snd_soc_acpi_codec_list,
 		.quirk_data = &adl_max98360a_amp,
 		.sof_tplg_filename = "sof-adl-max98360a-nau8825.tplg",
+	},
+	{
+		.id = "10508825",
+		.drv_name = "adl_rt1015p_nau8825",
+		.machine_quirk = snd_soc_acpi_codec_list,
+		.quirk_data = &adl_rt1015p_amp,
+		.sof_tplg_filename = "sof-adl-rt1015-nau8825.tplg",
 	},
 	{
 		.id = "10508825",
