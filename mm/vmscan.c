@@ -2051,8 +2051,6 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	spin_lock_irq(&pgdat->lru_lock);
 
 	move_pages_to_lru(lruvec, &page_list);
-	if (do_plug)
-		blk_finish_plug(&plug);
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
 	lru_note_cost(lruvec, file, stat.nr_pageout);
@@ -2063,6 +2061,9 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	__count_vm_events(PGSTEAL_ANON + file, nr_reclaimed);
 
 	spin_unlock_irq(&pgdat->lru_lock);
+
+	if (do_plug)
+		blk_finish_plug(&plug);
 
 	mem_cgroup_uncharge_list(&page_list);
 	free_unref_page_list(&page_list);
@@ -5275,6 +5276,7 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 	unsigned long nr_reclaimed = 0;
 	unsigned long nr_to_reclaim = sc->nr_to_reclaim;
 	struct blk_plug plug;
+	bool do_plug = true;
 	bool scan_adjusted;
 
 	if (lru_gen_enabled()) {
@@ -5301,7 +5303,9 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 	scan_adjusted = (!cgroup_reclaim(sc) && !current_is_kswapd() &&
 			 sc->priority == DEF_PRIORITY);
 
-	blk_start_plug(&plug);
+	trace_android_vh_shrink_lruvec_blk_plug(&do_plug);
+	if (do_plug)
+		blk_start_plug(&plug);
 	while (nr[LRU_INACTIVE_ANON] || nr[LRU_ACTIVE_FILE] ||
 					nr[LRU_INACTIVE_FILE]) {
 		unsigned long nr_anon, nr_file, percentage;
@@ -5373,7 +5377,8 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 
 		scan_adjusted = true;
 	}
-	blk_finish_plug(&plug);
+	if (do_plug)
+		blk_finish_plug(&plug);
 	sc->nr_reclaimed += nr_reclaimed;
 
 	/*
