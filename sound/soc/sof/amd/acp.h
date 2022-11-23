@@ -139,6 +139,7 @@ struct acp_dsp_stream {
 	int stream_tag;
 	int active;
 	unsigned int reg_offset;
+	size_t posn_offset;
 };
 
 /* Common device data struct for ACP devices */

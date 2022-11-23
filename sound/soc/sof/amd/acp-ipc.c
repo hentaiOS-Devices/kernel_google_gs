@@ -201,8 +201,16 @@ int acp_sof_ipc_msg_data(struct snd_sof_dev *sdev, struct snd_pcm_substream *sub
 {
 	unsigned int offset = sdev->dsp_box.offset;
 
-	if (!substream || !sdev->stream_box.size)
+	if (!substream || !sdev->stream_box.size) {
 		acp_mailbox_read(sdev, offset, p, sz);
+	} else {
+		struct acp_dsp_stream *stream = substream->runtime->private_data;
+
+		if (!stream)
+			return -ESTRPIPE;
+
+		acp_mailbox_read(sdev, stream->posn_offset, p, sz);
+	}
 
 	return 0;
 }
@@ -211,7 +219,19 @@ EXPORT_SYMBOL_NS(acp_sof_ipc_msg_data, SND_SOC_SOF_AMD_COMMON);
 int acp_sof_ipc_pcm_params(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream,
 			   const struct sof_ipc_pcm_params_reply *reply)
 {
-	/* TODO: Implement stream hw params to validate stream offset */
+	struct acp_dsp_stream *stream = substream->runtime->private_data;
+	size_t posn_offset = reply->posn_offset;
+
+	/* check for unaligned offset or overflow */
+	if (posn_offset > sdev->stream_box.size ||
+	    posn_offset % sizeof(struct sof_ipc_stream_posn) != 0)
+		return -EINVAL;
+
+	stream->posn_offset = sdev->stream_box.offset + posn_offset;
+
+	dev_dbg(sdev->dev, "pcm: stream dir %d, posn mailbox offset is %zu",
+		substream->stream, stream->posn_offset);
+
 	return 0;
 }
 EXPORT_SYMBOL_NS(acp_sof_ipc_pcm_params, SND_SOC_SOF_AMD_COMMON);
