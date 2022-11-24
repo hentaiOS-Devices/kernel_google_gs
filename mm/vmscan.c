@@ -4711,7 +4711,7 @@ static struct kobj_attribute lru_gen_enabled_attr = __ATTR(
 	enabled, 0644, show_lru_gen_enabled, store_lru_gen_enabled
 );
 
-int print_node_mglru(struct lruvec *lruvec, char *buf, int orig_pos)
+static int print_node_mglru(struct lruvec *lruvec, char *buf, int orig_pos)
 {
 	unsigned long seq;
 	struct lrugen *lrugen = &lruvec->evictable;
