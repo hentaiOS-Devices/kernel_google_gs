@@ -294,14 +294,11 @@ static int uvc_v4l2_try_format(struct uvc_streaming *stream,
 	 * developers test their webcams with the Linux driver as well as with
 	 * the Windows driver).
 	 */
-	mutex_lock(&stream->mutex);
 
 	ret = uvc_pm_get(stream);
-	if (ret) {
-		mutex_unlock(&stream->mutex);
-		ret = -ENODEV;
-		goto done;
-	}
+	if (ret)
+		return -ENODEV;
+	mutex_lock(&stream->mutex);
 
 	if (stream->dev->quirks & UVC_QUIRK_PROBE_EXTRAFIELDS)
 		probe->dwMaxVideoFrameSize =
@@ -497,15 +494,15 @@ static int uvc_v4l2_set_streamparm(struct uvc_streaming *stream,
 	uvc_dbg(stream->dev, FORMAT, "Setting frame interval to %u/%u (%u)\n",
 		timeperframe.numerator, timeperframe.denominator, interval);
 
-	mutex_lock(&stream->mutex);
-
-	if (!video_is_registered(&stream->vdev)) {
-		mutex_unlock(&stream->mutex);
+	ret = uvc_pm_get(stream);
+	if (ret)
 		return -ENODEV;
-	}
+
+	mutex_lock(&stream->mutex);
 
 	if (uvc_queue_streaming(&stream->queue)) {
 		mutex_unlock(&stream->mutex);
+		uvc_pm_put(stream);
 		return -EBUSY;
 	}
 
@@ -538,21 +535,17 @@ static int uvc_v4l2_set_streamparm(struct uvc_streaming *stream,
 	}
 
 	/* Probe the device with the new settings. */
-	ret = uvc_pm_get(stream);
-	if (ret) {
-		mutex_unlock(&stream->mutex);
-		return ret;
-	}
 	ret = uvc_probe_video(stream, &probe);
-	uvc_pm_put(stream);
 	if (ret < 0) {
 		mutex_unlock(&stream->mutex);
+		uvc_pm_put(stream);
 		return ret;
 	}
 
 	stream->ctrl = probe;
 	stream->cur_frame = frame;
 	mutex_unlock(&stream->mutex);
+	uvc_pm_put(stream);
 
 	/* Return the actual frame period. */
 	timeperframe.numerator = probe.dwFrameInterval;
@@ -1373,8 +1366,8 @@ static int uvc_ioctl_g_roi_target(struct file *file, void *fh,
 	sel->r.width	= roi->wROI_Right - roi->wROI_Left + 1;
 
 out:
-	uvc_pm_put(stream);
 	mutex_unlock(&chain->ctrl_mutex);
+	uvc_pm_put(stream);
 	return ret;
 }
 
@@ -1506,9 +1499,9 @@ static int uvc_ioctl_s_roi(struct file *file, void *fh,
 	}
 
 out:
-	uvc_pm_put(stream);
 	mutex_unlock(&stream->mutex);
 	mutex_unlock(&chain->ctrl_mutex);
+	uvc_pm_put(stream);
 	return ret;
 }
 
