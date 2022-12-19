@@ -221,7 +221,7 @@ static const struct ath11k_hw_params ath11k_hw_params[] = {
 		.num_peers = 512,
 		.supports_suspend = true,
 		.hal_desc_sz = sizeof(struct hal_rx_desc_ipq8074),
-		.supports_regdb = false,
+		.supports_regdb = true,
 		.supports_cc_ext = false,
 		.fix_l1ss = true,
 		.credit_flow = true,
@@ -691,15 +691,16 @@ out:
 
 static int ath11k_core_fetch_board_data_api_n(struct ath11k_base *ab,
 					      struct ath11k_board_data *bd,
-					      const char *boardname,
-					      const char *filename)
+					      const char *boardname)
 {
 	size_t len, magic_len;
 	const u8 *data;
-	char filepath[100];
+	char *filename, filepath[100];
 	size_t ie_len;
 	struct ath11k_fw_ie *hdr;
 	int ret, ie_id;
+
+	filename = ATH11K_BOARD_API2_FILE;
 
 	if (!bd->fw)
 		bd->fw = ath11k_core_firmware_request(ab, filename);
@@ -813,7 +814,6 @@ int ath11k_core_fetch_board_data_api_1(struct ath11k_base *ab,
 int ath11k_core_fetch_bdf(struct ath11k_base *ab, struct ath11k_board_data *bd)
 {
 	char boardname[BOARD_NAME_SIZE];
-	char *filename = ATH11K_BOARD_API2_FILE;
 	int ret;
 
 	ret = ath11k_core_create_board_name(ab, boardname, BOARD_NAME_SIZE);
@@ -823,7 +823,7 @@ int ath11k_core_fetch_bdf(struct ath11k_base *ab, struct ath11k_board_data *bd)
 	}
 
 	ab->bd_api = 2;
-	ret = ath11k_core_fetch_board_data_api_n(ab, bd, boardname, filename);
+	ret = ath11k_core_fetch_board_data_api_n(ab, bd, boardname);
 	if (!ret)
 		goto success;
 
@@ -842,32 +842,14 @@ success:
 
 int ath11k_core_fetch_regdb(struct ath11k_base *ab, struct ath11k_board_data *bd)
 {
-	char boardname[BOARD_NAME_SIZE];
-	char *filename = ATH11K_REGDB_API2_FILE;
 	int ret;
 
-	ret = ath11k_core_create_board_name(ab, boardname, sizeof(boardname));
-	if (ret) {
-		ath11k_dbg(ab, ATH11K_DBG_BOOT,
-			   "failed to create board name for regdb: %d", ret);
-		return ret;
-	}
-
-	ret = ath11k_core_fetch_board_data_api_n(ab, bd, boardname, filename);
-	if (!ret)
-		goto success;
-
 	ret = ath11k_core_fetch_board_data_api_1(ab, bd, ATH11K_REGDB_FILE_NAME);
-	if (ret) {
+	if (ret)
 		ath11k_dbg(ab, ATH11K_DBG_BOOT, "failed to fetch %s from %s\n",
 			   ATH11K_REGDB_FILE_NAME, ab->hw_params.fw.dir);
-		return ret;
-	}
 
-success:
-	ath11k_dbg(ab, ATH11K_DBG_BOOT, "fetched regdb\n");
-	return 0;
-
+	return ret;
 }
 
 static void ath11k_core_stop(struct ath11k_base *ab)
