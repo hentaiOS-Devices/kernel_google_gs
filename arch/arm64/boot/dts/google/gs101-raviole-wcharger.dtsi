@@ -26,7 +26,7 @@
 		idt,gpio_qien = <&gpp27 3 GPIO_ACTIVE_LOW>;
 
 		/* CSP */
-		idt,fuel-gauge = <&max77759_fg>;
+		idt,fuel-gauge = <&google_battery>;
 		/* Defender */
 		google,power_mitigate_threshold = <90>;
 		google,has-sw-ramp;
