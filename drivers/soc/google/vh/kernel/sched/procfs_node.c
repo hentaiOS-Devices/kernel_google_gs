@@ -43,7 +43,7 @@ static void apply_uclamp_change(enum vendor_group group, enum uclamp_id clamp_id
 struct uclamp_se uclamp_default[UCLAMP_CNT];
 unsigned int pmu_poll_time_ms = 10;
 bool pmu_poll_enabled;
-extern void pmu_poll_enable(void);
+extern int pmu_poll_enable(void);
 extern void pmu_poll_disable(void);
 
 extern unsigned int sysctl_sched_uclamp_min_filter_us;
@@ -1212,6 +1212,7 @@ static ssize_t pmu_poll_enable_store(struct file *filp,
 {
 	bool enable;
 	char buf[MAX_PROC_SIZE];
+	int ret = 0;
 
 	if (count >= sizeof(buf))
 		return -EINVAL;
@@ -1224,13 +1225,13 @@ static ssize_t pmu_poll_enable_store(struct file *filp,
 	if (kstrtobool(buf, &enable))
 		return -EINVAL;
 
-	if (pmu_poll_enabled == enable)
-		return count;
-
 	if (enable)
-		pmu_poll_enable();
+		ret = pmu_poll_enable();
 	else
 		pmu_poll_disable();
+
+	if (ret)
+		return ret;
 
 	return count;
 }
