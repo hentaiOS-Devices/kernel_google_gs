@@ -1425,9 +1425,18 @@ struct dmub_cmd_psr_copy_settings_data {
 	 */
 	uint8_t panel_inst;
 	/**
-	 * Explicit padding to 4 byte boundary.
+	 * Align structure used in dmub fw.
+	 * dsc_enable_status & use_phy_fsm
 	 */
-	uint8_t pad3[4];
+	uint8_t reserved[2];
+	/**
+	 * frame delay for frame re-lock
+	 */
+	uint8_t relock_delay_frame_cnt;
+	/**
+	 * Explicit padding to 1 byte boundary.
+	 */
+	uint8_t pad3;
 };
 
 /**

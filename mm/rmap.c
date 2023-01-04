@@ -786,11 +786,12 @@ static bool page_referenced_one(struct page *page, struct vm_area_struct *vma,
 		}
 
 		if (pvmw.pte) {
-			/* the multigenerational lru exploits the spatial locality */
-			if (lru_gen_enabled() && pte_young(*pvmw.pte)) {
-				lru_gen_scan_around(&pvmw);
+			if (lru_gen_enabled() && pte_young(*pvmw.pte) &&
+			    !(vma->vm_flags & (VM_SEQ_READ | VM_RAND_READ))) {
+				lru_gen_look_around(&pvmw);
 				referenced++;
 			}
+
 			if (ptep_clear_flush_young_notify(vma, address,
 						pvmw.pte)) {
 				/*

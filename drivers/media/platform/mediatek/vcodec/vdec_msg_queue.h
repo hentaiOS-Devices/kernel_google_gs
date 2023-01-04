@@ -76,6 +76,13 @@ struct vdec_lat_buf {
  * @wdma_wptr_addr: ube write point
  * @core_work: core hardware work
  * @lat_ctx: used to store lat buffer list
+ * @ctx: point to mtk_vcodec_ctx
+ *
+ * @lat_list_cnt: used to record each instance lat list count
+ * @core_list_cnt: used to record each instance core list count
+ * @list_cnt_mutex: mutex used to protect list cnt
+ * @core_dec_done: core work queue decode done event
+ * @int in_core_queue: the count of buffer in core work queue
  */
 struct vdec_msg_queue {
 	struct vdec_lat_buf lat_buf[NUM_BUFFER_COUNT];
@@ -86,6 +93,14 @@ struct vdec_msg_queue {
 
 	struct work_struct core_work;
 	struct vdec_msg_queue_ctx lat_ctx;
+	struct mtk_vcodec_ctx *ctx;
+
+	atomic_t lat_list_cnt;
+	atomic_t core_list_cnt;
+	struct mutex list_cnt_mutex;
+	wait_queue_head_t core_dec_done;
+
+	int in_core_queue;
 };
 
 /**

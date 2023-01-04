@@ -10,6 +10,7 @@
 #include <linux/usb.h>
 #include <linux/usb/quirks.h>
 #include <linux/usb/hcd.h>
+#include <linux/dmi.h>
 #include "usb.h"
 
 struct quirk_entry {
@@ -362,6 +363,9 @@ static const struct usb_device_id usb_quirk_list[] = {
 	{ USB_DEVICE(0x0781, 0x5583), .driver_info = USB_QUIRK_NO_LPM },
 	{ USB_DEVICE(0x0781, 0x5591), .driver_info = USB_QUIRK_NO_LPM },
 
+	/* Realforce 87U Keyboard */
+	{ USB_DEVICE(0x0853, 0x011b), .driver_info = USB_QUIRK_NO_LPM },
+
 	/* M-Systems Flash Disk Pioneers */
 	{ USB_DEVICE(0x08ec, 0x1000), .driver_info = USB_QUIRK_RESET_RESUME },
 
@@ -636,6 +640,21 @@ static int usb_amd_resume_quirk(struct usb_device *udev)
 	return 0;
 }
 
+static int usb_kinox_typec_lpm_quirk(struct usb_device *udev)
+{
+	/* Platform is Kinox Chromebox */
+	if (!(dmi_match(DMI_SYS_VENDOR, "Google")  &&
+		  dmi_match(DMI_PRODUCT_NAME, "Kinox")))
+		return 0;
+
+	/* USB3.2 Gen2x1 device attached directly to Type-C port root hub*/
+	if (udev->bus->busnum == 2 && udev->level == 1 &&
+		udev->speed == USB_SPEED_SUPER_PLUS)
+		return 1;
+
+	return 0;
+}
+
 static u32 usb_detect_static_quirks(struct usb_device *udev,
 				    const struct usb_device_id *id)
 {
@@ -689,6 +708,9 @@ void usb_detect_quirks(struct usb_device *udev)
 	if (usb_amd_resume_quirk(udev))
 		udev->quirks |= usb_detect_static_quirks(udev,
 				usb_amd_resume_quirk_list);
+
+	if (usb_kinox_typec_lpm_quirk(udev))
+		udev->quirks |= USB_QUIRK_NO_LPM;
 
 	udev->quirks ^= usb_detect_dynamic_quirks(udev);
 
