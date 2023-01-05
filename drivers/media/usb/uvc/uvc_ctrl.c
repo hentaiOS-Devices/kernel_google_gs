@@ -2411,6 +2411,8 @@ static void uvc_ctrl_prune_entity(struct uvc_device *dev,
 		{ { USB_DEVICE(0x0bda, 0x5539) }, 21 },
 		/* Realtek Semiconductor Corp. Integrated_Webcam_HD */
 		{ { USB_DEVICE(0x0bda, 0x565c) }, 21 },
+		/* Realtek Semiconductor Corp. Integrated_Webcam_HD */
+		{ { USB_DEVICE(0x0bda, 0x5676) }, 21 },
 		/* Syntek Integrated Camera */
 		{ { USB_DEVICE(0x174f, 0x244f) }, 21 },
 	};
