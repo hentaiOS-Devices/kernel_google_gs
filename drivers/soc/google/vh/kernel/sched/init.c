@@ -95,11 +95,12 @@ extern void rvh_setscheduler_pixel_mod(void *data, struct task_struct *p);
 extern void rvh_update_misfit_status_pixel_mod(void *data, struct task_struct *p,
 			struct rq *rq, bool *need_update);
 
+#if IS_ENABLED(CONFIG_SCHED_LIB)
 extern void android_rvh_show_max_freq(void *unused, struct cpufreq_policy *policy,
 						unsigned int *max_freq);
-
 extern void vh_sched_setaffinity_mod(void *data, struct task_struct *task,
 					const struct cpumask *in_mask, int *skip);
+#endif /* IS_ENABLED(CONFIG_SCHED_LIB) */
 
 extern struct cpufreq_governor sched_pixel_gov;
 
@@ -340,6 +341,7 @@ static int vh_sched_init(void)
 	if (ret)
 		return ret;
 
+#if IS_ENABLED(CONFIG_SCHED_LIB)
 	ret = register_trace_android_rvh_show_max_freq(android_rvh_show_max_freq, NULL);
 	if (ret)
 		return ret;
@@ -347,6 +349,7 @@ static int vh_sched_init(void)
 	ret = register_trace_android_vh_sched_setaffinity_early(vh_sched_setaffinity_mod, NULL);
 	if (ret)
 		return ret;
+#endif /* IS_ENABLED(CONFIG_SCHED_LIB) */
 
 	ret = register_trace_android_vh_binder_set_priority(
 		vh_binder_set_priority_pixel_mod, NULL);
