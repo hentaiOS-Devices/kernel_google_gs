@@ -19,6 +19,7 @@
 #include <linux/input/elan-i2c-ids.h>
 
 #include "hid-ids.h"
+#include "i2c-hid/i2c-hid.h"
 
 /*
  * Alphabetically sorted by vendor then product.
@@ -1285,6 +1286,11 @@ unsigned long hid_lookup_quirk(const struct hid_device *hdev)
 	 */
 	if (hdev->vendor == USB_VENDOR_ID_UGEE && (hdev->product & 0x0F) <= 0x09)
 		quirks |= HID_QUIRK_DEVICE_IS_DIGITIZER;
+
+	/* Get quirks specific to I2C devices */
+	if (IS_ENABLED(CONFIG_I2C_DMI_CORE) && IS_ENABLED(CONFIG_DMI) &&
+	    hdev->bus == BUS_I2C)
+		quirks |= i2c_hid_get_dmi_quirks(hdev->vendor, hdev->product);
 
 	return quirks;
 }
