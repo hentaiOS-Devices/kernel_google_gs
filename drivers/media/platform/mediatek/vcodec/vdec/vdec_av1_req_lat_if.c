@@ -2071,7 +2071,7 @@ static int vdec_av1_slice_lat_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 		goto err_free_fb_out;
 	}
 	if (instance->inneracing_mode)
-		vdec_msg_queue_qbuf(&ctx->dev->msg_queue_core_ctx, lat_buf);
+		vdec_msg_queue_qbuf(&ctx->msg_queue.core_ctx, lat_buf);
 
 	if (instance->irq_enabled) {
 		ret = mtk_vcodec_wait_for_done_ctx(ctx, MTK_INST_IRQ_RECEIVED,
@@ -2110,7 +2110,7 @@ static int vdec_av1_slice_lat_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	vdec_msg_queue_update_ube_wptr(&ctx->msg_queue, vsi->trans.dma_addr_end);
 
 	if (!instance->inneracing_mode)
-		vdec_msg_queue_qbuf(&ctx->dev->msg_queue_core_ctx, lat_buf);
+		vdec_msg_queue_qbuf(&ctx->msg_queue.core_ctx, lat_buf);
 	memcpy(&instance->slots, &vsi->slots, sizeof(instance->slots));
 
 	return 0;

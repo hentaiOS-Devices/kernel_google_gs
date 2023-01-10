@@ -21,6 +21,13 @@ struct mtk_vcodec_ctx;
 struct mtk_vcodec_dev;
 typedef int (*core_decode_cb_t)(struct vdec_lat_buf *lat_buf);
 
+/* current context isn't work */
+#define CONTEXT_LIST_EMPTY           (0)
+/* queued to the core work list */
+#define CONTEXT_LIST_QUEUED          (1)
+/* context decode done */
+#define CONTEXT_LIST_DEC_DONE        (2)
+
 /**
  * struct vdec_msg_queue_ctx - represents a queue for buffers ready to be processed
  * @ready_to_use: ready used queue used to signalize when get a job queue
@@ -52,6 +59,8 @@ struct vdec_msg_queue_ctx {
  * @core_decode: different codec use different decode callback function
  * @lat_list: add lat buffer to lat head list
  * @core_list: add lat buffer to core head list
+ *
+ * @is_last_frame: meaning this buffer is the last frame
  */
 struct vdec_lat_buf {
 	struct mtk_vcodec_mem wdma_err_addr;
@@ -66,6 +75,8 @@ struct vdec_lat_buf {
 	core_decode_cb_t core_decode;
 	struct list_head lat_list;
 	struct list_head core_list;
+
+	bool is_last_frame;
 };
 
 /**
@@ -76,13 +87,17 @@ struct vdec_lat_buf {
  * @wdma_wptr_addr: ube write point
  * @core_work: core hardware work
  * @lat_ctx: used to store lat buffer list
- * @ctx: point to mtk_vcodec_ctx
+ * @core_ctx: used to store core buffer list
  *
  * @lat_list_cnt: used to record each instance lat list count
  * @core_list_cnt: used to record each instance core list count
- * @list_cnt_mutex: mutex used to protect list cnt
- * @core_dec_done: core work queue decode done event
- * @int in_core_queue: the count of buffer in core work queue
+ *
+ * @ctx_list: context list
+ * @status: current context decode status for core hardware
+ *
+ * @empty_lat_buf: the last lat buf used to flush decode
+ * @core_dec_done: core flush done event
+ * @flush_done: core flush done status
  */
 struct vdec_msg_queue {
 	struct vdec_lat_buf lat_buf[NUM_BUFFER_COUNT];
@@ -93,14 +108,17 @@ struct vdec_msg_queue {
 
 	struct work_struct core_work;
 	struct vdec_msg_queue_ctx lat_ctx;
-	struct mtk_vcodec_ctx *ctx;
+	struct vdec_msg_queue_ctx core_ctx;
 
 	atomic_t lat_list_cnt;
 	atomic_t core_list_cnt;
-	struct mutex list_cnt_mutex;
-	wait_queue_head_t core_dec_done;
 
-	int in_core_queue;
+	struct list_head ctx_list;
+	int status;
+
+	struct vdec_lat_buf empty_lat_buf;
+	wait_queue_head_t core_dec_done;
+	bool flush_done;
 };
 
 /**
@@ -170,5 +188,4 @@ bool vdec_msg_queue_wait_lat_buf_full(struct vdec_msg_queue *msg_queue);
  */
 void vdec_msg_queue_deinit(struct vdec_msg_queue *msg_queue,
 			   struct mtk_vcodec_ctx *ctx);
-
 #endif
