@@ -630,13 +630,10 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 	dsi->data_rate = DIV_ROUND_UP_ULL(dsi->vm.pixelclock * bit_per_pixel,
 					  dsi->lanes);
 
-	if (dsi->panel && drm_panel_prepare_power(dsi->panel))
-		DRM_INFO("can't prepare power the panel\n");
-
 	ret = clk_set_rate(dsi->hs_clk, dsi->data_rate);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set data rate: %d\n", ret);
-		goto err_prepare_power;
+		goto err_refcount;
 	}
 
 	phy_power_on(dsi->phy);
@@ -681,9 +678,7 @@ err_disable_engine_clk:
 	clk_disable_unprepare(dsi->engine_clk);
 err_phy_power_off:
 	phy_power_off(dsi->phy);
-err_prepare_power:
-	if (dsi->panel && drm_panel_unprepare_power(dsi->panel))
-		DRM_INFO("Can't unprepare power the panel\n");
+err_refcount:
 	dsi->refcount--;
 	return ret;
 }
@@ -726,10 +721,6 @@ static void mtk_dsi_poweroff(struct mtk_dsi *dsi)
 	clk_disable_unprepare(dsi->digital_clk);
 
 	phy_power_off(dsi->phy);
-
-	if (dsi->panel && drm_panel_unprepare_power(dsi->panel))
-		DRM_INFO("Can't unprepare power the panel\n");
-
 	dsi->lanes_ready = false;
 }
 
