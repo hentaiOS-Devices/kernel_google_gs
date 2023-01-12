@@ -122,7 +122,7 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 	    old_state == SOF_DSP_PM_D0)
 		return 0;
 
-	sdev->fw_state = SOF_FW_BOOT_PREPARE;
+	sof_set_fw_state(sdev, SOF_FW_BOOT_PREPARE);
 
 	/* load the firmware */
 	ret = snd_sof_load_firmware(sdev);
@@ -133,7 +133,7 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 		return ret;
 	}
 
-	sdev->fw_state = SOF_FW_BOOT_IN_PROGRESS;
+	sof_set_fw_state(sdev, SOF_FW_BOOT_IN_PROGRESS);
 
 	/*
 	 * Boot the firmware. The FW boot status will be modified
@@ -191,7 +191,7 @@ static int sof_suspend(struct device *dev, bool runtime_suspend)
 	if (sdev->fw_state != SOF_FW_BOOT_COMPLETE)
 		goto suspend;
 
-	/* set restore_stream for all streams during system suspend */
+	/* prepare for streams to be resumed properly upon resume */
 	if (!runtime_suspend) {
 		ret = sof_set_hw_params_upon_resume(sdev->dev);
 		if (ret < 0) {
@@ -256,7 +256,7 @@ suspend:
 		return ret;
 
 	/* reset FW state */
-	sdev->fw_state = SOF_FW_BOOT_NOT_STARTED;
+	sof_set_fw_state(sdev, SOF_FW_BOOT_NOT_STARTED);
 	sdev->enabled_cores_mask = 0;
 
 	return ret;

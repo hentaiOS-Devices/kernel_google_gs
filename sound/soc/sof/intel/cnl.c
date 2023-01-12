@@ -247,6 +247,10 @@ const struct snd_sof_dsp_ops sof_cnl_ops = {
 	.block_read	= sof_block_read,
 	.block_write	= sof_block_write,
 
+	/* Mailbox IO */
+	.mailbox_read	= sof_mailbox_read,
+	.mailbox_write	= sof_mailbox_write,
+
 	/* doorbell */
 	.irq_thread	= cnl_ipc_irq_thread,
 
@@ -299,9 +303,8 @@ const struct snd_sof_dsp_ops sof_cnl_ops = {
 	/* parse platform specific extended manifest */
 	.parse_platform_ext_manifest = hda_dsp_ext_man_get_cavs_config_data,
 
-	/* dsp core power up/down */
-	.core_power_up = hda_dsp_enable_core,
-	.core_power_down = hda_dsp_core_reset_power_down,
+	/* dsp core get/put */
+	.core_get = hda_dsp_core_get,
 
 	/* firmware run */
 	.run = hda_dsp_cl_boot_firmware,
@@ -351,6 +354,13 @@ const struct sof_intel_dsp_desc cnl_chip_info = {
 };
 EXPORT_SYMBOL_NS(cnl_chip_info, SND_SOC_SOF_INTEL_HDA_COMMON);
 
+/*
+ * JasperLake is technically derived from IceLake, and should be in
+ * described in icl.c. However since JasperLake was designed with
+ * two cores, it cannot support the IceLake-specific power-up sequences
+ * which rely on core3. To simplify, JasperLake uses the CannonLake ops and
+ * is described in cnl.c
+ */
 const struct sof_intel_dsp_desc jsl_chip_info = {
 	/* Jasperlake */
 	.cores_num = 2,

@@ -9,22 +9,22 @@
 #include <sound/soc-acpi.h>
 #include <sound/soc-acpi-intel-match.h>
 
-static struct snd_soc_acpi_codecs jsl_7219_98373_codecs = {
+static const struct snd_soc_acpi_codecs jsl_7219_98373_codecs = {
 	.num_codecs = 1,
 	.codecs = {"MX98373"}
 };
 
-static struct snd_soc_acpi_codecs rt1015_spk = {
+static const struct snd_soc_acpi_codecs rt1015_spk = {
 	.num_codecs = 1,
 	.codecs = {"10EC1015"}
 };
 
-static struct snd_soc_acpi_codecs rt1015p_spk = {
+static const struct snd_soc_acpi_codecs rt1015p_spk = {
 	.num_codecs = 1,
 	.codecs = {"RTL1015"}
 };
 
-static struct snd_soc_acpi_codecs mx98360a_spk = {
+static const struct snd_soc_acpi_codecs mx98360a_spk = {
 	.num_codecs = 1,
 	.codecs = {"MX98360A"}
 };
@@ -79,6 +79,11 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_jsl_machines[] = {
 		.machine_quirk = snd_soc_acpi_codec_list,
 		.quirk_data = &mx98360a_spk,
 		.sof_tplg_filename = "sof-jsl-cs42l42-mx98360a.tplg",
+	},
+	{
+		.id = "ESSX8336",
+		.drv_name = "sof-essx8336",
+		.sof_tplg_filename = "sof-jsl-es8336.tplg",
 	},
 	{},
 };

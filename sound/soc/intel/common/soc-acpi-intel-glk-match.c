@@ -9,7 +9,7 @@
 #include <sound/soc-acpi.h>
 #include <sound/soc-acpi-intel-match.h>
 
-static struct snd_soc_acpi_codecs glk_codecs = {
+static const struct snd_soc_acpi_codecs glk_codecs = {
 	.num_codecs = 1,
 	.codecs = {"MX98357A"}
 };
@@ -52,7 +52,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_glk_machines[] = {
 		.quirk_data = &glk_codecs,
 		.sof_tplg_filename = "sof-glk-cs42l42.tplg",
 	},
-
 	{},
 };
 EXPORT_SYMBOL_GPL(snd_soc_acpi_intel_glk_machines);
