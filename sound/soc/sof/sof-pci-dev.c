@@ -63,14 +63,6 @@ static const struct dmi_system_id sof_tplg_table[] = {
 		.callback = sof_tplg_cb,
 		.matches = {
 			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Brya"),
-			DMI_MATCH(DMI_OEM_STRING, "AUDIO-MAX98390_ALC5682I_I2S"),
-		},
-		.driver_data = "sof-adl-max98390-ssp2-rt5682-ssp0.tplg",
-	},
-	{
-		.callback = sof_tplg_cb,
-		.matches = {
-			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Brya"),
 			DMI_MATCH(DMI_OEM_STRING, "AUDIO_AMP-MAX98360_ALC5682VS_I2S_2WAY"),
 		},
 		.driver_data = "sof-adl-max98360a-rt5682-2way.tplg",
@@ -87,6 +79,14 @@ static const struct dmi_system_id sof_tplg_table[] = {
 		.callback = sof_tplg_cb,
 		.matches = {
 			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Brya"),
+			DMI_MATCH(DMI_OEM_STRING, "AUDIO-MAX98390_ALC5682I_I2S"),
+		},
+		.driver_data = "sof-adl-max98390-ssp2-rt5682-ssp0.tplg",
+	},
+	{
+		.callback = sof_tplg_cb,
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Brya"),
 			DMI_MATCH(DMI_OEM_STRING, "AUDIO-MAX98360_ALC5682I_I2S_AMP_SSP2"),
 		},
 		.driver_data = "sof-adl-max98357a-rt5682.tplg",
@@ -96,17 +96,9 @@ static const struct dmi_system_id sof_tplg_table[] = {
 
 static const struct dmi_system_id community_key_platforms[] = {
 	{
-		.ident = "Up Squared",
+		.ident = "Up boards",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "AAEON"),
-			DMI_MATCH(DMI_BOARD_NAME, "UP-APL01"),
-		}
-	},
-	{
-		.ident = "Up Extreme",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "AAEON"),
-			DMI_MATCH(DMI_BOARD_NAME, "UP-WHL01"),
 		}
 	},
 	{

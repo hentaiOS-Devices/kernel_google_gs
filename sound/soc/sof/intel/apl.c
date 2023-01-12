@@ -42,6 +42,10 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	.block_read	= sof_block_read,
 	.block_write	= sof_block_write,
 
+	/* Mailbox IO */
+	.mailbox_read	= sof_mailbox_read,
+	.mailbox_write	= sof_mailbox_write,
+
 	/* doorbell */
 	.irq_thread	= hda_dsp_ipc_irq_thread,
 
@@ -97,9 +101,8 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	/* parse platform specific extended manifest */
 	.parse_platform_ext_manifest = hda_dsp_ext_man_get_cavs_config_data,
 
-	/* dsp core power up/down */
-	.core_power_up = hda_dsp_enable_core,
-	.core_power_down = hda_dsp_core_reset_power_down,
+	/* dsp core get/put */
+	.core_get = hda_dsp_core_get,
 
 	/* trace callback */
 	.trace_init = hda_dsp_trace_init,
