@@ -525,36 +525,6 @@ See also the examples in :ref:`control`.
       - n/a
       - A struct :c:type:`v4l2_ctrl_vp9_frame`, containing VP9
 	frame decode parameters for stateless video decoders.
-    * - ``V4L2_CTRL_TYPE_AV1_SEQUENCE``
-      - n/a
-      - n/a
-      - n/a
-      - A struct :c:type:`v4l2_ctrl_av1_sequence`, containing AV1 Sequence OBU
-	decoding parameters for stateless video decoders.
-    * - ``V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY``
-      - n/a
-      - n/a
-      - n/a
-      - A struct :c:type:`v4l2_ctrl_av1_tile_group_entry`, containing AV1 Tile Group
-	OBU decoding parameters for stateless video decoders.
-    * - ``V4L2_CTRL_TYPE_AV1_FRAME``
-      - n/a
-      - n/a
-      - n/a
-      - A struct :c:type:`v4l2_ctrl_av1_frame`, containing AV1 Frame/Frame
-	Header OBU decoding parameters for stateless video decoders.
-    * - ``V4L2_CTRL_TYPE_AV1_PROFILE``
-      - n/a
-      - n/a
-      - n/a
-      - A enum :c:type:`v4l2_ctrl_av1_profile`, indicating what AV1 profiles
-	an AV1 stateless decoder might support.
-    * - ``V4L2_CTRL_TYPE_AV1_LEVEL``
-      - n/a
-      - n/a
-      - n/a
-      - A enum :c:type:`v4l2_ctrl_av1_level`, indicating what AV1 levels
-	an AV1 stateless decoder might support.
 
 .. raw:: latex
 
