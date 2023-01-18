@@ -10,9 +10,11 @@
 
 #include <linux/kernel.h>
 #include <linux/init.h>
+#include <linux/io.h>
 #include <linux/module.h>
 #include <asm/unaligned.h>
 #include <scsi/scsi_proto.h>
+#include "../ufs-exynos.h"
 #include "ufs-pixel-fips.h"
 #include "ufs-pixel-fips_sha256.h"
 
@@ -60,6 +62,10 @@ MODULE_PARM_DESC(fips_lu, "FIPS partition LUN");
 #define IO_RETRY_COUNT			(25)
 #define SG_ENTRY_ENCKEY_NUM_WORDS	(8)
 #define SG_ENTRY_TWKEY_NUM_WORDS	(8)
+#define ISE_VERSION_REG_OFFSET		(0x1C)
+#define ISE_VERSION_MAJOR(x)		(((x) >> 16) & 0xFF)
+#define ISE_VERSION_MINOR(x)		(((x) >> 8) & 0xFF)
+#define ISE_VERSION_REVISION(x)		((x) & 0xFF)
 
 struct fips_buffer_info {
 	void *io_buffer;
@@ -471,6 +477,18 @@ int ufs_pixel_fips_verify(struct ufs_hba *hba)
 	u32 interrupts;
 	struct fips_buffer_info bi;
 	const u32 mki = UFS_PIXEL_MASTER_KEY_INDEX;
+	static u32 ise_version;
+
+	if (!ise_version) {
+		struct exynos_ufs *ufs = to_exynos_ufs(hba);
+		struct ufs_vs_handle *handle = &ufs->handle;
+
+		ise_version = readl(handle->ufsp + ISE_VERSION_REG_OFFSET);
+		pr_info("ISE HW version  %u.%u.%u\n",
+			ISE_VERSION_MAJOR(ise_version),
+			ISE_VERSION_MINOR(ise_version),
+			ISE_VERSION_REVISION(ise_version));
+	}
 
 	ise_available = 0;
 
