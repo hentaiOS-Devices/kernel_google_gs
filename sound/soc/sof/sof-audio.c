@@ -817,9 +817,9 @@ int sof_tear_down_pipelines(struct snd_sof_dev *sdev, bool verify)
 			continue;
 		}
 
-		/* Do not free widgets for static pipelines with FW ABI older than 2.2 */
+		/* Do not free widgets for static pipelines with FW ABI older than 2.3 */
 		if (!verify && !swidget->dynamic_pipeline_widget &&
-		    SOF_FW_VER(v->major, v->minor, v->micro) < SOF_FW_VER(2, 2, 0)) {
+		    SOF_FW_VER(v->major, v->minor, v->micro) < SOF_FW_VER(2, 3, 0)) {
 			swidget->use_count = 0;
 			swidget->complete = 0;
 			continue;
