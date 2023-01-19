@@ -42,7 +42,7 @@
 		physical-memory-group-manager = <&mali_mgm>;
 
 		/* Priority control */
-		priority-control-manager = <&mali_pcm>;
+		/*priority-control-manager = <&mali_pcm>;*/
 
 		/* Protected memory allocator */
 		protected-memory-allocator = <&mali_pma>;
