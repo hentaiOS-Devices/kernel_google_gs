@@ -79,7 +79,7 @@
 
 		/* SBWC */
 		support_sbwc = <1>;
-		support_sbwcl = <0>;
+		support_sbwcl = <1>;
 		support_afbc = <1>;
 
 		/* SBWC decoder max resolution */
