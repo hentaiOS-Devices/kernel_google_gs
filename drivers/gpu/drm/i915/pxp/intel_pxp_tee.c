@@ -105,6 +105,10 @@ static int i915_pxp_tee_component_bind(struct device *i915_kdev,
 	struct intel_pxp *pxp = i915_dev_to_pxp(i915_kdev);
 	intel_wakeref_t wakeref;
 
+	pxp->dev_link = device_link_add(i915_kdev, tee_kdev, DL_FLAG_STATELESS);
+	if (drm_WARN_ON(&i915->drm, !pxp->dev_link))
+		return -ENODEV;
+
 	mutex_lock(&pxp->tee_mutex);
 	pxp->pxp_component = data;
 	pxp->pxp_component->tee_dev = tee_kdev;
@@ -136,6 +140,11 @@ static void i915_pxp_tee_component_unbind(struct device *i915_kdev,
 	mutex_lock(&pxp->tee_mutex);
 	pxp->pxp_component = NULL;
 	mutex_unlock(&pxp->tee_mutex);
+
+	if (pxp->dev_link) {
+		device_link_del(pxp->dev_link);
+		pxp->dev_link = NULL;
+	}
 }
 
 static const struct component_ops i915_pxp_tee_component_ops = {
