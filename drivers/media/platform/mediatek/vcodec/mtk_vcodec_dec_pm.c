@@ -70,7 +70,11 @@ static int mtk_vcodec_dec_pw_on(struct mtk_vcodec_pm *pm)
 
 static void mtk_vcodec_dec_pw_off(struct mtk_vcodec_pm *pm)
 {
-	pm_runtime_put_sync(pm->dev);
+	int ret;
+
+	ret = pm_runtime_put_sync(pm->dev);
+	if (ret)
+		mtk_v4l2_err("pm_runtime_put_sync fail %d", ret);
 }
 
 static void mtk_vcodec_dec_clock_on(struct mtk_vcodec_pm *pm)
