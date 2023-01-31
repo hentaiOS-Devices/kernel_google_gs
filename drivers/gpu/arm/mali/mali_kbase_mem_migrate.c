@@ -321,8 +321,6 @@ void kbase_mem_migrate_set_address_space_ops(struct kbase_device *kbdev, struct 
 
 		if (!kbdev->mem_migrate.mapping)
 			kbdev->mem_migrate.mapping = filp->f_inode->i_mapping;
-		else
-			WARN_ON(kbdev->mem_migrate.mapping != filp->f_inode->i_mapping);
 	}
 }
 
