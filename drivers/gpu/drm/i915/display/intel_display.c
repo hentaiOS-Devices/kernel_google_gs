@@ -1266,8 +1266,7 @@ static void intel_crtc_async_flip_disable_wa(struct intel_atomic_state *state,
 		intel_atomic_get_old_crtc_state(state, crtc);
 	const struct intel_crtc_state *new_crtc_state =
 		intel_atomic_get_new_crtc_state(state, crtc);
-	u8 disable_async_flip_planes = old_crtc_state->async_flip_planes &
-				       ~new_crtc_state->async_flip_planes;
+	u8 update_planes = new_crtc_state->update_planes;
 	const struct intel_plane_state *old_plane_state;
 	struct intel_plane *plane;
 	bool need_vbl_wait = false;
@@ -1276,7 +1275,7 @@ static void intel_crtc_async_flip_disable_wa(struct intel_atomic_state *state,
 	for_each_old_intel_plane_in_state(state, plane, old_plane_state, i) {
 		if (plane->need_async_flip_disable_wa &&
 		    plane->pipe == crtc->pipe &&
-		    disable_async_flip_planes & BIT(plane->id)) {
+		    update_planes & BIT(plane->id)) {
 			/*
 			 * Apart from the async flip bit we want to
 			 * preserve the old state for the plane.
@@ -1389,7 +1388,7 @@ static void intel_pre_plane_update(struct intel_atomic_state *state,
 	 * WA for platforms where async address update enable bit
 	 * is double buffered and only latched at start of vblank.
 	 */
-	if (old_crtc_state->async_flip_planes & ~new_crtc_state->async_flip_planes)
+	if (old_crtc_state->uapi.async_flip && !new_crtc_state->uapi.async_flip)
 		intel_crtc_async_flip_disable_wa(state, crtc);
 }
 
