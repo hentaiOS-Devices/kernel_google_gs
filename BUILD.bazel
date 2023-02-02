@@ -6,6 +6,11 @@ load("//build/kernel/kleaf:common_kernels.bzl", "define_common_kernels")
 package(
     default_visibility = [
         "//visibility:public",
+    ],
+)
+
+package(
+    default_visibility = [
         "//private/google-modules:__subpackages__",
     ],
 )
