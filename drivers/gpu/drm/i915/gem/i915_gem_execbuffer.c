@@ -2979,6 +2979,11 @@ err_request:
 	if (eb.fences)
 		signal_fence_array(&eb);
 
+	if (unlikely(eb.gem_context->syncobj)) {
+		drm_syncobj_replace_fence(eb.gem_context->syncobj,
+					  &eb.request->fence);
+	}
+
 	if (out_fence) {
 		if (err == 0) {
 			fd_install(out_fence_fd, out_fence->file);
@@ -2988,11 +2993,6 @@ err_request:
 		} else {
 			fput(out_fence->file);
 		}
-	}
-
-	if (unlikely(eb.gem_context->syncobj)) {
-		drm_syncobj_replace_fence(eb.gem_context->syncobj,
-					  &eb.request->fence);
 	}
 
 	i915_request_put(eb.request);
