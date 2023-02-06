@@ -155,7 +155,8 @@ irqreturn_t acp_sof_ipc_irq_thread(int irq, void *context)
 	if (sdev->first_boot && sdev->fw_state != SOF_FW_BOOT_COMPLETE) {
 		acp_mailbox_read(sdev, sdev->dsp_box.offset, &status, sizeof(status));
 		if ((status & SOF_IPC_PANIC_MAGIC_MASK) == SOF_IPC_PANIC_MAGIC) {
-			snd_sof_dsp_panic(sdev, sdev->dsp_box.offset + sizeof(status));
+			snd_sof_dsp_panic(sdev, sdev->dsp_box.offset + sizeof(status),
+					true);
 			return IRQ_HANDLED;
 		}
 		snd_sof_ipc_msgs_rx(sdev);
@@ -184,7 +185,7 @@ irqreturn_t acp_sof_ipc_irq_thread(int irq, void *context)
 
 	acp_mailbox_read(sdev, sdev->debug_box.offset, &status, sizeof(u32));
 	if ((status & SOF_IPC_PANIC_MAGIC_MASK) == SOF_IPC_PANIC_MAGIC) {
-		snd_sof_dsp_panic(sdev, sdev->dsp_oops_offset);
+		snd_sof_dsp_panic(sdev, sdev->dsp_oops_offset, true);
 		return IRQ_HANDLED;
 	}
 
