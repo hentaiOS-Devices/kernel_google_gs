@@ -37,6 +37,7 @@ int acp_pcm_hw_params(struct snd_sof_dev *sdev, struct snd_pcm_substream *substr
 
 	ipc_params->buffer.phy_addr = stream->reg_offset;
 	ipc_params->stream_tag = stream->stream_tag;
+	ipc_params->cont_update_posn = 1;
 
 	/* write buffer size of stream in scratch memory */
 
