@@ -79,8 +79,7 @@ static int cr50_i2c_wait_tpm_ready(struct tpm_chip *chip)
 	}
 
 	/* Wait for interrupt to indicate TPM is ready to respond */
-	rc = wait_for_completion_timeout(&priv->tpm_ready,
-		msecs_to_jiffies(chip->timeout_a));
+	rc = wait_for_completion_timeout(&priv->tpm_ready, chip->timeout_a);
 
 	if (rc == 0)
 		dev_warn(&chip->dev, "Timeout waiting for TPM ready\n");
