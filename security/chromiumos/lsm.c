@@ -244,6 +244,25 @@ static int chromiumos_locked_down(enum lockdown_reason what)
 	return 0;
 }
 
+#define DM_LOCKED_PREFIX "dm_locked-"
+static int chromiumos_locked_down_dm_device(dev_t dev)
+{
+	int ret = 0;
+	struct mapped_device *md = NULL;
+	char dm_uuid[DM_UUID_LEN];
+
+	md = dm_get_md(dev);
+	if (!md)
+		return 0;
+
+	if (!dm_copy_name_and_uuid(md, NULL, dm_uuid) &&
+		strncmp(dm_uuid, DM_LOCKED_PREFIX, strlen(DM_LOCKED_PREFIX)) == 0)
+			ret = 1;
+
+	dm_put(md);
+	return ret;
+}
+
 /*
  * This specific function will prevent mknod of 3 specific device mapper devices.
  * If an attempt is made to mknod hiberimage, hiberintegrity, or hiberimage_integrity it will
@@ -264,26 +283,11 @@ static int chromiumos_locked_down(enum lockdown_reason what)
  */
 static int chromiumos_security_dm_mknod(struct dentry *dentry, umode_t mode, dev_t dev)
 {
-	int ret = 0;
-	struct mapped_device *md = NULL;
-	char dm_name[DM_NAME_LEN];
+	/* if it's a dm block device that's locked down, return -EPERM */
+	if (S_ISBLK(mode) && chromiumos_locked_down_dm_device(dev))
+		return -EPERM;
 
-	if (!S_ISBLK(mode))
-		return 0;
-
-	md = dm_get_md(dev);
-	if (!md)
-		return 0;
-
-	if (!dm_copy_name_and_uuid(md, dm_name, NULL)) {
-		if (strcmp(dm_name, "hiberimage") == 0 ||
-			strcmp(dm_name, "hiberintegrity") == 0 ||
-			strcmp(dm_name, "hiberimage_integrity") == 0)
-			ret = -EPERM;
-	}
-
-	dm_put(md);
-	return ret;
+	return 0;
 }
 
 static int chromiumos_security_path_mknod(const struct path *const dir,
