@@ -13,6 +13,7 @@
 #include <linux/firmware.h>
 #include <sound/sof.h>
 #include <sound/sof/ext_manifest.h>
+#include "sof-priv.h"
 #include "ops.h"
 
 static int get_ext_windows(struct snd_sof_dev *sdev,
@@ -363,7 +364,6 @@ static int snd_sof_fw_ext_man_parse(struct snd_sof_dev *sdev,
  */
 static void sof_get_windows(struct snd_sof_dev *sdev)
 {
-	int bar = snd_sof_dsp_get_bar_index(sdev, SOF_FW_BLK_TYPE_SRAM);
 	struct sof_ipc_window_elem *elem;
 	u32 outbox_offset = 0;
 	u32 stream_offset = 0;
@@ -395,64 +395,53 @@ static void sof_get_windows(struct snd_sof_dev *sdev)
 		case SOF_IPC_REGION_UPBOX:
 			inbox_offset = window_offset + elem->offset;
 			inbox_size = elem->size;
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						inbox_offset,
-						elem->size, "inbox",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							inbox_offset,
+							elem->size, "inbox",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		case SOF_IPC_REGION_DOWNBOX:
 			outbox_offset = window_offset + elem->offset;
 			outbox_size = elem->size;
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						outbox_offset,
-						elem->size, "outbox",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							outbox_offset,
+							elem->size, "outbox",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		case SOF_IPC_REGION_TRACE:
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						window_offset +
-						elem->offset,
-						elem->size, "etrace",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							window_offset + elem->offset,
+							elem->size, "etrace",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		case SOF_IPC_REGION_DEBUG:
 			debug_offset = window_offset + elem->offset;
 			debug_size = elem->size;
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						window_offset +
-						elem->offset,
-						elem->size, "debug",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							window_offset + elem->offset,
+							elem->size, "debug",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		case SOF_IPC_REGION_STREAM:
 			stream_offset = window_offset + elem->offset;
 			stream_size = elem->size;
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						stream_offset,
-						elem->size, "stream",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							stream_offset,
+							elem->size, "stream",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		case SOF_IPC_REGION_REGS:
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						window_offset +
-						elem->offset,
-						elem->size, "regs",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							window_offset + elem->offset,
+							elem->size, "regs",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		case SOF_IPC_REGION_EXCEPTION:
 			sdev->dsp_oops_offset = window_offset + elem->offset;
-			snd_sof_debugfs_io_item(sdev,
-						sdev->bar[bar] +
-						window_offset +
-						elem->offset,
-						elem->size, "exception",
-						SOF_DEBUGFS_ACCESS_D0_ONLY);
+			snd_sof_debugfs_add_region_item(sdev, SOF_FW_BLK_TYPE_SRAM,
+							window_offset + elem->offset,
+							elem->size, "exception",
+							SOF_DEBUGFS_ACCESS_D0_ONLY);
 			break;
 		default:
 			dev_err(sdev->dev, "error: get illegal window info\n");
@@ -465,8 +454,12 @@ static void sof_get_windows(struct snd_sof_dev *sdev)
 		return;
 	}
 
-	snd_sof_dsp_mailbox_init(sdev, inbox_offset, inbox_size,
-				 outbox_offset, outbox_size);
+	sdev->dsp_box.offset = inbox_offset;
+	sdev->dsp_box.size = inbox_size;
+
+	sdev->host_box.offset = outbox_offset;
+	sdev->host_box.size = outbox_size;
+
 	sdev->stream_box.offset = stream_offset;
 	sdev->stream_box.size = stream_size;
 
@@ -526,7 +519,7 @@ int sof_fw_ready(struct snd_sof_dev *sdev, u32 msg_id)
 
 	sof_get_windows(sdev);
 
-	return 0;
+	return sof_ipc_init_msg_memory(sdev);
 }
 EXPORT_SYMBOL(sof_fw_ready);
 
@@ -723,10 +716,10 @@ int snd_sof_load_firmware_raw(struct snd_sof_dev *sdev)
 	ret = request_firmware(&plat_data->fw, fw_filename, sdev->dev);
 
 	if (ret < 0) {
-		dev_err(sdev->dev, "error: request firmware %s failed err: %d\n",
-			fw_filename, ret);
 		dev_err(sdev->dev,
-			"you may need to download the firmware from https://github.com/thesofproject/sof-bin/\n");
+			"error: sof firmware file is missing, you might need to\n");
+		dev_err(sdev->dev,
+			"       download it from https://github.com/thesofproject/sof-bin/\n");
 		goto err;
 	} else {
 		dev_dbg(sdev->dev, "request_firmware %s successful\n",
@@ -794,21 +787,15 @@ error:
 }
 EXPORT_SYMBOL(snd_sof_load_firmware_memcpy);
 
-int snd_sof_load_firmware(struct snd_sof_dev *sdev)
-{
-	dev_dbg(sdev->dev, "loading firmware\n");
-
-	if (sof_ops(sdev)->load_firmware)
-		return sof_ops(sdev)->load_firmware(sdev);
-	return 0;
-}
-EXPORT_SYMBOL(snd_sof_load_firmware);
-
 int snd_sof_run_firmware(struct snd_sof_dev *sdev)
 {
 	int ret;
 
 	init_waitqueue_head(&sdev->boot_wait);
+
+	/* (re-)enable dsp dump */
+	sdev->dbg_dump_printed = false;
+	sdev->ipc_dump_printed = false;
 
 	/* create read-only fw_version debugfs to store boot version info */
 	if (sdev->first_boot) {
@@ -834,7 +821,8 @@ int snd_sof_run_firmware(struct snd_sof_dev *sdev)
 	/* boot the firmware on the DSP */
 	ret = snd_sof_dsp_run(sdev);
 	if (ret < 0) {
-		dev_err(sdev->dev, "error: failed to reset DSP\n");
+		snd_sof_dsp_dbg_dump(sdev, "Failed to start DSP",
+				     SOF_DBG_DUMP_MBOX | SOF_DBG_DUMP_PCI);
 		return ret;
 	}
 
@@ -848,16 +836,13 @@ int snd_sof_run_firmware(struct snd_sof_dev *sdev)
 				 sdev->fw_state > SOF_FW_BOOT_IN_PROGRESS,
 				 msecs_to_jiffies(sdev->boot_timeout));
 	if (ret == 0) {
-		dev_err(sdev->dev, "error: firmware boot failure\n");
-		snd_sof_dsp_dbg_dump(sdev, SOF_DBG_DUMP_REGS | SOF_DBG_DUMP_MBOX |
-			SOF_DBG_DUMP_TEXT | SOF_DBG_DUMP_PCI | SOF_DBG_DUMP_FORCE_ERR_LEVEL);
-		sdev->fw_state = SOF_FW_BOOT_FAILED;
+		snd_sof_dsp_dbg_dump(sdev, "Firmware boot failure due to timeout",
+				     SOF_DBG_DUMP_REGS | SOF_DBG_DUMP_MBOX |
+				     SOF_DBG_DUMP_TEXT | SOF_DBG_DUMP_PCI);
 		return -EIO;
 	}
 
-	if (sdev->fw_state == SOF_FW_BOOT_COMPLETE)
-		dev_dbg(sdev->dev, "firmware boot complete\n");
-	else
+	if (sdev->fw_state == SOF_FW_BOOT_READY_FAILED)
 		return -EIO; /* FW boots but fw_ready op failed */
 
 	/* perform post fw run operations */
@@ -866,6 +851,9 @@ int snd_sof_run_firmware(struct snd_sof_dev *sdev)
 		dev_err(sdev->dev, "error: failed post fw run op\n");
 		return ret;
 	}
+
+	dev_dbg(sdev->dev, "firmware boot complete\n");
+	sof_set_fw_state(sdev, SOF_FW_BOOT_COMPLETE);
 
 	return 0;
 }

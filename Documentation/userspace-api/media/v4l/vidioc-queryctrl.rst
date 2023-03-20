@@ -543,18 +543,6 @@ See also the examples in :ref:`control`.
       - n/a
       - A struct :c:type:`v4l2_ctrl_av1_frame`, containing AV1 Frame/Frame
 	Header OBU decoding parameters for stateless video decoders.
-    * - ``V4L2_CTRL_TYPE_AV1_PROFILE``
-      - n/a
-      - n/a
-      - n/a
-      - A enum :c:type:`v4l2_ctrl_av1_profile`, indicating what AV1 profiles
-	an AV1 stateless decoder might support.
-    * - ``V4L2_CTRL_TYPE_AV1_LEVEL``
-      - n/a
-      - n/a
-      - n/a
-      - A enum :c:type:`v4l2_ctrl_av1_level`, indicating what AV1 levels
-	an AV1 stateless decoder might support.
 
 .. raw:: latex
 

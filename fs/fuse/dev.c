@@ -786,7 +786,7 @@ static int fuse_check_page(struct page *page)
 	       1 << PG_workingset |
 	       1 << PG_reclaim |
 	       1 << PG_waiters |
-	       LRU_GEN_MASK | LRU_USAGE_MASK))) {
+	       LRU_GEN_MASK | LRU_REFS_MASK))) {
 		dump_page(page, "fuse: trying to steal weird page");
 		return 1;
 	}

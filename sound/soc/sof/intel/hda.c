@@ -41,7 +41,7 @@
 #define EXCEPT_MAX_HDR_SIZE	0x400
 #define HDA_EXT_ROM_STATUS_SIZE 8
 
-int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w)
+int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w, unsigned int quirk_flags)
 {
 	struct snd_sof_widget *swidget = w->dobj.private;
 	struct snd_soc_component *component = swidget->scomp;
@@ -58,6 +58,13 @@ int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w)
 		return -EINVAL;
 	}
 
+	/* DAI already configured, reset it before reconfiguring it */
+	if (sof_dai->configured) {
+		ret = hda_ctrl_dai_widget_free(w, SOF_DAI_CONFIG_FLAGS_NONE);
+		if (ret < 0)
+			return ret;
+	}
+
 	config = &sof_dai->dai_config[sof_dai->current_config];
 
 	/*
@@ -71,8 +78,10 @@ int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w)
 		return ret;
 	}
 
-	/* set HW_PARAMS flag */
-	config->flags = FIELD_PREP(SOF_DAI_CONFIG_FLAGS_MASK, SOF_DAI_CONFIG_FLAGS_HW_PARAMS);
+	/* set HW_PARAMS flag along with quirks */
+	config->flags = SOF_DAI_CONFIG_FLAGS_HW_PARAMS |
+		       quirk_flags << SOF_DAI_CONFIG_FLAGS_QUIRK_SHIFT;
+
 
 	/* send DAI_CONFIG IPC */
 	ret = sof_ipc_tx_message(sdev->ipc, config->hdr.cmd, config, config->hdr.size,
@@ -87,7 +96,7 @@ int hda_ctrl_dai_widget_setup(struct snd_soc_dapm_widget *w)
 	return 0;
 }
 
-int hda_ctrl_dai_widget_free(struct snd_soc_dapm_widget *w)
+int hda_ctrl_dai_widget_free(struct snd_soc_dapm_widget *w, unsigned int quirk_flags)
 {
 	struct snd_sof_widget *swidget = w->dobj.private;
 	struct snd_soc_component *component = swidget->scomp;
@@ -110,8 +119,9 @@ int hda_ctrl_dai_widget_free(struct snd_soc_dapm_widget *w)
 
 	config = &sof_dai->dai_config[sof_dai->current_config];
 
-	/* set HW_FREE flag */
-	config->flags = FIELD_PREP(SOF_DAI_CONFIG_FLAGS_MASK, SOF_DAI_CONFIG_FLAGS_HW_FREE);
+	/* set HW_FREE flag along with any quirks */
+	config->flags = SOF_DAI_CONFIG_FLAGS_HW_FREE |
+		       quirk_flags << SOF_DAI_CONFIG_FLAGS_QUIRK_SHIFT;
 
 	ret = sof_ipc_tx_message(sdev->ipc, config->hdr.cmd, config, config->hdr.size,
 				 &reply, sizeof(reply));
@@ -125,17 +135,6 @@ int hda_ctrl_dai_widget_free(struct snd_soc_dapm_widget *w)
 	sof_dai->configured = false;
 
 	return sof_widget_free(sdev, swidget);
-}
-
-static const struct sof_intel_dsp_desc
-	*get_chip_info(struct snd_sof_pdata *pdata)
-{
-	const struct sof_dev_desc *desc = pdata->desc;
-	const struct sof_intel_dsp_desc *chip_info;
-
-	chip_info = desc->chip_info;
-
-	return chip_info;
 }
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_INTEL_SOUNDWIRE)
@@ -177,23 +176,19 @@ static int sdw_dai_config_ipc(struct snd_sof_dev *sdev,
 	config->alh.stream_id = alh_stream_id;
 
 	if (setup)
-		return hda_ctrl_dai_widget_setup(w);
+		return hda_ctrl_dai_widget_setup(w, SOF_DAI_CONFIG_FLAGS_NONE);
 
-	return hda_ctrl_dai_widget_free(w);
+	return hda_ctrl_dai_widget_free(w, SOF_DAI_CONFIG_FLAGS_NONE);
 }
 
 static int sdw_params_stream(struct device *dev,
 			     struct sdw_intel_stream_params_data *params_data)
 {
-	struct snd_pcm_substream *substream = params_data->substream;
 	struct snd_sof_dev *sdev = dev_get_drvdata(dev);
 	struct snd_soc_dai *d = params_data->dai;
 	struct snd_soc_dapm_widget *w;
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		w = d->playback_widget;
-	else
-		w = d->capture_widget;
+	w = snd_soc_dai_get_widget(d, params_data->stream);
 
 	return sdw_dai_config_ipc(sdev, w, params_data->link_id, params_data->alh_stream_id,
 				  d->id, true);
@@ -202,15 +197,11 @@ static int sdw_params_stream(struct device *dev,
 static int sdw_free_stream(struct device *dev,
 			   struct sdw_intel_stream_free_data *free_data)
 {
-	struct snd_pcm_substream *substream = free_data->substream;
 	struct snd_sof_dev *sdev = dev_get_drvdata(dev);
 	struct snd_soc_dai *d = free_data->dai;
 	struct snd_soc_dapm_widget *w;
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		w = d->playback_widget;
-	else
-		w = d->capture_widget;
+	w = snd_soc_dai_get_widget(d, free_data->stream);
 
 	/* send invalid stream_id */
 	return sdw_dai_config_ipc(sdev, w, free_data->link_id, 0xFFFF, d->id, false);
@@ -315,7 +306,7 @@ static int hda_sdw_exit(struct snd_sof_dev *sdev)
 	return 0;
 }
 
-static bool hda_dsp_check_sdw_irq(struct snd_sof_dev *sdev)
+bool hda_common_check_sdw_irq(struct snd_sof_dev *sdev)
 {
 	struct sof_intel_hda_dev *hdev;
 	bool ret = false;
@@ -339,6 +330,17 @@ static bool hda_dsp_check_sdw_irq(struct snd_sof_dev *sdev)
 
 out:
 	return ret;
+}
+
+static bool hda_dsp_check_sdw_irq(struct snd_sof_dev *sdev)
+{
+	const struct sof_intel_dsp_desc *chip;
+
+	chip = get_chip_info(sdev->pdata);
+	if (chip && chip->check_sdw_irq)
+		return chip->check_sdw_irq(sdev);
+
+	return false;
 }
 
 static irqreturn_t hda_dsp_sdw_thread(int irq, void *context)
@@ -370,7 +372,38 @@ void hda_sdw_process_wakeen(struct snd_sof_dev *sdev)
 	sdw_intel_process_wakeen_event(hdev->sdw);
 }
 
-#endif
+#else /* IS_ENABLED(CONFIG_SND_SOC_SOF_INTEL_SOUNDWIRE) */
+static inline int hda_sdw_acpi_scan(struct snd_sof_dev *sdev)
+{
+	return 0;
+}
+
+static inline int hda_sdw_probe(struct snd_sof_dev *sdev)
+{
+	return 0;
+}
+
+static inline int hda_sdw_exit(struct snd_sof_dev *sdev)
+{
+	return 0;
+}
+
+static inline bool hda_dsp_check_sdw_irq(struct snd_sof_dev *sdev)
+{
+	return false;
+}
+
+static inline irqreturn_t hda_dsp_sdw_thread(int irq, void *context)
+{
+	return IRQ_HANDLED;
+}
+
+static inline bool hda_sdw_check_wakeen_irq(struct snd_sof_dev *sdev)
+{
+	return false;
+}
+
+#endif /* IS_ENABLED(CONFIG_SND_SOC_SOF_INTEL_SOUNDWIRE) */
 
 /*
  * Debug
@@ -388,6 +421,10 @@ MODULE_PARM_DESC(use_msi, "SOF HDA use PCI MSI mode");
 #else
 #define hda_use_msi	(1)
 #endif
+
+int sof_hda_position_quirk = SOF_HDA_POSITION_QUIRK_USE_DPIB_REGISTERS;
+module_param_named(position_quirk, sof_hda_position_quirk, int, 0444);
+MODULE_PARM_DESC(position_quirk, "SOF HDaudio position quirk");
 
 static char *hda_model;
 module_param(hda_model, charp, 0444);
@@ -429,11 +466,13 @@ static const struct hda_dsp_msg_code hda_dsp_rom_msg[] = {
 
 static void hda_dsp_get_status(struct snd_sof_dev *sdev)
 {
+	const struct sof_intel_dsp_desc *chip;
 	u32 status;
 	int i;
 
+	chip = get_chip_info(sdev->pdata);
 	status = snd_sof_dsp_read(sdev, HDA_DSP_BAR,
-				  HDA_DSP_SRAM_REG_ROM_STATUS);
+				  chip->rom_status_reg);
 
 	for (i = 0; i < ARRAY_SIZE(hda_dsp_rom_msg); i++) {
 		if (status == hda_dsp_rom_msg[i].code) {
@@ -478,18 +517,19 @@ static void hda_dsp_get_registers(struct snd_sof_dev *sdev,
 /* dump the first 8 dwords representing the extended ROM status */
 static void hda_dsp_dump_ext_rom_status(struct snd_sof_dev *sdev, u32 flags)
 {
+	const struct sof_intel_dsp_desc *chip;
 	char msg[128];
 	int len = 0;
 	u32 value;
 	int i;
 
+	chip = get_chip_info(sdev->pdata);
 	for (i = 0; i < HDA_EXT_ROM_STATUS_SIZE; i++) {
-		value = snd_sof_dsp_read(sdev, HDA_DSP_BAR, HDA_DSP_SRAM_REG_ROM_STATUS + i * 0x4);
+		value = snd_sof_dsp_read(sdev, HDA_DSP_BAR, chip->rom_status_reg + i * 0x4);
 		len += snprintf(msg + len, sizeof(msg) - len, " 0x%x", value);
 	}
 
-	sof_dev_dbg_or_err(sdev->dev, flags & SOF_DBG_DUMP_FORCE_ERR_LEVEL,
-			   "extended rom status: %s", msg);
+	dev_err(sdev->dev, "extended rom status: %s", msg);
 
 }
 
@@ -502,8 +542,7 @@ void hda_dsp_dump(struct snd_sof_dev *sdev, u32 flags)
 	/* print ROM/FW status */
 	hda_dsp_get_status(sdev);
 
-	/* print panic info if FW boot is complete. Otherwise, print the extended ROM status */
-	if (sdev->fw_state == SOF_FW_BOOT_COMPLETE) {
+	if (flags & SOF_DBG_DUMP_REGS) {
 		u32 status = snd_sof_dsp_read(sdev, HDA_DSP_BAR, HDA_DSP_SRAM_REG_FW_STATUS);
 		u32 panic = snd_sof_dsp_read(sdev, HDA_DSP_BAR, HDA_DSP_SRAM_REG_FW_TRACEP);
 
@@ -532,12 +571,9 @@ void hda_ipc_irq_dump(struct snd_sof_dev *sdev)
 	ppsts = snd_sof_dsp_read(sdev, HDA_DSP_PP_BAR, SOF_HDA_REG_PP_PPSTS);
 	rirbsts = snd_hdac_chip_readb(bus, RIRBSTS);
 
-	dev_err(sdev->dev,
-		"error: hda irq intsts 0x%8.8x intlctl 0x%8.8x rirb %2.2x\n",
+	dev_err(sdev->dev, "hda irq intsts 0x%8.8x intlctl 0x%8.8x rirb %2.2x\n",
 		intsts, intctl, rirbsts);
-	dev_err(sdev->dev,
-		"error: dsp irq ppsts 0x%8.8x adspis 0x%8.8x\n",
-		ppsts, adspis);
+	dev_err(sdev->dev, "dsp irq ppsts 0x%8.8x adspis 0x%8.8x\n", ppsts, adspis);
 }
 
 void hda_ipc_dump(struct snd_sof_dev *sdev)
@@ -555,8 +591,7 @@ void hda_ipc_dump(struct snd_sof_dev *sdev)
 
 	/* dump the IPC regs */
 	/* TODO: parse the raw msg */
-	dev_err(sdev->dev,
-		"error: host status 0x%8.8x dsp status 0x%8.8x mask 0x%8.8x\n",
+	dev_err(sdev->dev, "host status 0x%8.8x dsp status 0x%8.8x mask 0x%8.8x\n",
 		hipcie, hipct, hipcctl);
 }
 
@@ -573,7 +608,10 @@ static int hda_init(struct snd_sof_dev *sdev)
 	/* HDA bus init */
 	sof_hda_bus_init(bus, &pci->dev);
 
-	bus->use_posbuf = 1;
+	if (sof_hda_position_quirk == SOF_HDA_POSITION_QUIRK_USE_DPIB_REGISTERS)
+		bus->use_posbuf = 0;
+	else
+		bus->use_posbuf = 1;
 	bus->bdl_pos_adj = 0;
 	bus->sync_write = 1;
 
@@ -772,6 +810,20 @@ skip_soundwire:
 	return 0;
 }
 
+static void hda_check_for_state_change(struct snd_sof_dev *sdev)
+{
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_HDA)
+	struct hdac_bus *bus = sof_to_bus(sdev);
+	unsigned int codec_mask;
+
+	codec_mask = snd_hdac_chip_readw(bus, STATESTS);
+	if (codec_mask) {
+		hda_codec_jack_check(sdev);
+		snd_hdac_chip_writew(bus, STATESTS, codec_mask);
+	}
+#endif
+}
+
 static irqreturn_t hda_dsp_interrupt_handler(int irq, void *context)
 {
 	struct snd_sof_dev *sdev = context;
@@ -813,6 +865,8 @@ static irqreturn_t hda_dsp_interrupt_thread(int irq, void *context)
 	if (hda_sdw_check_wakeen_irq(sdev))
 		hda_sdw_process_wakeen(sdev);
 
+	hda_check_for_state_change(sdev);
+
 	/* enable GIE interrupt */
 	snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR,
 				SOF_HDA_INTCTL,
@@ -853,6 +907,8 @@ int hda_dsp_probe(struct snd_sof_dev *sdev)
 		ret = -EIO;
 		goto err;
 	}
+
+	sdev->num_cores = chip->cores_num;
 
 	hdev = devm_kzalloc(sdev->dev, sizeof(*hdev), GFP_KERNEL);
 	if (!hdev)
@@ -989,9 +1045,9 @@ err:
 int hda_dsp_remove(struct snd_sof_dev *sdev)
 {
 	struct sof_intel_hda_dev *hda = sdev->pdata->hw_pdata;
+	const struct sof_intel_dsp_desc *chip = hda->desc;
 	struct hdac_bus *bus = sof_to_bus(sdev);
 	struct pci_dev *pci = to_pci_dev(sdev->dev);
-	const struct sof_intel_dsp_desc *chip = hda->desc;
 
 	/* cancel any attempt for DSP D0I3 */
 	cancel_delayed_work_sync(&hda->d0i3_work);
@@ -1016,7 +1072,7 @@ int hda_dsp_remove(struct snd_sof_dev *sdev)
 
 	/* disable cores */
 	if (chip)
-		snd_sof_dsp_core_power_down(sdev, chip->host_managed_cores_mask);
+		hda_dsp_core_reset_power_down(sdev, chip->host_managed_cores_mask);
 
 	/* disable DSP */
 	snd_sof_dsp_update_bits(sdev, HDA_DSP_PP_BAR, SOF_HDA_REG_PP_PPCTL,
@@ -1363,6 +1419,16 @@ int hda_pci_intel_probe(struct pci_dev *pci, const struct pci_device_id *pci_id)
 	return sof_pci_probe(pci, pci_id);
 }
 EXPORT_SYMBOL_NS(hda_pci_intel_probe, SND_SOC_SOF_INTEL_HDA_COMMON);
+
+int hda_register_clients(struct snd_sof_dev *sdev)
+{
+	return hda_probes_register(sdev);
+}
+
+void hda_unregister_clients(struct snd_sof_dev *sdev)
+{
+	hda_probes_unregister(sdev);
+}
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_IMPORT_NS(SND_SOC_SOF_PCI_DEV);

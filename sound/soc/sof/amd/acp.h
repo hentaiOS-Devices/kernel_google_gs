@@ -64,8 +64,11 @@
 #define MBOX_READY_MASK				0x80000000
 #define MBOX_STATUS_MASK			0xFFFF
 
-#define BOX_SIZE_512                            0x200
-#define BOX_SIZE_1024                           0x400
+#define BOX_SIZE_512				0x200
+#define BOX_SIZE_1024				0x400
+
+#define EXCEPT_MAX_HDR_SIZE			0x400
+#define AMD_STACK_DUMP_SIZE			32
 
 struct  acp_atu_grp_pte {
 	u32 low;
@@ -136,6 +139,7 @@ struct acp_dsp_stream {
 	int stream_tag;
 	int active;
 	unsigned int reg_offset;
+	size_t posn_offset;
 };
 
 /* Common device data struct for ACP devices */
@@ -152,18 +156,6 @@ struct acp_dev_data {
 	struct acp_dsp_stream stream_buf[ACP_MAX_STREAM];
 	struct acp_dsp_stream *dtrace_stream;
 	struct pci_dev *smn_dev;
-};
-
-enum acp_pcm_types {
-	I2S_BT = 0,
-	I2S_SP,
-	PDM_DMIC,
-	PCM_NONE,
-};
-
-struct acp_pcm_table {
-	u8 pcm_index;
-	char *pcm_name;
 };
 
 void memcpy_to_scratch(struct snd_sof_dev *sdev, u32 offset, unsigned int *src, size_t bytes);
@@ -217,7 +209,8 @@ int acp_pcm_open(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream);
 int acp_pcm_close(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream);
 int acp_pcm_hw_params(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream,
 		      struct snd_pcm_hw_params *params, struct sof_ipc_stream_params *ipc_params);
-snd_pcm_uframes_t acp_pcm_pointer(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream);
+snd_pcm_uframes_t acp_pcm_pointer(struct snd_sof_dev *sdev,
+				  struct snd_pcm_substream *substream);
 
 extern const struct snd_sof_dsp_ops sof_renoir_ops;
 
@@ -225,12 +218,16 @@ extern const struct snd_sof_dsp_ops sof_renoir_ops;
 int snd_amd_acp_find_config(struct pci_dev *pci);
 
 /* Trace */
-int acp_sof_trace_init(struct snd_sof_dev *sdev, u32 *stream_tag);
+int acp_sof_trace_init(struct snd_sof_dev *sdev,
+		       struct sof_ipc_dma_trace_params_ext *dtrace_params);
 int acp_sof_trace_release(struct snd_sof_dev *sdev);
 
 struct sof_amd_acp_desc {
 	unsigned int host_bridge_id;
 };
+
+void amd_sof_ipc_dump(struct snd_sof_dev *sdev);
+void amd_sof_dump(struct snd_sof_dev *sdev, u32 flags);
 
 static inline const struct sof_amd_acp_desc *get_chip_info(struct snd_sof_pdata *pdata)
 {

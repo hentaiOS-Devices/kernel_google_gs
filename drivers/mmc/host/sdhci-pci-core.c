@@ -981,12 +981,10 @@ static int glk_emmc_probe_slot(struct sdhci_pci_slot *slot)
 		slot->host->mmc->caps2 |= MMC_CAP2_CQE;
 
 	if (slot->chip->pdev->device != PCI_DEVICE_ID_INTEL_GLK_EMMC) {
-		if (jsl_broken_hs400es(slot)) {
-			slot->host->mmc->caps2 |= MMC_CAP2_HS400;
-		} else {
+		if (!jsl_broken_hs400es(slot)) {
 			slot->host->mmc->caps2 |= MMC_CAP2_HS400_ES;
 			slot->host->mmc_host_ops.hs400_enhanced_strobe =
-						intel_hs400_enhanced_strobe;
+							intel_hs400_enhanced_strobe;
 		}
 		slot->host->mmc->caps2 |= MMC_CAP2_CQE_DCMD;
 	}
@@ -1801,6 +1799,8 @@ static int amd_probe(struct sdhci_pci_chip *chip)
 		}
 	}
 
+	pci_dev_put(smbus_dev);
+
 	if (gen == AMD_CHIPSET_BEFORE_ML || gen == AMD_CHIPSET_CZ)
 		chip->quirks2 |= SDHCI_QUIRK2_CLEAR_TRANSFERMODE_REG_BEFORE_CMD;
 
@@ -2392,7 +2392,8 @@ static struct pci_driver sdhci_driver = {
 	.probe =	sdhci_pci_probe,
 	.remove =	sdhci_pci_remove,
 	.driver =	{
-		.pm =   &sdhci_pci_pm_ops
+		.pm =   &sdhci_pci_pm_ops,
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 

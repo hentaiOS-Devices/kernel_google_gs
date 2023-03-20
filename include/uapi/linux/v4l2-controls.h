@@ -802,6 +802,87 @@ enum v4l2_mpeg_video_frame_skip_mode {
 #define V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY		(V4L2_CID_CODEC_BASE + 653)
 #define V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY_ENABLE	(V4L2_CID_CODEC_BASE + 654)
 
+/**
+ * enum v4l2_mpeg_video_av1_profile - AV1 profiles
+ *
+ * @V4L2_MPEG_VIDEO_AV1_PROFILE_MAIN: compliant decoders must be able to decode
+ * streams with seq_profile equal to 0.
+ * @V4L2_MPEG_VIDEO_PROFILE_HIGH: compliant decoders must be able to decode
+ * streams with seq_profile equal to 0.
+ * @V4L2_MPEG_VIDEO_PROFILE_PROFESSIONAL: compliant decoders must be able to
+ * decode streams with seq_profile equal to 0.
+ *
+ * Conveys the highest profile a decoder can work with.
+ */
+#define V4L2_CID_MPEG_VIDEO_AV1_PROFILE (V4L2_CID_CODEC_BASE + 655)
+enum v4l2_mpeg_video_av1_profile {
+	V4L2_MPEG_VIDEO_AV1_PROFILE_MAIN = 0,
+	V4L2_MPEG_VIDEO_AV1_PROFILE_HIGH = 1,
+	V4L2_MPEG_VIDEO_AV1_PROFILE_PROFESSIONAL = 2,
+};
+
+/**
+ * enum v4l2_stateless_av1_level - AV1 levels
+ *
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_2_0: Level 2.0.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_2_1: Level 2.1.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_2_2: Level 2.2.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_2_3: Level 2.3.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_3_0: Level 3.0.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_3_1: Level 3.1.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_3_2: Level 3.2.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_3_3: Level 3.3.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_4_0: Level 4.0.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_4_1: Level 4.1.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_4_2: Level 4.2.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_4_3: Level 4.3.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_5_0: Level 5.0.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_5_1: Level 5.1.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_5_2: Level 5.2.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_5_3: Level 5.3.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_6_0: Level 6.0.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_6_1: Level 6.1.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_6_2: Level 6.2.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_6_3: Level 6.3.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_7_0: Level 7.0.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_7_2: Level 7.2.
+ * @V4L2_MPEG_VIDEO_AV1_LEVEL_7_3: Level 7.3.
+ *
+ * Conveys the highest level a decoder can work with.
+ */
+#define V4L2_CID_MPEG_VIDEO_AV1_LEVEL (V4L2_CID_CODEC_BASE+ 656)
+enum v4l2_mpeg_video_av1_level {
+	V4L2_MPEG_VIDEO_AV1_LEVEL_2_0 = 0,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_2_1 = 1,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_2_2 = 2,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_2_3 = 3,
+
+	V4L2_MPEG_VIDEO_AV1_LEVEL_3_0 = 4,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_3_1 = 5,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_3_2 = 6,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_3_3 = 7,
+
+	V4L2_MPEG_VIDEO_AV1_LEVEL_4_0 = 8,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_4_1 = 9,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_4_2 = 10,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_4_3 = 11,
+
+	V4L2_MPEG_VIDEO_AV1_LEVEL_5_0 = 12,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_5_1 = 13,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_5_2 = 14,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_5_3 = 15,
+
+	V4L2_MPEG_VIDEO_AV1_LEVEL_6_0 = 16,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_6_1 = 17,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_6_2 = 18,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_6_3 = 19,
+
+	V4L2_MPEG_VIDEO_AV1_LEVEL_7_0 = 20,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_7_1 = 21,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_7_2 = 22,
+	V4L2_MPEG_VIDEO_AV1_LEVEL_7_3 = 23
+};
+
 /*  MPEG-class control IDs specific to the CX2341x driver as defined by V4L2 */
 #define V4L2_CID_CODEC_CX2341X_BASE				(V4L2_CTRL_CLASS_CODEC | 0x1000)
 #define V4L2_CID_MPEG_CX2341X_VIDEO_SPATIAL_FILTER_MODE		(V4L2_CID_CODEC_CX2341X_BASE+0)
@@ -2836,7 +2917,7 @@ struct v4l2_ctrl_av1_sequence {
  *
  * Represents a single AV1 tile inside an AV1 Tile Group. Note that MiRowStart,
  * MiRowEnd, MiColStart and MiColEnd can be retrieved from struct
- * v4l2_av1_tile_info in struct v4l2_ctrl_av1_frame using tile_row and
+ * v4l2_av1_tile_info in struct v4l2_ctrl_av1_frame_header using tile_row and
  * tile_col. See section 6.10.1 "General tile group OBU semantics" for more
  * details.
  *
@@ -2884,7 +2965,6 @@ enum v4l2_av1_warp_model {
  * @V4L2_AV1_REF_BWDREF_FRAME: BWD Reference Frame
  * @V4L2_AV1_REF_ALTREF2_FRAME: Alternative2 Reference Frame
  * @V4L2_AV1_REF_ALTREF_FRAME: Alternative Reference Frame
- * @V4L2_AV1_NUM_REF_FRAMES: Total Reference Frame Number
  */
 enum v4l2_av1_reference_frame {
 	V4L2_AV1_REF_INTRA_FRAME = 0,
@@ -2895,7 +2975,6 @@ enum v4l2_av1_reference_frame {
 	V4L2_AV1_REF_BWDREF_FRAME = 5,
 	V4L2_AV1_REF_ALTREF2_FRAME = 6,
 	V4L2_AV1_REF_ALTREF_FRAME = 7,
-	V4L2_AV1_NUM_REF_FRAMES,
 };
 
 #define V4L2_AV1_GLOBAL_MOTION_IS_INVALID(ref) (1 << (ref))
@@ -2921,7 +3000,7 @@ enum v4l2_av1_reference_frame {
 struct v4l2_av1_global_motion {
 	__u8 flags[V4L2_AV1_TOTAL_REFS_PER_FRAME];
 	enum v4l2_av1_warp_model type[V4L2_AV1_TOTAL_REFS_PER_FRAME];
-	__u32 params[V4L2_AV1_TOTAL_REFS_PER_FRAME][6];
+	__s32 params[V4L2_AV1_TOTAL_REFS_PER_FRAME][6];
 	__u8 invalid;
 };
 
@@ -3226,7 +3305,7 @@ enum v4l2_av1_tx_mode {
  * @cdef: cdef params
  * @loop_restoration: loop restoration params
  * @global_motion: global motion params
- * @flags: see V4L2_AV1_FRAME_FLAG_{}
+ * @flags: see V4L2_AV1_FRAME_HEADER_FLAG_{}
  * @frame_type: specifies the AV1 frame type
  * @order_hint: specifies OrderHintBits least significant bits of the expected
  * output order for this frame.
@@ -3253,10 +3332,10 @@ enum v4l2_av1_tx_mode {
  * @refresh_frame_flags: contains a bitmask that specifies which reference frame
  * slots will be updated with the current frame after it is decoded.
  * @order_hints: specifies the expected output order hint for each reference
- * frame.
- * @last_frame_idx: specifies the reference frame to use for LAST_FRAME.
- * @gold_frame_idx: specifies the reference frame to use for GOLDEN_FRAME.
- * refs
+ * frame. This field corresponds to the OrderHints variable from the
+ * specification (section 5.9.2. Uncompressed header syntax). As such, this is
+ * only used for non-intra frames and ignored otherwise. order_hints[0] is
+ * always ignored.
  * @reference_frame_ts: the V4L2 timestamp of the reference frame slots.
  * @ref_frame_idx: used to index into @reference_frame_ts when decoding
  * inter-frames. The meaning of this array is the same as in the specification.
@@ -3289,93 +3368,10 @@ struct v4l2_ctrl_av1_frame {
 	__u8 primary_ref_frame;
 	__u32 buffer_removal_time[V4L2_AV1_MAX_OPERATING_POINTS];
 	__u8 refresh_frame_flags;
-	__u32 order_hints[V4L2_AV1_NUM_REF_FRAMES];
-	__s8 last_frame_idx;
-	__s8 gold_frame_idx;
+	__u32 order_hints[V4L2_AV1_TOTAL_REFS_PER_FRAME];
 	__u64 reference_frame_ts[V4L2_AV1_TOTAL_REFS_PER_FRAME];
-	__u8 ref_frame_idx[V4L2_AV1_REFS_PER_FRAME];
+	__s8 ref_frame_idx[V4L2_AV1_REFS_PER_FRAME];
 	__u8 skip_mode_frame[2];
-};
-
-/**
- * enum v4l2_stateless_av1_profile - AV1 profiles
- *
- * @V4L2_STATELESS_AV1_PROFILE_MAIN: compliant decoders must be able to decode
- * streams with seq_profile equal to 0.
- * @V4L2_STATELESS_PROFILE_HIGH: compliant decoders must be able to decode
- * streams with seq_profile equal to 0.
- * @V4L2_STATELESS_PROFILE_PROFESSIONAL: compliant decoders must be able to
- * decode streams with seq_profile equal to 0.
- *
- * Conveys the highest profile a decoder can work with.
- */
-#define V4L2_CID_STATELESS_AV1_PROFILE (V4L2_CID_CODEC_STATELESS_BASE + 503)
-enum v4l2_stateless_av1_profile {
-	V4L2_STATELESS_AV1_PROFILE_MAIN = 0,
-	V4L2_STATELESS_AV1_PROFILE_HIGH = 1,
-	V4L2_STATELESS_AV1_PROFILE_PROFESSIONAL = 2,
-};
-
-/**
- * enum v4l2_stateless_av1_level - AV1 levels
- *
- * @V4L2_STATELESS_AV1_LEVEL_2_0: Level 2.0.
- * @V4L2_STATELESS_AV1_LEVEL_2_1: Level 2.1.
- * @V4L2_STATELESS_AV1_LEVEL_2_2: Level 2.2.
- * @V4L2_STATELESS_AV1_LEVEL_2_3: Level 2.3.
- * @V4L2_STATELESS_AV1_LEVEL_3_0: Level 3.0.
- * @V4L2_STATELESS_AV1_LEVEL_3_1: Level 3.1.
- * @V4L2_STATELESS_AV1_LEVEL_3_2: Level 3.2.
- * @V4L2_STATELESS_AV1_LEVEL_3_3: Level 3.3.
- * @V4L2_STATELESS_AV1_LEVEL_4_0: Level 4.0.
- * @V4L2_STATELESS_AV1_LEVEL_4_1: Level 4.1.
- * @V4L2_STATELESS_AV1_LEVEL_4_2: Level 4.2.
- * @V4L2_STATELESS_AV1_LEVEL_4_3: Level 4.3.
- * @V4L2_STATELESS_AV1_LEVEL_5_0: Level 5.0.
- * @V4L2_STATELESS_AV1_LEVEL_5_1: Level 5.1.
- * @V4L2_STATELESS_AV1_LEVEL_5_2: Level 5.2.
- * @V4L2_STATELESS_AV1_LEVEL_5_3: Level 5.3.
- * @V4L2_STATELESS_AV1_LEVEL_6_0: Level 6.0.
- * @V4L2_STATELESS_AV1_LEVEL_6_1: Level 6.1.
- * @V4L2_STATELESS_AV1_LEVEL_6_2: Level 6.2.
- * @V4L2_STATELESS_AV1_LEVEL_6_3: Level 6.3.
- * @V4L2_STATELESS_AV1_LEVEL_7_0: Level 7.0.
- * @V4L2_STATELESS_AV1_LEVEL_7_2: Level 7.2.
- * @V4L2_STATELESS_AV1_LEVEL_7_3: Level 7.3.
- *
- * Conveys the highest level a decoder can work with.
- */
-#define V4L2_CID_STATELESS_AV1_LEVEL (V4L2_CID_CODEC_STATELESS_BASE + 504)
-enum v4l2_stateless_av1_level {
-	V4L2_STATELESS_AV1_LEVEL_2_0 = 0,
-	V4L2_STATELESS_AV1_LEVEL_2_1 = 1,
-	V4L2_STATELESS_AV1_LEVEL_2_2 = 2,
-	V4L2_STATELESS_AV1_LEVEL_2_3 = 3,
-
-	V4L2_STATELESS_AV1_LEVEL_3_0 = 4,
-	V4L2_STATELESS_AV1_LEVEL_3_1 = 5,
-	V4L2_STATELESS_AV1_LEVEL_3_2 = 6,
-	V4L2_STATELESS_AV1_LEVEL_3_3 = 7,
-
-	V4L2_STATELESS_AV1_LEVEL_4_0 = 8,
-	V4L2_STATELESS_AV1_LEVEL_4_1 = 9,
-	V4L2_STATELESS_AV1_LEVEL_4_2 = 10,
-	V4L2_STATELESS_AV1_LEVEL_4_3 = 11,
-
-	V4L2_STATELESS_AV1_LEVEL_5_0 = 12,
-	V4L2_STATELESS_AV1_LEVEL_5_1 = 13,
-	V4L2_STATELESS_AV1_LEVEL_5_2 = 14,
-	V4L2_STATELESS_AV1_LEVEL_5_3 = 15,
-
-	V4L2_STATELESS_AV1_LEVEL_6_0 = 16,
-	V4L2_STATELESS_AV1_LEVEL_6_1 = 17,
-	V4L2_STATELESS_AV1_LEVEL_6_2 = 18,
-	V4L2_STATELESS_AV1_LEVEL_6_3 = 19,
-
-	V4L2_STATELESS_AV1_LEVEL_7_0 = 20,
-	V4L2_STATELESS_AV1_LEVEL_7_1 = 21,
-	V4L2_STATELESS_AV1_LEVEL_7_2 = 22,
-	V4L2_STATELESS_AV1_LEVEL_7_3 = 23
 };
 
 #define V4L2_AV1_FILM_GRAIN_FLAG_APPLY_GRAIN 0x1
@@ -3418,7 +3414,7 @@ enum v4l2_stateless_av1_level {
  * on the scale of 0..255.
  * @point_cr_scaling:  represents the scaling (output) value for the i-th point
  * of the piecewise linear scaling function for cr component.
- * @grain_scaling_minus_8: represents the shift – 8 applied to the values of the
+ * @grain_scaling_minus_8: represents the shift - 8 applied to the values of the
  * chroma component. The grain_scaling_minus_8 can take values of 0..3 and
  * determines the range and quantization step of the standard deviation of film
  * grain.

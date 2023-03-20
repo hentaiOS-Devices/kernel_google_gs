@@ -51,6 +51,7 @@
 #include "display/intel_dmc.h"
 #include "display/intel_display_types.h"
 #include "display/intel_dp.h"
+#include "display/intel_dpt.h"
 #include "display/intel_fbdev.h"
 #include "display/intel_hotplug.h"
 #include "display/intel_overlay.h"
@@ -91,9 +92,6 @@
 #include "intel_pm.h"
 #include "intel_region_ttm.h"
 #include "vlv_suspend.h"
-
-/* Intel Rapid Start Technology ACPI device name */
-static const char irst_name[] = "INT3392";
 
 static const struct drm_driver driver;
 
@@ -999,12 +997,9 @@ static int i915_driver_open(struct drm_device *dev, struct drm_file *file)
  */
 static void i915_driver_lastclose(struct drm_device *dev)
 {
-	struct drm_i915_private *i915 = to_i915(dev);
-
 	intel_fbdev_restore_mode(dev);
 
-	if (HAS_DISPLAY(i915))
-		vga_switcheroo_process_delayed_switch();
+	vga_switcheroo_process_delayed_switch();
 }
 
 static void i915_driver_postclose(struct drm_device *dev, struct drm_file *file)
@@ -1102,6 +1097,13 @@ static bool suspend_to_idle(struct drm_i915_private *dev_priv)
 	return false;
 }
 
+static void i915_drm_complete(struct drm_device *dev)
+{
+	struct drm_i915_private *i915 = to_i915(dev);
+
+	intel_pxp_resume_complete(&(i915->gt.pxp));
+}
+
 static int i915_drm_prepare(struct drm_device *dev)
 {
 	struct drm_i915_private *i915 = to_i915(dev);
@@ -1142,6 +1144,8 @@ static int i915_drm_suspend(struct drm_device *dev)
 
 	intel_suspend_hw(dev_priv);
 
+	/* Must be called before GGTT is suspended. */
+	intel_dpt_suspend(dev_priv);
 	i915_ggtt_suspend(&dev_priv->ggtt);
 
 	i915_save_display(dev_priv);
@@ -1258,6 +1262,8 @@ static int i915_drm_resume(struct drm_device *dev)
 		drm_err(&dev_priv->drm, "failed to re-enable GGTT\n");
 
 	i915_ggtt_resume(&dev_priv->ggtt);
+	/* Must be called after GGTT is resumed. */
+	intel_dpt_resume(dev_priv);
 
 	intel_dmc_ucode_resume(dev_priv);
 
@@ -1417,8 +1423,6 @@ static int i915_pm_suspend(struct device *kdev)
 		return -ENODEV;
 	}
 
-	i915_ggtt_mark_pte_lost(i915, false);
-
 	if (i915->drm.switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
 
@@ -1471,15 +1475,17 @@ static int i915_pm_resume(struct device *kdev)
 	if (i915->drm.switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
 
-	/*
-	 * If IRST is enabled, or if we can't detect whether it's enabled,
-	 * then we must assume we lost the GGTT page table entries, since
-	 * they are not retained if IRST decided to enter S4.
-	 */
-	if (!IS_ENABLED(CONFIG_ACPI) || acpi_dev_present(irst_name, NULL, -1))
-		i915_ggtt_mark_pte_lost(i915, true);
-
 	return i915_drm_resume(&i915->drm);
+}
+
+static void i915_pm_complete(struct device *kdev)
+{
+	struct drm_i915_private *i915 = kdev_to_i915(kdev);
+
+	if (i915->drm.switch_power_state == DRM_SWITCH_POWER_OFF)
+		return;
+
+	i915_drm_complete(&i915->drm);
 }
 
 /* freeze: before creating the hibernation_image */
@@ -1538,9 +1544,6 @@ static int i915_pm_restore_early(struct device *kdev)
 
 static int i915_pm_restore(struct device *kdev)
 {
-	struct drm_i915_private *i915 = kdev_to_i915(kdev);
-
-	i915_ggtt_mark_pte_lost(i915, true);
 	return i915_pm_resume(kdev);
 }
 
@@ -1694,6 +1697,7 @@ const struct dev_pm_ops i915_pm_ops = {
 	.suspend_late = i915_pm_suspend_late,
 	.resume_early = i915_pm_resume_early,
 	.resume = i915_pm_resume,
+	.complete = i915_pm_complete,
 
 	/*
 	 * S4 event handlers

@@ -248,18 +248,10 @@ still cause this situation.
       - ``p_av1_tile_group_entry``
       - A pointer to a struct :c:type:`v4l2_ctrl_av1_tile_group_entry`. Valid if this control is
         of type ``V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY``.
-    * - struct :c:type:`v4l2_ctrl_av1_frame` *
+    * - struct :c:type:`v4l2_ctrl_av1_frame_header` *
       - ``p_av1_frame``
       - A pointer to a struct :c:type:`v4l2_ctrl_av1_frame`. Valid if this control is
         of type ``V4L2_CTRL_TYPE_AV1_FRAME``.
-    * - struct :c:type:`v4l2_ctrl_av1_profile` *
-      - ``p_av1_profile``
-      - A pointer to a struct :c:type:`v4l2_ctrl_av1_profile`. Valid if this control is
-        of type ``V4L2_CTRL_TYPE_AV1_PROFILE``.
-    * - struct :c:type:`v4l2_ctrl_av1_level` *
-      - ``p_av1_level``
-      - A pointer to a struct :c:type:`v4l2_ctrl_av1_level`. Valid if this control is
-        of type ``V4L2_CTRL_TYPE_AV1_LEVEL``.
     * - struct :c:type:`v4l2_ctrl_av1_film_grain` *
       - ``p_av1_film_grain``
       - A pointer to a struct :c:type:`v4l2_ctrl_av1_film_grain`. Valid if this control is

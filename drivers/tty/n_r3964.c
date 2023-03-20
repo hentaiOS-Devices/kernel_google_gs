@@ -1018,7 +1018,7 @@ static void r3964_close(struct tty_struct *tty)
 	 * Make sure that our task queue isn't activated.  If it
 	 * is, take it out of the linked list.
 	 */
-	del_timer_sync(&pInfo->tmr);
+	timer_shutdown_sync(&pInfo->tmr);
 
 	/* Remove client-structs and message queues: */
 	pClient = pInfo->firstClient;

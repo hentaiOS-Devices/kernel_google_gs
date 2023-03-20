@@ -1921,21 +1921,6 @@ void __hci_req_update_scan(struct hci_request *req)
 	hci_req_add(req, HCI_OP_WRITE_SCAN_ENABLE, 1, &scan);
 }
 
-static int update_scan(struct hci_request *req, unsigned long opt)
-{
-	hci_dev_lock(req->hdev);
-	__hci_req_update_scan(req);
-	hci_dev_unlock(req->hdev);
-	return 0;
-}
-
-static void scan_update_work(struct work_struct *work)
-{
-	struct hci_dev *hdev = container_of(work, struct hci_dev, scan_update);
-
-	hci_req_sync(hdev, update_scan, 0, HCI_CMD_TIMEOUT, NULL);
-}
-
 static u8 get_service_classes(struct hci_dev *hdev)
 {
 	struct bt_uuid *uuid;
@@ -2562,46 +2547,31 @@ static int stop_discovery(struct hci_request *req, unsigned long opt)
 	return 0;
 }
 
-static void start_discov_update(struct work_struct *work)
+static void discov_update(struct work_struct *work)
 {
 	struct hci_dev *hdev = container_of(work, struct hci_dev,
-					    start_discov_update);
+					    discov_update);
 	u8 status = 0;
 
-	BT_DBG("%s old state %u", hdev->name, hdev->discovery.state);
-
-	if (hci_discovery_active(hdev))
-		BT_DBG("discovery was already started");
-	else
+	switch (hdev->discovery.state) {
+	case DISCOVERY_STARTING:
 		start_discovery(hdev, &status);
-
-	mgmt_start_discovery_complete(hdev, status);
-	if (status) {
-		hci_discovery_set_state(hdev, DISCOVERY_STOPPED);
-		BT_ERR("Failed to start discovery: status 0x%02x", status);
-	} else {
-		hci_discovery_set_state(hdev, DISCOVERY_FINDING);
-	}
-}
-
-static void stop_discov_update(struct work_struct *work)
-{
-	struct hci_dev *hdev = container_of(work, struct hci_dev,
-					    stop_discov_update);
-	u8 status = 0;
-
-	BT_DBG("%s old state %u", hdev->name, hdev->discovery.state);
-
-	if (hdev->discovery.state == DISCOVERY_STOPPED)
-		BT_DBG("discovery was already stopped");
-	else
+		mgmt_start_discovery_complete(hdev, status);
+		if (status)
+			hci_discovery_set_state(hdev, DISCOVERY_STOPPED);
+		else
+			hci_discovery_set_state(hdev, DISCOVERY_FINDING);
+		break;
+	case DISCOVERY_STOPPING:
 		hci_req_sync(hdev, stop_discovery, 0, HCI_CMD_TIMEOUT, &status);
-
-	mgmt_stop_discovery_complete(hdev, status);
-	if (status)
-		BT_ERR("Failed to stop discovery: status 0x%02x", status);
-	else
-		hci_discovery_set_state(hdev, DISCOVERY_STOPPED);
+		mgmt_stop_discovery_complete(hdev, status);
+		if (!status)
+			hci_discovery_set_state(hdev, DISCOVERY_STOPPED);
+		break;
+	case DISCOVERY_STOPPED:
+	default:
+		return;
+	}
 }
 
 static void discov_off(struct work_struct *work)
@@ -2739,9 +2709,7 @@ int __hci_req_hci_power_on(struct hci_dev *hdev)
 
 void hci_request_setup(struct hci_dev *hdev)
 {
-	INIT_WORK(&hdev->start_discov_update, start_discov_update);
-	INIT_WORK(&hdev->stop_discov_update, stop_discov_update);
-	INIT_WORK(&hdev->scan_update, scan_update_work);
+	INIT_WORK(&hdev->discov_update, discov_update);
 	INIT_DELAYED_WORK(&hdev->discov_off, discov_off);
 	INIT_DELAYED_WORK(&hdev->le_scan_disable, le_scan_disable_work);
 	INIT_DELAYED_WORK(&hdev->le_scan_restart, le_scan_restart_work);
@@ -2753,9 +2721,7 @@ void hci_request_cancel_all(struct hci_dev *hdev)
 {
 	__hci_cmd_sync_cancel(hdev, ENODEV);
 
-	cancel_work_sync(&hdev->start_discov_update);
-	cancel_work_sync(&hdev->stop_discov_update);
-	cancel_work_sync(&hdev->scan_update);
+	cancel_work_sync(&hdev->discov_update);
 	cancel_delayed_work_sync(&hdev->discov_off);
 	cancel_delayed_work_sync(&hdev->le_scan_disable);
 	cancel_delayed_work_sync(&hdev->le_scan_restart);

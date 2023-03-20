@@ -11,7 +11,7 @@
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
-#include <linux/platform_device.h>
+#include <linux/auxiliary_bus.h>
 #include <sound/pcm_params.h>
 #include <linux/pm_runtime.h>
 #include <sound/soc.h>
@@ -39,80 +39,6 @@
 static int md_flags;
 module_param_named(sdw_md_flags, md_flags, int, 0444);
 MODULE_PARM_DESC(sdw_md_flags, "SoundWire Intel Master device flags (0x0 all off)");
-
-/* Intel SHIM Registers Definition */
-#define SDW_SHIM_LCAP			0x0
-#define SDW_SHIM_LCTL			0x4
-#define SDW_SHIM_IPPTR			0x8
-#define SDW_SHIM_SYNC			0xC
-
-#define SDW_SHIM_CTLSCAP(x)		(0x010 + 0x60 * (x))
-#define SDW_SHIM_CTLS0CM(x)		(0x012 + 0x60 * (x))
-#define SDW_SHIM_CTLS1CM(x)		(0x014 + 0x60 * (x))
-#define SDW_SHIM_CTLS2CM(x)		(0x016 + 0x60 * (x))
-#define SDW_SHIM_CTLS3CM(x)		(0x018 + 0x60 * (x))
-#define SDW_SHIM_PCMSCAP(x)		(0x020 + 0x60 * (x))
-
-#define SDW_SHIM_PCMSYCHM(x, y)		(0x022 + (0x60 * (x)) + (0x2 * (y)))
-#define SDW_SHIM_PCMSYCHC(x, y)		(0x042 + (0x60 * (x)) + (0x2 * (y)))
-#define SDW_SHIM_PDMSCAP(x)		(0x062 + 0x60 * (x))
-#define SDW_SHIM_IOCTL(x)		(0x06C + 0x60 * (x))
-#define SDW_SHIM_CTMCTL(x)		(0x06E + 0x60 * (x))
-
-#define SDW_SHIM_WAKEEN			0x190
-#define SDW_SHIM_WAKESTS		0x192
-
-#define SDW_SHIM_LCTL_SPA		BIT(0)
-#define SDW_SHIM_LCTL_SPA_MASK		GENMASK(3, 0)
-#define SDW_SHIM_LCTL_CPA		BIT(8)
-#define SDW_SHIM_LCTL_CPA_MASK		GENMASK(11, 8)
-
-#define SDW_SHIM_SYNC_SYNCPRD_VAL_24	(24000 / SDW_CADENCE_GSYNC_KHZ - 1)
-#define SDW_SHIM_SYNC_SYNCPRD_VAL_38_4	(38400 / SDW_CADENCE_GSYNC_KHZ - 1)
-#define SDW_SHIM_SYNC_SYNCPRD		GENMASK(14, 0)
-#define SDW_SHIM_SYNC_SYNCCPU		BIT(15)
-#define SDW_SHIM_SYNC_CMDSYNC_MASK	GENMASK(19, 16)
-#define SDW_SHIM_SYNC_CMDSYNC		BIT(16)
-#define SDW_SHIM_SYNC_SYNCGO		BIT(24)
-
-#define SDW_SHIM_PCMSCAP_ISS		GENMASK(3, 0)
-#define SDW_SHIM_PCMSCAP_OSS		GENMASK(7, 4)
-#define SDW_SHIM_PCMSCAP_BSS		GENMASK(12, 8)
-
-#define SDW_SHIM_PCMSYCM_LCHN		GENMASK(3, 0)
-#define SDW_SHIM_PCMSYCM_HCHN		GENMASK(7, 4)
-#define SDW_SHIM_PCMSYCM_STREAM		GENMASK(13, 8)
-#define SDW_SHIM_PCMSYCM_DIR		BIT(15)
-
-#define SDW_SHIM_PDMSCAP_ISS		GENMASK(3, 0)
-#define SDW_SHIM_PDMSCAP_OSS		GENMASK(7, 4)
-#define SDW_SHIM_PDMSCAP_BSS		GENMASK(12, 8)
-#define SDW_SHIM_PDMSCAP_CPSS		GENMASK(15, 13)
-
-#define SDW_SHIM_IOCTL_MIF		BIT(0)
-#define SDW_SHIM_IOCTL_CO		BIT(1)
-#define SDW_SHIM_IOCTL_COE		BIT(2)
-#define SDW_SHIM_IOCTL_DO		BIT(3)
-#define SDW_SHIM_IOCTL_DOE		BIT(4)
-#define SDW_SHIM_IOCTL_BKE		BIT(5)
-#define SDW_SHIM_IOCTL_WPDD		BIT(6)
-#define SDW_SHIM_IOCTL_CIBD		BIT(8)
-#define SDW_SHIM_IOCTL_DIBD		BIT(9)
-
-#define SDW_SHIM_CTMCTL_DACTQE		BIT(0)
-#define SDW_SHIM_CTMCTL_DODS		BIT(1)
-#define SDW_SHIM_CTMCTL_DOAIS		GENMASK(4, 3)
-
-#define SDW_SHIM_WAKEEN_ENABLE		BIT(0)
-#define SDW_SHIM_WAKESTS_STATUS		BIT(0)
-
-/* Intel ALH Register definitions */
-#define SDW_ALH_STRMZCFG(x)		(0x000 + (0x4 * (x)))
-#define SDW_ALH_NUM_STREAMS		64
-
-#define SDW_ALH_STRMZCFG_DMAT_VAL	0x3
-#define SDW_ALH_STRMZCFG_DMAT		GENMASK(7, 0)
-#define SDW_ALH_STRMZCFG_CHN		GENMASK(19, 16)
 
 enum intel_pdi_type {
 	INTEL_PDI_IN = 0,
@@ -786,7 +712,7 @@ intel_pdi_alh_configure(struct sdw_intel *sdw, struct sdw_cdns_pdi *pdi)
 }
 
 static int intel_params_stream(struct sdw_intel *sdw,
-			       struct snd_pcm_substream *substream,
+			       int stream,
 			       struct snd_soc_dai *dai,
 			       struct snd_pcm_hw_params *hw_params,
 			       int link_id, int alh_stream_id)
@@ -794,7 +720,7 @@ static int intel_params_stream(struct sdw_intel *sdw,
 	struct sdw_intel_link_res *res = sdw->link_res;
 	struct sdw_intel_stream_params_data params_data;
 
-	params_data.substream = substream;
+	params_data.stream = stream; /* direction */
 	params_data.dai = dai;
 	params_data.hw_params = hw_params;
 	params_data.link_id = link_id;
@@ -807,14 +733,14 @@ static int intel_params_stream(struct sdw_intel *sdw,
 }
 
 static int intel_free_stream(struct sdw_intel *sdw,
-			     struct snd_pcm_substream *substream,
+			     int stream,
 			     struct snd_soc_dai *dai,
 			     int link_id)
 {
 	struct sdw_intel_link_res *res = sdw->link_res;
 	struct sdw_intel_stream_free_data free_data;
 
-	free_data.substream = substream;
+	free_data.stream = stream; /* direction */
 	free_data.dai = dai;
 	free_data.link_id = link_id;
 
@@ -951,7 +877,7 @@ static int intel_hw_params(struct snd_pcm_substream *substream,
 	dma->hw_params = params;
 
 	/* Inform DSP about PDI stream number */
-	ret = intel_params_stream(sdw, substream, dai, params,
+	ret = intel_params_stream(sdw, substream->stream, dai, params,
 				  sdw->instance,
 				  pdi->intel_alh_id);
 	if (ret)
@@ -1028,7 +954,7 @@ static int intel_prepare(struct snd_pcm_substream *substream,
 		sdw_cdns_config_stream(cdns, ch, dir, dma->pdi);
 
 		/* Inform DSP about PDI stream number */
-		ret = intel_params_stream(sdw, substream, dai,
+		ret = intel_params_stream(sdw, substream->stream, dai,
 					  dma->hw_params,
 					  sdw->instance,
 					  dma->pdi->intel_alh_id);
@@ -1062,7 +988,7 @@ intel_hw_free(struct snd_pcm_substream *substream, struct snd_soc_dai *dai)
 		return ret;
 	}
 
-	ret = intel_free_stream(sdw, substream, dai, sdw->instance);
+	ret = intel_free_stream(sdw, substream->stream, dai, sdw->instance);
 	if (ret < 0) {
 		dev_err(dai->dev, "intel_free_stream: failed %d", ret);
 		return ret;
@@ -1140,8 +1066,8 @@ static const struct snd_soc_dai_ops intel_pcm_dai_ops = {
 	.prepare = intel_prepare,
 	.hw_free = intel_hw_free,
 	.shutdown = intel_shutdown,
-	.set_sdw_stream = intel_pcm_set_sdw_stream,
-	.get_sdw_stream = intel_get_sdw_stream,
+	.set_stream = intel_pcm_set_sdw_stream,
+	.get_stream = intel_get_sdw_stream,
 };
 
 static const struct snd_soc_dai_ops intel_pdm_dai_ops = {
@@ -1150,8 +1076,8 @@ static const struct snd_soc_dai_ops intel_pdm_dai_ops = {
 	.prepare = intel_prepare,
 	.hw_free = intel_hw_free,
 	.shutdown = intel_shutdown,
-	.set_sdw_stream = intel_pdm_set_sdw_stream,
-	.get_sdw_stream = intel_get_sdw_stream,
+	.set_stream = intel_pdm_set_sdw_stream,
+	.get_stream = intel_get_sdw_stream,
 };
 
 static const struct snd_soc_component_driver dai_component = {
@@ -1328,11 +1254,14 @@ static int intel_init(struct sdw_intel *sdw)
 }
 
 /*
- * probe and init
+ * probe and init (aux_dev_id argument is required by function prototype but not used)
  */
-static int intel_master_probe(struct platform_device *pdev)
+static int intel_link_probe(struct auxiliary_device *auxdev,
+			    const struct auxiliary_device_id *aux_dev_id)
+
 {
-	struct device *dev = &pdev->dev;
+	struct device *dev = &auxdev->dev;
+	struct sdw_intel_link_dev *ldev = auxiliary_dev_to_sdw_intel_link_dev(auxdev);
 	struct sdw_intel *sdw;
 	struct sdw_cdns *cdns;
 	struct sdw_bus *bus;
@@ -1345,14 +1274,14 @@ static int intel_master_probe(struct platform_device *pdev)
 	cdns = &sdw->cdns;
 	bus = &cdns->bus;
 
-	sdw->instance = pdev->id;
-	sdw->link_res = dev_get_platdata(dev);
+	sdw->instance = auxdev->id;
+	sdw->link_res = &ldev->link_res;
 	cdns->dev = dev;
 	cdns->registers = sdw->link_res->registers;
 	cdns->instance = sdw->instance;
 	cdns->msg_count = 0;
 
-	bus->link_id = pdev->id;
+	bus->link_id = auxdev->id;
 
 	sdw_cdns_probe(cdns);
 
@@ -1385,10 +1314,10 @@ static int intel_master_probe(struct platform_device *pdev)
 	return 0;
 }
 
-int intel_master_startup(struct platform_device *pdev)
+int intel_link_startup(struct auxiliary_device *auxdev)
 {
 	struct sdw_cdns_stream_config config;
-	struct device *dev = &pdev->dev;
+	struct device *dev = &auxdev->dev;
 	struct sdw_cdns *cdns = dev_get_drvdata(dev);
 	struct sdw_intel *sdw = cdns_to_intel(cdns);
 	struct sdw_bus *bus = &cdns->bus;
@@ -1524,9 +1453,9 @@ err_init:
 	return ret;
 }
 
-static int intel_master_remove(struct platform_device *pdev)
+static void intel_link_remove(struct auxiliary_device *auxdev)
 {
-	struct device *dev = &pdev->dev;
+	struct device *dev = &auxdev->dev;
 	struct sdw_cdns *cdns = dev_get_drvdata(dev);
 	struct sdw_intel *sdw = cdns_to_intel(cdns);
 	struct sdw_bus *bus = &cdns->bus;
@@ -1542,19 +1471,17 @@ static int intel_master_remove(struct platform_device *pdev)
 		snd_soc_unregister_component(dev);
 	}
 	sdw_bus_master_delete(bus);
-
-	return 0;
 }
 
-int intel_master_process_wakeen_event(struct platform_device *pdev)
+int intel_link_process_wakeen_event(struct auxiliary_device *auxdev)
 {
-	struct device *dev = &pdev->dev;
+	struct device *dev = &auxdev->dev;
 	struct sdw_intel *sdw;
 	struct sdw_bus *bus;
 	void __iomem *shim;
 	u16 wake_sts;
 
-	sdw = platform_get_drvdata(pdev);
+	sdw = dev_get_drvdata(dev);
 	bus = &sdw->cdns.bus;
 
 	if (bus->prop.hw_disabled) {
@@ -1978,17 +1905,22 @@ static const struct dev_pm_ops intel_pm = {
 	SET_RUNTIME_PM_OPS(intel_suspend_runtime, intel_resume_runtime, NULL)
 };
 
-static struct platform_driver sdw_intel_drv = {
-	.probe = intel_master_probe,
-	.remove = intel_master_remove,
-	.driver = {
-		.name = "intel-sdw",
-		.pm = &intel_pm,
-	}
+static const struct auxiliary_device_id intel_link_id_table[] = {
+	{ .name = "soundwire_intel.link" },
+	{},
 };
+MODULE_DEVICE_TABLE(auxiliary, intel_link_id_table);
 
-module_platform_driver(sdw_intel_drv);
+static struct auxiliary_driver sdw_intel_drv = {
+	.probe = intel_link_probe,
+	.remove = intel_link_remove,
+	.driver = {
+		/* auxiliary_driver_register() sets .name to be the modname */
+		.pm = &intel_pm,
+	},
+	.id_table = intel_link_id_table
+};
+module_auxiliary_driver(sdw_intel_drv);
 
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_ALIAS("platform:intel-sdw");
-MODULE_DESCRIPTION("Intel Soundwire Master Driver");
+MODULE_DESCRIPTION("Intel Soundwire Link Driver");

@@ -7,12 +7,11 @@
 #include <linux/component.h>
 #include <linux/iopoll.h>
 #include <linux/irq.h>
-#include <linux/mfd/syscon.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
-#include <linux/regmap.h>
+#include <linux/reset.h>
 
 #include <video/mipi_display.h>
 #include <video/videomode.h>
@@ -145,8 +144,6 @@
 #define DATA_0				(0xff << 16)
 #define DATA_1				(0xff << 24)
 
-#define MMSYS_SW_RST_DSI_B BIT(25)
-
 #define NS_TO_CYCLE(n, c)    ((n) / (c) + (((n) % (c)) ? 1 : 0))
 
 #define MTK_DSI_HOST_IS_READ(type) \
@@ -191,8 +188,7 @@ struct mtk_dsi {
 	struct drm_connector *connector;
 	struct drm_panel *panel;
 	struct phy *phy;
-	struct regmap *mmsys_sw_rst_b;
-	u32 sw_rst_b;
+
 	void __iomem *regs;
 
 	struct clk *engine_clk;
@@ -279,16 +275,6 @@ static void mtk_dsi_enable(struct mtk_dsi *dsi)
 static void mtk_dsi_disable(struct mtk_dsi *dsi)
 {
 	mtk_dsi_mask(dsi, DSI_CON_CTRL, DSI_EN, 0);
-}
-
-static void mtk_dsi_reset_all(struct mtk_dsi *dsi)
-{
-	regmap_update_bits(dsi->mmsys_sw_rst_b, dsi->sw_rst_b,
-			   MMSYS_SW_RST_DSI_B, 0);
-	usleep_range(1000, 1100);
-
-	regmap_update_bits(dsi->mmsys_sw_rst_b, dsi->sw_rst_b,
-			   MMSYS_SW_RST_DSI_B, MMSYS_SW_RST_DSI_B);
 }
 
 static void mtk_dsi_reset_engine(struct mtk_dsi *dsi)
@@ -645,13 +631,10 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 	dsi->data_rate = DIV_ROUND_UP_ULL(dsi->vm.pixelclock * bit_per_pixel,
 					  dsi->lanes);
 
-	if (dsi->panel && drm_panel_prepare_power(dsi->panel))
-		DRM_INFO("can't prepare power the panel\n");
-
 	ret = clk_set_rate(dsi->hs_clk, dsi->data_rate);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set data rate: %d\n", ret);
-		goto err_prepare_power;
+		goto err_refcount;
 	}
 
 	phy_power_on(dsi->phy);
@@ -696,9 +679,7 @@ err_disable_engine_clk:
 	clk_disable_unprepare(dsi->engine_clk);
 err_phy_power_off:
 	phy_power_off(dsi->phy);
-err_prepare_power:
-	if (dsi->panel && drm_panel_unprepare_power(dsi->panel))
-		DRM_INFO("Can't unprepare power the panel\n");
+err_refcount:
 	dsi->refcount--;
 	return ret;
 }
@@ -741,10 +722,6 @@ static void mtk_dsi_poweroff(struct mtk_dsi *dsi)
 	clk_disable_unprepare(dsi->digital_clk);
 
 	phy_power_off(dsi->phy);
-
-	if (dsi->panel && drm_panel_unprepare_power(dsi->panel))
-		DRM_INFO("Can't unprepare power the panel\n");
-
 	dsi->lanes_ready = false;
 }
 
@@ -758,7 +735,7 @@ static void mtk_dsi_lane_ready(struct mtk_dsi *dsi)
 		mtk_dsi_clk_ulp_mode_leave(dsi);
 		mtk_dsi_lane0_ulp_mode_leave(dsi);
 		mtk_dsi_clk_hs_mode(dsi, 0);
-		msleep(20);
+		usleep_range(1000, 3000);
 		/* The reaction time after pulling up the mipi signal for dsi_rx */
 	}
 }
@@ -1106,10 +1083,10 @@ static int mtk_dsi_bind(struct device *dev, struct device *master, void *data)
 	struct mtk_dsi *dsi = dev_get_drvdata(dev);
 
 	ret = mtk_dsi_encoder_init(drm, dsi);
+	if (ret)
+		return ret;
 
-	mtk_dsi_reset_all(dsi);
-
-	return ret;
+	return device_reset_optional(dev);
 }
 
 static void mtk_dsi_unbind(struct device *dev, struct device *master,
@@ -1130,7 +1107,6 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 	struct mtk_dsi *dsi;
 	struct device *dev = &pdev->dev;
 	struct resource *regs;
-	struct regmap *regmap;
 	int irq_num;
 	int ret;
 
@@ -1145,22 +1121,6 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to register DSI host: %d\n", ret);
 		return ret;
 	}
-
-	regmap = syscon_regmap_lookup_by_phandle(dev->of_node,
-						 "mediatek,syscon-dsi");
-	ret = of_property_read_u32_index(dev->of_node, "mediatek,syscon-dsi", 1,
-					 &dsi->sw_rst_b);
-
-	if (IS_ERR(regmap))
-		ret = PTR_ERR(regmap);
-
-	if (ret) {
-		ret = PTR_ERR(regmap);
-		dev_err(dev, "Failed to get mmsys registers: %d\n", ret);
-		return ret;
-	}
-
-	dsi->mmsys_sw_rst_b = regmap;
 
 	ret = drm_of_find_panel_or_bridge(dev->of_node, 0, 0,
 					  &dsi->panel, &dsi->next_bridge);

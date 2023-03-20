@@ -707,6 +707,10 @@ const char * const *v4l2_ctrl_get_menu(u32 id)
 		return vp9_profile;
 	case V4L2_CID_MPEG_VIDEO_VP9_LEVEL:
 		return vp9_level;
+	case V4L2_CID_MPEG_VIDEO_AV1_PROFILE:
+		return av1_profile;
+	case V4L2_CID_MPEG_VIDEO_AV1_LEVEL:
+		return av1_level;
 	case V4L2_CID_JPEG_CHROMA_SUBSAMPLING:
 		return jpeg_chroma_subsampling;
 	case V4L2_CID_DV_TX_MODE:
@@ -737,10 +741,6 @@ const char * const *v4l2_ctrl_get_menu(u32 id)
 		return hevc_decode_mode;
 	case V4L2_CID_STATELESS_HEVC_START_CODE:
 		return hevc_start_code;
-	case V4L2_CID_STATELESS_AV1_PROFILE:
-		return av1_profile;
-	case V4L2_CID_STATELESS_AV1_LEVEL:
-		return av1_level;
 	case V4L2_CID_CAMERA_ORIENTATION:
 		return camera_orientation;
 	default:
@@ -981,6 +981,10 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_VP9_PROFILE:			return "VP9 Profile";
 	case V4L2_CID_MPEG_VIDEO_VP9_LEVEL:			return "VP9 Level";
 
+	/* AV1 controls */
+	case V4L2_CID_MPEG_VIDEO_AV1_PROFILE:			return "AV1 Profile";
+	case V4L2_CID_MPEG_VIDEO_AV1_LEVEL:			return "AV1 Level";
+
 	/* HEVC controls */
 	case V4L2_CID_MPEG_VIDEO_HEVC_I_FRAME_QP:		return "HEVC I-Frame QP Value";
 	case V4L2_CID_MPEG_VIDEO_HEVC_P_FRAME_QP:		return "HEVC P-Frame QP Value";
@@ -1219,10 +1223,8 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_STATELESS_HEVC_START_CODE:		return "HEVC Start Code";
 	case V4L2_CID_STATELESS_HEVC_ENTRY_POINT_OFFSETS:	return "HEVC Entry Point Offsets";
 	case V4L2_CID_STATELESS_AV1_SEQUENCE:			return "AV1 Sequence parameters";
-	case V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY:	        return "AV1 Tile Group Entry";
+	case V4L2_CID_STATELESS_AV1_TILE_GROUP_ENTRY:		return "AV1 Tile Group Entry";
 	case V4L2_CID_STATELESS_AV1_FRAME:			return "AV1 Frame parameters";
-	case V4L2_CID_STATELESS_AV1_PROFILE:			return "AV1 Profile";
-	case V4L2_CID_STATELESS_AV1_LEVEL:			return "AV1 Level";
 	case V4L2_CID_STATELESS_AV1_FILM_GRAIN:			return "AV1 Film Grain";
 
 	/* Colorimetry controls */
@@ -1391,6 +1393,8 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_MPEG_VIDEO_VP8_PROFILE:
 	case V4L2_CID_MPEG_VIDEO_VP9_PROFILE:
 	case V4L2_CID_MPEG_VIDEO_VP9_LEVEL:
+	case V4L2_CID_MPEG_VIDEO_AV1_PROFILE:
+	case V4L2_CID_MPEG_VIDEO_AV1_LEVEL:
 	case V4L2_CID_DETECT_MD_MODE:
 	case V4L2_CID_MPEG_VIDEO_HEVC_PROFILE:
 	case V4L2_CID_MPEG_VIDEO_HEVC_LEVEL:
@@ -1403,8 +1407,6 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_STATELESS_HEVC_START_CODE:
 	case V4L2_CID_STATELESS_H264_DECODE_MODE:
 	case V4L2_CID_STATELESS_H264_START_CODE:
-	case V4L2_CID_STATELESS_AV1_PROFILE:
-	case V4L2_CID_STATELESS_AV1_LEVEL:
 	case V4L2_CID_CAMERA_ORIENTATION:
 		*type = V4L2_CTRL_TYPE_MENU;
 		break;

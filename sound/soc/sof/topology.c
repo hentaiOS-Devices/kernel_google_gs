@@ -1357,69 +1357,6 @@ static int sof_control_unload(struct snd_soc_component *scomp,
  * DAI Topology
  */
 
-/* Static DSP core power management so far, should be extended in the future */
-static int sof_core_enable(struct snd_sof_dev *sdev, int core)
-{
-	struct sof_ipc_pm_core_config pm_core_config = {
-		.hdr = {
-			.cmd = SOF_IPC_GLB_PM_MSG | SOF_IPC_PM_CORE_ENABLE,
-			.size = sizeof(pm_core_config),
-		},
-		.enable_mask = sdev->enabled_cores_mask | BIT(core),
-	};
-	int ret;
-
-	if (sdev->enabled_cores_mask & BIT(core))
-		return 0;
-
-	/* power up the core if it is host managed */
-	ret = snd_sof_dsp_core_power_up(sdev, BIT(core));
-	if (ret < 0) {
-		dev_err(sdev->dev, "error: %d powering up core %d\n",
-			ret, core);
-		return ret;
-	}
-
-	/* Now notify DSP */
-	ret = sof_ipc_tx_message(sdev->ipc, pm_core_config.hdr.cmd,
-				 &pm_core_config, sizeof(pm_core_config),
-				 &pm_core_config, sizeof(pm_core_config));
-	if (ret < 0) {
-		dev_err(sdev->dev, "error: core %d enable ipc failure %d\n",
-			core, ret);
-		goto err;
-	}
-	return ret;
-err:
-	/* power down core if it is host managed and return the original error if this fails too */
-	if (snd_sof_dsp_core_power_down(sdev, BIT(core)) < 0)
-		dev_err(sdev->dev, "error: powering down core %d\n", core);
-
-	return ret;
-}
-
-int sof_pipeline_core_enable(struct snd_sof_dev *sdev,
-			     const struct snd_sof_widget *swidget)
-{
-	const struct sof_ipc_pipe_new *pipeline;
-	int ret;
-
-	if (swidget->id == snd_soc_dapm_scheduler) {
-		pipeline = swidget->private;
-	} else {
-		pipeline = snd_sof_pipeline_find(sdev, swidget->pipeline_id);
-		if (!pipeline)
-			return -ENOENT;
-	}
-
-	/* First enable the pipeline core */
-	ret = sof_core_enable(sdev, pipeline->core);
-	if (ret < 0)
-		return ret;
-
-	return sof_core_enable(sdev, swidget->core);
-}
-
 static int sof_connect_dai_widget(struct snd_soc_component *scomp,
 				  struct snd_soc_dapm_widget *w,
 				  struct snd_soc_tplg_dapm_widget *tw,
@@ -1718,23 +1655,6 @@ err:
 /*
  * Pipeline Topology
  */
-int sof_load_pipeline_ipc(struct snd_sof_dev *sdev,
-			  struct sof_ipc_pipe_new *pipeline,
-			  struct sof_ipc_comp_reply *r)
-{
-	int ret = sof_core_enable(sdev, pipeline->core);
-
-	if (ret < 0)
-		return ret;
-
-	ret = sof_ipc_tx_message(sdev->ipc, pipeline->hdr.cmd, pipeline,
-				 sizeof(*pipeline), r, sizeof(*r));
-	if (ret < 0)
-		dev_err(sdev->dev, "error: load pipeline ipc failure\n");
-
-	return ret;
-}
-
 static int sof_widget_load_pipeline(struct snd_soc_component *scomp, int index,
 				    struct snd_sof_widget *swidget,
 				    struct snd_soc_tplg_dapm_widget *tw)
@@ -1786,9 +1706,17 @@ static int sof_widget_load_pipeline(struct snd_soc_component *scomp, int index,
 		goto err;
 	}
 
-	dev_dbg(scomp->dev, "pipeline %s: period %d pri %d mips %d core %d frames %d\n",
+	if (sof_debug_check_flag(SOF_DBG_DISABLE_MULTICORE))
+		pipeline->core = SOF_DSP_PRIMARY_CORE;
+
+	if (sof_debug_check_flag(SOF_DBG_DYNAMIC_PIPELINES_OVERRIDE))
+		swidget->dynamic_pipeline_widget =
+			sof_debug_check_flag(SOF_DBG_DYNAMIC_PIPELINES_ENABLE);
+
+	dev_dbg(scomp->dev, "pipeline %s: period %d pri %d mips %d core %d frames %d dynamic %d\n",
 		swidget->widget->name, pipeline->period, pipeline->priority,
-		pipeline->period_mips, pipeline->core, pipeline->frames_per_sched);
+		pipeline->period_mips, pipeline->core, pipeline->frames_per_sched,
+		swidget->dynamic_pipeline_widget);
 
 	swidget->private = pipeline;
 
@@ -2391,6 +2319,9 @@ static int sof_widget_ready(struct snd_soc_component *scomp, int index,
 		return ret;
 	}
 
+	if (sof_debug_check_flag(SOF_DBG_DISABLE_MULTICORE))
+		comp.core = SOF_DSP_PRIMARY_CORE;
+
 	swidget->core = comp.core;
 
 	ret = sof_parse_tokens(scomp, &swidget->comp_ext, comp_ext_tokens,
@@ -2414,13 +2345,14 @@ static int sof_widget_ready(struct snd_soc_component *scomp, int index,
 		}
 
 		ret = sof_widget_load_dai(scomp, index, swidget, tw, dai);
-		if (ret == 0) {
-			sof_connect_dai_widget(scomp, w, tw, dai);
-			list_add(&dai->list, &sdev->dai_list);
-			swidget->private = dai;
-		} else {
+		if (!ret)
+			ret = sof_connect_dai_widget(scomp, w, tw, dai);
+		if (ret < 0) {
 			kfree(dai);
+			break;
 		}
+		list_add(&dai->list, &sdev->dai_list);
+		swidget->private = dai;
 		break;
 	case snd_soc_dapm_mixer:
 		ret = sof_widget_load_mixer(scomp, index, swidget, tw);
@@ -2514,10 +2446,8 @@ static int sof_route_unload(struct snd_soc_component *scomp,
 static int sof_widget_unload(struct snd_soc_component *scomp,
 			     struct snd_soc_dobj *dobj)
 {
-	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(scomp);
 	const struct snd_kcontrol_new *kc;
 	struct snd_soc_dapm_widget *widget;
-	struct sof_ipc_pipe_new *pipeline;
 	struct snd_sof_control *scontrol;
 	struct snd_sof_widget *swidget;
 	struct soc_mixer_control *sm;
@@ -2543,24 +2473,6 @@ static int sof_widget_unload(struct snd_soc_component *scomp,
 			kfree(dai->dai_config);
 			list_del(&dai->list);
 		}
-		break;
-	case snd_soc_dapm_scheduler:
-
-		/* power down the pipeline schedule core */
-		pipeline = swidget->private;
-
-		/*
-		 * Runtime PM should still function normally if topology loading fails and
-		 * it's components are unloaded. Do not power down the primary core so that the
-		 * CTX_SAVE IPC can succeed during runtime suspend.
-		 */
-		if (pipeline->core == SOF_DSP_PRIMARY_CORE)
-			break;
-
-		ret = snd_sof_dsp_core_power_down(sdev, 1 << pipeline->core);
-		if (ret < 0)
-			dev_err(scomp->dev, "error: powering down pipeline schedule core %d\n",
-				pipeline->core);
 		break;
 	default:
 		break;
@@ -2630,8 +2542,10 @@ static int sof_dai_load(struct snd_soc_component *scomp, int index,
 
 	for_each_pcm_streams(stream) {
 		spcm->stream[stream].comp_id = COMP_ID_UNASSIGNED;
-		INIT_WORK(&spcm->stream[stream].period_elapsed_work,
-			  snd_sof_pcm_period_elapsed_work);
+		if (pcm->compress)
+			snd_sof_compr_init_elapsed_work(&spcm->stream[stream].period_elapsed_work);
+		else
+			snd_sof_pcm_init_elapsed_work(&spcm->stream[stream].period_elapsed_work);
 	}
 
 	spcm->pcm = *pcm;
@@ -2874,12 +2788,12 @@ static int sof_link_ssp_load(struct snd_soc_component *scomp, int index,
 		config[i].ssp.rx_slots = le32_to_cpu(hw_config[i].rx_slots);
 		config[i].ssp.tx_slots = le32_to_cpu(hw_config[i].tx_slots);
 
-		dev_dbg(scomp->dev, "tplg: config SSP%d fmt 0x%x mclk %d bclk %d fclk %d width (%d)%d slots %d mclk id %d quirks %d\n",
+		dev_dbg(scomp->dev, "tplg: config SSP%d fmt %#x mclk %d bclk %d fclk %d width (%d)%d slots %d mclk id %d quirks %d clks_control %#x\n",
 			config[i].dai_index, config[i].format,
 			config[i].ssp.mclk_rate, config[i].ssp.bclk_rate,
 			config[i].ssp.fsync_rate, config[i].ssp.sample_valid_bits,
 			config[i].ssp.tdm_slot_width, config[i].ssp.tdm_slots,
-			config[i].ssp.mclk_id, config[i].ssp.quirks);
+			config[i].ssp.mclk_id, config[i].ssp.quirks, config[i].ssp.clks_control);
 
 		/* validate SSP fsync rate and channel count */
 		if (config[i].ssp.fsync_rate < 8000 || config[i].ssp.fsync_rate > 192000) {
@@ -3648,7 +3562,7 @@ static int sof_complete(struct snd_soc_component *scomp)
 			 * Apply the dynamic_pipeline_widget flag and set the pipe_widget field
 			 * for all widgets that have the same pipeline ID as the scheduler widget
 			 */
-			list_for_each_entry_reverse(comp_swidget, &sdev->widget_list, list)
+			list_for_each_entry(comp_swidget, &sdev->widget_list, list)
 				if (comp_swidget->pipeline_id == swidget->pipeline_id) {
 					ret = sof_set_pipe_widget(sdev, swidget, comp_swidget);
 					if (ret < 0)
@@ -3661,7 +3575,7 @@ static int sof_complete(struct snd_soc_component *scomp)
 	}
 
 	/* verify topology components loading including dynamic pipelines */
-	if (sof_core_debug & SOF_DBG_VERIFY_TPLG) {
+	if (sof_debug_check_flag(SOF_DBG_VERIFY_TPLG)) {
 		ret = sof_set_up_pipelines(sdev, true);
 		if (ret < 0) {
 			dev_err(sdev->dev, "error: topology verification failed %d\n", ret);

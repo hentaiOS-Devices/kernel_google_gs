@@ -519,6 +519,8 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 			return r;
 	}
 
+	mutex_lock(&p->bo_list->bo_list_mutex);
+
 	/* One for TTM and one for the CS job */
 	amdgpu_bo_list_for_each_entry(e, p->bo_list)
 		e->tv.num_shared = 2;
@@ -545,6 +547,7 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 					GFP_KERNEL | __GFP_ZERO);
 		if (!e->user_pages) {
 			DRM_ERROR("kvmalloc_array failure\n");
+			mutex_unlock(&p->bo_list->bo_list_mutex);
 			return -ENOMEM;
 		}
 
@@ -552,6 +555,7 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 		if (r) {
 			kvfree(e->user_pages);
 			e->user_pages = NULL;
+			mutex_unlock(&p->bo_list->bo_list_mutex);
 			return r;
 		}
 
@@ -569,6 +573,7 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 	if (unlikely(r != 0)) {
 		if (r != -ERESTARTSYS)
 			DRM_ERROR("ttm_eu_reserve_buffers failed.\n");
+		mutex_unlock(&p->bo_list->bo_list_mutex);
 		goto out;
 	}
 
@@ -640,6 +645,7 @@ error_validate:
 			e->chain = NULL;
 		}
 		ttm_eu_backoff_reservation(&p->ticket, &p->validated);
+		mutex_unlock(&p->bo_list->bo_list_mutex);
 	}
 out:
 	return r;
@@ -690,6 +696,7 @@ static void amdgpu_cs_parser_fini(struct amdgpu_cs_parser *parser, int error,
 
 		ttm_eu_backoff_reservation(&parser->ticket,
 					   &parser->validated);
+		mutex_unlock(&parser->bo_list->bo_list_mutex);
 	}
 
 	for (i = 0; i < parser->num_post_deps; i++) {
@@ -1287,6 +1294,7 @@ static int amdgpu_cs_submit(struct amdgpu_cs_parser *p,
 
 	ttm_eu_fence_buffer_objects(&p->ticket, &p->validated, p->fence);
 	mutex_unlock(&p->adev->notifier_lock);
+	mutex_unlock(&p->bo_list->bo_list_mutex);
 
 	return 0;
 

@@ -23,11 +23,11 @@
 #include <linux/audit.h>
 #include <linux/binfmts.h>
 #include <linux/cred.h>
+#include <linux/device-mapper.h>
 #include <linux/fs.h>
 #include <linux/fs_parser.h>
 #include <linux/fs_struct.h>
 #include <linux/lsm_hooks.h>
-#include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/mount.h>
 #include <linux/namei.h>	/* for nameidata_get_total_link_count */
@@ -41,8 +41,6 @@
 
 #include "inode_mark.h"
 #include "utils.h"
-
-static const char secagentd[] = "/usr/sbin/secagentd";
 
 #if defined(CONFIG_SECURITY_CHROMIUMOS_NO_UNPRIVILEGED_UNSAFE_MOUNTS) || \
 	defined(CONFIG_SECURITY_CHROMIUMOS_NO_SYMLINK_MOUNT)
@@ -230,6 +228,7 @@ static int chromiumos_bprm_creds_for_exec(struct linux_binprm *bprm)
 			task_pid_nr(current));
 		kfree(cmdline);
 
+		pr_notice_ratelimited("memfd execution blocked\n");
 		return -EACCES;
 	}
 	return 0;
@@ -237,35 +236,73 @@ static int chromiumos_bprm_creds_for_exec(struct linux_binprm *bprm)
 
 static int chromiumos_locked_down(enum lockdown_reason what)
 {
-	if (what == LOCKDOWN_BPF_WRITE_USER)
+	if (what == LOCKDOWN_BPF_WRITE_USER) {
+		pr_notice_ratelimited("BPF_WRITE_USER blocked\n");
 		return -EACCES;
+	}
 
 	return 0;
 }
 
-// 5.10 kernel is used by VM, which might not have CONFIG_BPF_SYSCALL
-#ifdef CONFIG_BPF_SYSCALL
-static int chromiumos_bpf(int cmd, union bpf_attr *attr, unsigned int size)
+#define DM_LOCKED_PREFIX "dm_locked-"
+static int chromiumos_locked_down_dm_device(dev_t dev)
 {
-	char buf[128];
-	int res;
-	int len;
+	int ret = 0;
+	struct mapped_device *md = NULL;
+	char dm_uuid[DM_UUID_LEN];
 
-	len = strlen(secagentd);
-	res = get_cmdline(current, buf, sizeof(buf));
-	if (res > 0 && buf[res - 1] == '\0') {
-		// null terminated.
-		res = res - 1;
-	}
+	md = dm_get_md(dev);
+	if (!md)
+		return 0;
 
-	if (res < len || strncmp(buf, secagentd, len)) {
-		pr_notice("bpf syscall blocked");
-		return -EACCES;
-	}
+	if (!dm_copy_name_and_uuid(md, NULL, dm_uuid) &&
+		strncmp(dm_uuid, DM_LOCKED_PREFIX, strlen(DM_LOCKED_PREFIX)) == 0)
+			ret = 1;
+
+	dm_put(md);
+	return ret;
+}
+
+/*
+ * This specific function will prevent mknod of 3 specific device mapper devices.
+ * If an attempt is made to mknod hiberimage, hiberintegrity, or hiberimage_integrity it will
+ * fail with a -EPERM.
+ *
+ * When device mapper first creates a device using dmsetup the node created is a dm-N node, this
+ * happens before a table has been made live. Once the table has been made live a symbolic link is
+ * created in /dev/mapper/DM_NAME pointing to the dm-N node that was previously created.
+ * This method specifically queries the name of the dm device, that is, it's a no-op if the device
+ * mapper device has no table (and thus no name). Once a table has been established if the name of the
+ * device is one of the three restricted ones any future mknod will be rejected with -EPERM.
+ *
+ * The typical flow would be: establish the dm-crypt/dm-integrity hibernate volumes. Once they are
+ * created they are opened by the kernel using the /dev/snapshot set-device ioctl. When the kernel
+ * has it opened it will then be unlinked from the file system and once it has been unlink since
+ * we're blocking mknod there will be no way to recreate the node.
+ *
+ */
+static int chromiumos_security_dm_mknod(struct dentry *dentry, umode_t mode, dev_t dev)
+{
+	/* if it's a dm block device that's locked down, return -EPERM */
+	if (S_ISBLK(mode) && chromiumos_locked_down_dm_device(dev))
+		return -EPERM;
 
 	return 0;
 }
-#endif
+
+static int chromiumos_security_path_mknod(const struct path *const dir,
+			   struct dentry *const dentry, const umode_t mode,
+			   const unsigned int dev)
+{
+	return chromiumos_security_dm_mknod(dentry, mode, new_decode_dev(dev));
+}
+
+static int chromiumos_security_inode_mknod(struct inode *dir, struct dentry *dentry,
+		umode_t mode, dev_t dev)
+{
+	return chromiumos_security_dm_mknod(dentry, mode, dev);
+}
+
 
 static struct security_hook_list chromiumos_security_hooks[] = {
 	LSM_HOOK_INIT(sb_mount, chromiumos_security_sb_mount),
@@ -273,9 +310,8 @@ static struct security_hook_list chromiumos_security_hooks[] = {
 	LSM_HOOK_INIT(file_open, chromiumos_security_file_open),
 	LSM_HOOK_INIT(bprm_creds_for_exec, chromiumos_bprm_creds_for_exec),
 	LSM_HOOK_INIT(locked_down, chromiumos_locked_down),
-#ifdef CONFIG_BPF_SYSCALL
-	LSM_HOOK_INIT(bpf, chromiumos_bpf),
-#endif
+	LSM_HOOK_INIT(path_mknod, chromiumos_security_path_mknod),
+	LSM_HOOK_INIT(inode_mknod, chromiumos_security_inode_mknod),
 };
 
 static int __init chromiumos_security_init(void)

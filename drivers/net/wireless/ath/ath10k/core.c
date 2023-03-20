@@ -193,7 +193,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.credit_size_workaround = false,
 		.bmi_large_size_download = true,
 		.supports_peer_stats_info = true,
-		.start_retry = ATH10K_START_RETRY,
 	},
 	{
 		.id = QCA6174_HW_2_1_VERSION,

@@ -36,6 +36,7 @@ struct panel_desc {
 	const struct panel_init_cmd *init_cmds;
 	unsigned int lanes;
 	bool discharge_on_disable;
+	bool lp11_before_reset;
 };
 
 struct boe_panel {
@@ -51,7 +52,6 @@ struct boe_panel {
 	struct regulator *avdd;
 	struct gpio_desc *enable_gpio;
 
-	bool prepared_power;
 	bool prepared;
 };
 
@@ -741,7 +741,6 @@ static const struct panel_init_cmd inx_init_cmd[] = {
 };
 
 static const struct panel_init_cmd boe_init_cmd[] = {
-	_INIT_DELAY_CMD(24),
 	_INIT_DCS_CMD(0xB0, 0x05),
 	_INIT_DCS_CMD(0xB1, 0xE5),
 	_INIT_DCS_CMD(0xB3, 0x52),
@@ -1154,12 +1153,21 @@ static int boe_panel_enter_sleep_mode(struct boe_panel *boe)
 	return 0;
 }
 
-static int boe_panel_unprepare_power(struct drm_panel *panel)
+static int boe_panel_unprepare(struct drm_panel *panel)
 {
 	struct boe_panel *boe = to_boe_panel(panel);
+	int ret;
 
-	if (!boe->prepared_power)
+	if (!boe->prepared)
 		return 0;
+
+	ret = boe_panel_enter_sleep_mode(boe);
+	if (ret < 0) {
+		dev_err(panel->dev, "failed to set panel off: %d\n", ret);
+		return ret;
+	}
+
+	msleep(150);
 
 	if (boe->desc->discharge_on_disable) {
 		regulator_disable(boe->avee);
@@ -1170,7 +1178,6 @@ static int boe_panel_unprepare_power(struct drm_panel *panel)
 		regulator_disable(boe->pp1800);
 		regulator_disable(boe->pp3300);
 	} else {
-		msleep(150);
 		gpiod_set_value(boe->enable_gpio, 0);
 		usleep_range(1000, 2000);
 		regulator_disable(boe->avee);
@@ -1180,39 +1187,17 @@ static int boe_panel_unprepare_power(struct drm_panel *panel)
 		regulator_disable(boe->pp3300);
 	}
 
-	boe->prepared_power = false;
-
-	return 0;
-}
-
-static int boe_panel_unprepare(struct drm_panel *panel)
-{
-	struct boe_panel *boe = to_boe_panel(panel);
-	int ret;
-
-	if (!boe->prepared)
-		return 0;
-
-	if (!boe->desc->discharge_on_disable) {
-		ret = boe_panel_enter_sleep_mode(boe);
-		if (ret < 0) {
-			dev_err(panel->dev, "failed to set panel off: %d\n",
-				ret);
-			return ret;
-		}
-	}
-
 	boe->prepared = false;
 
 	return 0;
 }
 
-static int boe_panel_prepare_power(struct drm_panel *panel)
+static int boe_panel_prepare(struct drm_panel *panel)
 {
 	struct boe_panel *boe = to_boe_panel(panel);
 	int ret;
 
-	if (boe->prepared_power)
+	if (boe->prepared)
 		return 0;
 
 	gpiod_set_value(boe->enable_gpio, 0);
@@ -1237,6 +1222,10 @@ static int boe_panel_prepare_power(struct drm_panel *panel)
 
 	usleep_range(10000, 11000);
 
+	if (boe->desc->lp11_before_reset) {
+		mipi_dsi_dcs_nop(boe->dsi);
+		usleep_range(1000, 2000);
+	}
 	gpiod_set_value(boe->enable_gpio, 1);
 	usleep_range(1000, 2000);
 	gpiod_set_value(boe->enable_gpio, 0);
@@ -1244,10 +1233,18 @@ static int boe_panel_prepare_power(struct drm_panel *panel)
 	gpiod_set_value(boe->enable_gpio, 1);
 	usleep_range(6000, 10000);
 
-	boe->prepared_power = true;
+	ret = boe_panel_init_dcs_cmd(boe);
+	if (ret < 0) {
+		dev_err(panel->dev, "failed to init panel: %d\n", ret);
+		goto poweroff;
+	}
+
+	boe->prepared = true;
 
 	return 0;
 
+poweroff:
+	regulator_disable(boe->avee);
 poweroffavdd:
 	regulator_disable(boe->avdd);
 poweroff1v8:
@@ -1256,25 +1253,6 @@ poweroff1v8:
 	gpiod_set_value(boe->enable_gpio, 0);
 
 	return ret;
-}
-
-static int boe_panel_prepare(struct drm_panel *panel)
-{
-	struct boe_panel *boe = to_boe_panel(panel);
-	int ret;
-
-	if (boe->prepared)
-		return 0;
-
-	ret = boe_panel_init_dcs_cmd(boe);
-	if (ret < 0) {
-		dev_err(panel->dev, "failed to init panel: %d\n", ret);
-		return ret;
-	}
-
-	boe->prepared = true;
-
-	return 0;
 }
 
 static int boe_panel_enable(struct drm_panel *panel)
@@ -1474,6 +1452,7 @@ static const struct panel_desc boe_tv105wum_nw0_desc = {
 	.mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
 		      MIPI_DSI_MODE_LPM,
 	.init_cmds = boe_init_cmd,
+	.lp11_before_reset = true,
 };
 
 static int boe_panel_get_modes(struct drm_panel *panel,
@@ -1504,9 +1483,7 @@ static int boe_panel_get_modes(struct drm_panel *panel,
 
 static const struct drm_panel_funcs boe_panel_funcs = {
 	.unprepare = boe_panel_unprepare,
-	.unprepare_power = boe_panel_unprepare_power,
 	.prepare = boe_panel_prepare,
-	.prepare_power = boe_panel_prepare_power,
 	.enable = boe_panel_enable,
 	.get_modes = boe_panel_get_modes,
 };

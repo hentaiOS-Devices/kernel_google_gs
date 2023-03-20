@@ -167,6 +167,8 @@ static int t7xx_acpi_reset(struct t7xx_pci_dev *t7xx_dev, char *fn_name)
 		return -EFAULT;
 	}
 
+	kfree(buffer.pointer);
+
 #endif
 	return 0;
 }
@@ -195,7 +197,7 @@ static irqreturn_t t7xx_rgu_isr_thread(int irq, void *data)
 	t7xx_reset_device_via_pmic(t7xx_dev);
 
 	if (!t7xx_dev->hp_enable)
-		t7xx_rescan_queue_work(t7xx_dev->pdev);
+		t7xx_rescan_queue_work(t7xx_dev->pdev, false);
 
 	return IRQ_HANDLED;
 }

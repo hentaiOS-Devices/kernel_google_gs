@@ -109,7 +109,7 @@ static void mt8195_dsp_handle_request(struct mtk_adsp_ipc *ipc)
 
 	/* Check to see if the message is a panic code 0x0dead*** */
 	if ((p & SOF_IPC_PANIC_MAGIC_MASK) == SOF_IPC_PANIC_MAGIC) {
-		snd_sof_dsp_panic(priv->sdev, p);
+		snd_sof_dsp_panic(priv->sdev, p, true);
 	} else {
 		snd_sof_ipc_msgs_rx(priv->sdev);
 
@@ -141,6 +141,7 @@ static int platform_parse_resource(struct platform_device *pdev, void *data)
 	}
 
 	ret = of_address_to_resource(mem_region, 0, &res);
+	of_node_put(mem_region);
 	if (ret) {
 		dev_err(dev, "of_address_to_resource dma failed\n");
 		return ret;
@@ -169,6 +170,7 @@ static int platform_parse_resource(struct platform_device *pdev, void *data)
 	}
 
 	ret = of_address_to_resource(mem_region, 0, &res);
+	of_node_put(mem_region);
 	if (ret) {
 		dev_err(dev, "of_address_to_resource sysmem failed\n");
 		return ret;
@@ -217,11 +219,6 @@ static int platform_parse_resource(struct platform_device *pdev, void *data)
 
 	adsp->pa_sram = (phys_addr_t)mmio->start;
 	adsp->sramsize = resource_size(mmio);
-	if (adsp->sramsize < TOTAL_SIZE_SHARED_SRAM_FROM_TAIL) {
-		dev_err(dev, "adsp SRAM(%#x) is not enough for share\n",
-			adsp->sramsize);
-		return -EINVAL;
-	}
 
 	dev_dbg(dev, "sram pbase=%pa,%#x\n", &adsp->pa_sram, adsp->sramsize);
 

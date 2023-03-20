@@ -1059,19 +1059,27 @@ static int psi_cpu_show(struct seq_file *m, void *v)
 	return psi_show(m, &psi_system, PSI_CPU);
 }
 
+static int psi_open(struct file *file, int (*psi_show)(struct seq_file *, void *))
+{
+	if (file->f_mode & FMODE_WRITE && !capable(CAP_SYS_RESOURCE))
+		return -EPERM;
+
+	return single_open(file, psi_show, NULL);
+}
+
 static int psi_io_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, psi_io_show, NULL);
+	return psi_open(file, psi_io_show);
 }
 
 static int psi_memory_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, psi_memory_show, NULL);
+	return psi_open(file, psi_memory_show);
 }
 
 static int psi_cpu_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, psi_cpu_show, NULL);
+	return psi_open(file, psi_cpu_show);
 }
 
 struct psi_trigger *psi_trigger_create(struct psi_group *group,
@@ -1158,10 +1166,11 @@ void psi_trigger_destroy(struct psi_trigger *t)
 
 	group = t->group;
 	/*
-	 * Wakeup waiters to stop polling. Can happen if cgroup is deleted
-	 * from under a polling process.
+	 * Wakeup waiters to stop polling and clear the queue to prevent it from
+	 * being accessed later. Can happen if cgroup is deleted from under a
+	 * polling process.
 	 */
-	wake_up_interruptible(&t->event_wait);
+	wake_up_pollfree(&t->event_wait);
 
 	mutex_lock(&group->trigger_lock);
 
@@ -1339,9 +1348,9 @@ static int __init psi_proc_init(void)
 {
 	if (psi_enable) {
 		proc_mkdir("pressure", NULL);
-		proc_create("pressure/io", 0, NULL, &psi_io_proc_ops);
-		proc_create("pressure/memory", 0, NULL, &psi_memory_proc_ops);
-		proc_create("pressure/cpu", 0, NULL, &psi_cpu_proc_ops);
+		proc_create("pressure/io", 0666, NULL, &psi_io_proc_ops);
+		proc_create("pressure/memory", 0666, NULL, &psi_memory_proc_ops);
+		proc_create("pressure/cpu", 0666, NULL, &psi_cpu_proc_ops);
 	}
 	return 0;
 }

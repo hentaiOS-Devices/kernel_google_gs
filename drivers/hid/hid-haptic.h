@@ -65,6 +65,7 @@ struct hid_haptic_device {
 #define HID_HAPTIC_PRESS_EFFECT_ID 1
 	struct hid_haptic_effect *effect;
 	struct hid_haptic_effect stop_effect;
+	struct work_struct reset_work;
 };
 
 #ifdef CONFIG_MULTITOUCH_HAPTIC

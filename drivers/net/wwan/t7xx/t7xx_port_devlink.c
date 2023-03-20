@@ -383,15 +383,14 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 	struct t7xx_port *port;
 	int ret;
 
-	port = dl->port;
-	if (port->dl->mode != T7XX_FB_DL_MODE) {
-		dev_err(port->dev, "Modem is not in fastboot download mode!");
+	if (dl->mode != T7XX_FB_DL_MODE) {
+		dev_err(dl->dev, "Modem is not in fastboot download mode!");
 		ret = -EPERM;
 		goto err_out;
 	}
 
 	if (dl->status != T7XX_DEVLINK_IDLE) {
-		dev_err(port->dev, "Modem is busy!");
+		dev_err(dl->dev, "Modem is busy");
 		ret = -EBUSY;
 		goto err_out;
 	}
@@ -402,11 +401,13 @@ static int t7xx_devlink_flash_update(struct devlink *devlink,
 	}
 
 	set_bit(T7XX_FLASH_STATUS, &dl->status);
-	
+	port = dl->port;
 	devlink_flash_update_begin_notify(devlink);
+
 	ret = request_firmware(&fw, params->file_name, devlink->dev);
 	if (ret) {
 		dev_dbg(port->dev, "requested firmware file not found");
+		clear_bit(T7XX_FLASH_STATUS, &dl->status);
 		return ret;
 	}
 
@@ -462,7 +463,7 @@ static int t7xx_devlink_reload_up(struct devlink *devlink,
 	switch (action) {
 	case DEVLINK_RELOAD_ACTION_DRIVER_REINIT:
 	case DEVLINK_RELOAD_ACTION_FW_ACTIVATE:
-		t7xx_rescan_queue_work(dl->mtk_dev->pdev);
+		t7xx_rescan_queue_work(dl->mtk_dev->pdev, false);
 		return 0;
 	default:
 		/* Unsupported action should not get to this function */

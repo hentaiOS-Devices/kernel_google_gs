@@ -23,6 +23,9 @@ static u32 snd_sof_dsp_power_target(struct snd_sof_dev *sdev)
 	u32 target_dsp_state;
 
 	switch (sdev->system_suspend_target) {
+	case SOF_SUSPEND_S5:
+	case SOF_SUSPEND_S4:
+		/* DSP should be in D3 if the system is suspending to S3+ */
 	case SOF_SUSPEND_S3:
 		/* DSP should be in D3 if the system is suspending to S3 */
 		target_dsp_state = SOF_DSP_PM_D3;
@@ -122,7 +125,7 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 	    old_state == SOF_DSP_PM_D0)
 		return 0;
 
-	sdev->fw_state = SOF_FW_BOOT_PREPARE;
+	sof_set_fw_state(sdev, SOF_FW_BOOT_PREPARE);
 
 	/* load the firmware */
 	ret = snd_sof_load_firmware(sdev);
@@ -130,10 +133,11 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 		dev_err(sdev->dev,
 			"error: failed to load DSP firmware after resume %d\n",
 			ret);
+		sof_set_fw_state(sdev, SOF_FW_BOOT_FAILED);
 		return ret;
 	}
 
-	sdev->fw_state = SOF_FW_BOOT_IN_PROGRESS;
+	sof_set_fw_state(sdev, SOF_FW_BOOT_IN_PROGRESS);
 
 	/*
 	 * Boot the firmware. The FW boot status will be modified
@@ -144,6 +148,7 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 		dev_err(sdev->dev,
 			"error: failed to boot DSP firmware after resume %d\n",
 			ret);
+		sof_set_fw_state(sdev, SOF_FW_BOOT_FAILED);
 		return ret;
 	}
 
@@ -165,6 +170,9 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 		return ret;
 	}
 
+	/* Notify clients not managed by pm framework about core resume */
+	sof_resume_clients(sdev);
+
 	/* notify DSP of system resume */
 	ret = sof_send_pm_ctx_ipc(sdev, SOF_IPC_PM_CTX_RESTORE);
 	if (ret < 0)
@@ -178,7 +186,8 @@ static int sof_resume(struct device *dev, bool runtime_resume)
 static int sof_suspend(struct device *dev, bool runtime_suspend)
 {
 	struct snd_sof_dev *sdev = dev_get_drvdata(dev);
-	u32 target_state = 0;
+	u32 target_state = snd_sof_dsp_power_target(sdev);
+	pm_message_t pm_state;
 	int ret;
 
 	/* do nothing if dsp suspend callback is not set */
@@ -191,7 +200,7 @@ static int sof_suspend(struct device *dev, bool runtime_suspend)
 	if (sdev->fw_state != SOF_FW_BOOT_COMPLETE)
 		goto suspend;
 
-	/* set restore_stream for all streams during system suspend */
+	/* prepare for streams to be resumed properly upon resume */
 	if (!runtime_suspend) {
 		ret = sof_set_hw_params_upon_resume(sdev->dev);
 		if (ret < 0) {
@@ -202,16 +211,22 @@ static int sof_suspend(struct device *dev, bool runtime_suspend)
 		}
 	}
 
-	target_state = snd_sof_dsp_power_target(sdev);
+	pm_state.event = target_state;
 
 	/* Skip to platform-specific suspend if DSP is entering D0 */
-	if (target_state == SOF_DSP_PM_D0)
+	if (target_state == SOF_DSP_PM_D0) {
+		/* Notify clients not managed by pm framework about core suspend */
+		sof_suspend_clients(sdev, pm_state);
 		goto suspend;
+	}
 
 	sof_tear_down_pipelines(sdev, false);
 
 	/* release trace */
 	snd_sof_release_trace(sdev);
+
+	/* Notify clients not managed by pm framework about core suspend */
+	sof_suspend_clients(sdev, pm_state);
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_ENABLE_DEBUGFS_CACHE)
 	/* cache debugfs contents during runtime suspend */
@@ -257,7 +272,7 @@ suspend:
 		return ret;
 
 	/* reset FW state */
-	sdev->fw_state = SOF_FW_BOOT_NOT_STARTED;
+	sof_set_fw_state(sdev, SOF_FW_BOOT_NOT_STARTED);
 	sdev->enabled_cores_mask = 0;
 
 	return ret;
@@ -312,12 +327,36 @@ int snd_sof_prepare(struct device *dev)
 	/* will suspend to S3 by default */
 	sdev->system_suspend_target = SOF_SUSPEND_S3;
 
+	/*
+	 * if the firmware is crashed or boot failed then we try to aim for S3
+	 * to reboot the firmware
+	 */
+	if (sdev->fw_state == SOF_FW_CRASHED ||
+	    sdev->fw_state == SOF_FW_BOOT_FAILED)
+		return 0;
+
 	if (!desc->use_acpi_target_states)
 		return 0;
 
 #if defined(CONFIG_ACPI)
-	if (acpi_target_system_state() == ACPI_STATE_S0)
+	switch (acpi_target_system_state()) {
+	case ACPI_STATE_S0:
 		sdev->system_suspend_target = SOF_SUSPEND_S0IX;
+		break;
+	case ACPI_STATE_S1:
+	case ACPI_STATE_S2:
+	case ACPI_STATE_S3:
+		sdev->system_suspend_target = SOF_SUSPEND_S3;
+		break;
+	case ACPI_STATE_S4:
+		sdev->system_suspend_target = SOF_SUSPEND_S4;
+		break;
+	case ACPI_STATE_S5:
+		sdev->system_suspend_target = SOF_SUSPEND_S5;
+		break;
+	default:
+		break;
+	}
 #endif
 
 	return 0;

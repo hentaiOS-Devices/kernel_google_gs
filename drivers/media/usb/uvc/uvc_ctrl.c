@@ -6,6 +6,7 @@
  *          Laurent Pinchart (laurent.pinchart@ideasonboard.com)
  */
 
+#include <asm/barrier.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/module.h>
@@ -1457,6 +1458,10 @@ static void uvc_ctrl_status_event_work(struct work_struct *work)
 
 	uvc_ctrl_status_event(w->chain, w->ctrl, w->data);
 
+	/* The barrier is needed to synchronize with uvc_status_stop(). */
+	if (smp_load_acquire(&dev->flush_status))
+		return;
+
 	/* Resubmit the URB. */
 	w->urb->interval = dev->int_ep->desc.bInterval;
 	ret = usb_submit_urb(w->urb, GFP_KERNEL);
@@ -2408,6 +2413,10 @@ static void uvc_ctrl_prune_entity(struct uvc_device *dev,
 		{ { USB_DEVICE(0x0bda, 0x5539) }, 21 },
 		/* Realtek Semiconductor Corp. Integrated_Webcam_HD */
 		{ { USB_DEVICE(0x0bda, 0x565c) }, 21 },
+		/* Realtek Semiconductor Corp. Integrated_Webcam_HD */
+		{ { USB_DEVICE(0x0bda, 0x5676) }, 21 },
+		/* Realtek Semiconductor Corp. Integrated_Webcam_HD */
+		{ { USB_DEVICE(0x0bda, 0x567e) }, 21 },
 		/* Syntek Integrated Camera */
 		{ { USB_DEVICE(0x174f, 0x244f) }, 21 },
 	};

@@ -74,6 +74,15 @@ static const struct snd_soc_acpi_adr_device rt711_sdca_0_adr[] = {
 	}
 };
 
+static const struct snd_soc_acpi_adr_device rt711_sdca_2_adr[] = {
+	{
+		.adr = 0x000230025D071101ull,
+		.num_endpoints = 1,
+		.endpoints = &single_endpoint,
+		.name_prefix = "rt711"
+	}
+};
+
 static const struct snd_soc_acpi_adr_device rt1316_1_group1_adr[] = {
 	{
 		.adr = 0x000131025D131601, /* unique ID is set for some reason */
@@ -95,6 +104,24 @@ static const struct snd_soc_acpi_adr_device rt1316_2_group1_adr[] = {
 static const struct snd_soc_acpi_adr_device rt1316_3_group1_adr[] = {
 	{
 		.adr = 0x000330025D131601,
+		.num_endpoints = 1,
+		.endpoints = &spk_r_endpoint,
+		.name_prefix = "rt1316-2"
+	}
+};
+
+static const struct snd_soc_acpi_adr_device rt1316_0_group2_adr[] = {
+	{
+		.adr = 0x000031025D131601ull,
+		.num_endpoints = 1,
+		.endpoints = &spk_l_endpoint,
+		.name_prefix = "rt1316-1"
+	}
+};
+
+static const struct snd_soc_acpi_adr_device rt1316_1_group2_adr[] = {
+	{
+		.adr = 0x000130025D131601ull,
 		.num_endpoints = 1,
 		.endpoints = &spk_r_endpoint,
 		.name_prefix = "rt1316-2"
@@ -209,6 +236,63 @@ static const struct snd_soc_acpi_link_adr adl_sdca_3_in_1[] = {
 	{}
 };
 
+static const struct snd_soc_acpi_link_adr adl_sdw_rt711_link2_rt1316_link01_rt714_link3[] = {
+	{
+		.mask = BIT(2),
+		.num_adr = ARRAY_SIZE(rt711_sdca_2_adr),
+		.adr_d = rt711_sdca_2_adr,
+	},
+	{
+		.mask = BIT(0),
+		.num_adr = ARRAY_SIZE(rt1316_0_group2_adr),
+		.adr_d = rt1316_0_group2_adr,
+	},
+	{
+		.mask = BIT(1),
+		.num_adr = ARRAY_SIZE(rt1316_1_group2_adr),
+		.adr_d = rt1316_1_group2_adr,
+	},
+	{
+		.mask = BIT(3),
+		.num_adr = ARRAY_SIZE(rt714_3_adr),
+		.adr_d = rt714_3_adr,
+	},
+	{}
+};
+
+static const struct snd_soc_acpi_link_adr adl_sdw_rt1316_link12_rt714_link0[] = {
+	{
+		.mask = BIT(1),
+		.num_adr = ARRAY_SIZE(rt1316_1_group1_adr),
+		.adr_d = rt1316_1_group1_adr,
+	},
+	{
+		.mask = BIT(2),
+		.num_adr = ARRAY_SIZE(rt1316_2_group1_adr),
+		.adr_d = rt1316_2_group1_adr,
+	},
+	{
+		.mask = BIT(0),
+		.num_adr = ARRAY_SIZE(rt714_0_adr),
+		.adr_d = rt714_0_adr,
+	},
+	{}
+};
+
+static const struct snd_soc_acpi_link_adr adl_sdw_rt1316_link2_rt714_link3[] = {
+	{
+		.mask = BIT(2),
+		.num_adr = ARRAY_SIZE(rt1316_2_single_adr),
+		.adr_d = rt1316_2_single_adr,
+	},
+	{
+		.mask = BIT(3),
+		.num_adr = ARRAY_SIZE(rt714_3_adr),
+		.adr_d = rt714_3_adr,
+	},
+	{}
+};
+
 static const struct snd_soc_acpi_link_adr adl_sdw_rt1316_link2_rt714_link0[] = {
 	{
 		.mask = BIT(2),
@@ -280,14 +364,14 @@ static const struct snd_soc_acpi_codecs adl_max98357a_amp = {
 	.codecs = {"MX98357A"}
 };
 
-static const struct snd_soc_acpi_codecs adl_max98390_amp = {
-	.num_codecs = 1,
-	.codecs = {"MX98390"}
-};
-
 static const struct snd_soc_acpi_codecs adl_max98360a_amp = {
 	.num_codecs = 1,
 	.codecs = {"MX98360A"}
+};
+
+static const struct snd_soc_acpi_codecs adl_rt1015p_amp = {
+	.num_codecs = 1,
+	.codecs = {"RTL1015"}
 };
 
 static const struct snd_soc_acpi_codecs adl_rt1019p_amp = {
@@ -298,6 +382,16 @@ static const struct snd_soc_acpi_codecs adl_rt1019p_amp = {
 static const struct snd_soc_acpi_codecs adl_rt5682_rt5682s_hp = {
 	.num_codecs = 2,
 	.codecs = {"10EC5682", "RTL5682"},
+};
+
+static const struct snd_soc_acpi_codecs adl_nau8318_amp = {
+	.num_codecs = 1,
+	.codecs = {"NVTN2012"}
+};
+
+static const struct snd_soc_acpi_codecs adl_max98390_amp = {
+	.num_codecs = 1,
+	.codecs = {"MX98390"}
 };
 
 struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_machines[] = {
@@ -314,20 +408,6 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_machines[] = {
 		.machine_quirk = snd_soc_acpi_codec_list,
 		.quirk_data = &adl_max98357a_amp,
 		.sof_tplg_filename = "sof-adl-max98357a-rt5682.tplg",
-	},
-	{
-		.id = "10EC5682",
-		.drv_name = "adl_max98390_rt5682",
-		.machine_quirk = snd_soc_acpi_codec_list,
-		.quirk_data = &adl_max98390_amp,
-		.sof_tplg_filename = "sof-adl-max98390-rt5682.tplg",
-	},
-	{
-		.id = "RTL5682",
-		.drv_name = "adl_mx98390_rt5682s",
-		.machine_quirk = snd_soc_acpi_codec_list,
-		.quirk_data = &adl_max98390_amp,
-		.sof_tplg_filename = "sof-adl-max98390-rt5682.tplg",
 	},
 	{
 		.comp_ids = &adl_rt5682_rt5682s_hp,
@@ -358,9 +438,37 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_machines[] = {
 		.sof_tplg_filename = "sof-adl-max98360a-nau8825.tplg",
 	},
 	{
+		.comp_ids = &adl_rt5682_rt5682s_hp,
+		.drv_name = "adl_rt1019_rt5682",
+		.machine_quirk = snd_soc_acpi_codec_list,
+		.quirk_data = &adl_rt1019p_amp,
+		.sof_tplg_filename = "sof-adl-rt1019-rt5682.tplg",
+	},
+	{
+		.id = "10508825",
+		.drv_name = "adl_rt1015p_nau8825",
+		.machine_quirk = snd_soc_acpi_codec_list,
+		.quirk_data = &adl_rt1015p_amp,
+		.sof_tplg_filename = "sof-adl-rt1015-nau8825.tplg",
+	},
+	{
+		.id = "10508825",
+		.drv_name = "adl_nau8318_8825",
+		.machine_quirk = snd_soc_acpi_codec_list,
+		.quirk_data = &adl_nau8318_amp,
+		.sof_tplg_filename = "sof-adl-nau8318-nau8825.tplg",
+	},
+	{
 		.id = "10508825",
 		.drv_name = "sof_nau8825",
 		.sof_tplg_filename = "sof-adl-nau8825.tplg",
+	},
+	{
+		.comp_ids = &adl_rt5682_rt5682s_hp,
+		.drv_name = "adl_max98390_rt5682",
+		.machine_quirk = snd_soc_acpi_codec_list,
+		.quirk_data = &adl_max98390_amp,
+		.sof_tplg_filename = "sof-adl-max98390-rt5682.tplg",
 	},
 	{
 		.comp_ids = &adl_rt5682_rt5682s_hp,
@@ -403,6 +511,24 @@ struct snd_soc_acpi_mach snd_soc_acpi_intel_adl_sdw_machines[] = {
 		.links = adl_sdca_3_in_1,
 		.drv_name = "sof_sdw",
 		.sof_tplg_filename = "sof-adl-rt711-l0-rt1316-l13-rt714-l2.tplg",
+	},
+	{
+		.link_mask = 0xF, /* 4 active links required */
+		.links = adl_sdw_rt711_link2_rt1316_link01_rt714_link3,
+		.drv_name = "sof_sdw",
+		.sof_tplg_filename = "sof-adl-rt711-l2-rt1316-l01-rt714-l3.tplg",
+	},
+	{
+		.link_mask = 0xC, /* rt1316 on link2 & rt714 on link3 */
+		.links = adl_sdw_rt1316_link2_rt714_link3,
+		.drv_name = "sof_sdw",
+		.sof_tplg_filename = "sof-adl-rt1316-l2-mono-rt714-l3.tplg",
+	},
+	{
+		.link_mask = 0x7, /* rt714 on link0 & two rt1316s on link1 and link2 */
+		.links = adl_sdw_rt1316_link12_rt714_link0,
+		.drv_name = "sof_sdw",
+		.sof_tplg_filename = "sof-adl-rt1316-l12-rt714-l0.tplg",
 	},
 	{
 		.link_mask = 0x5, /* 2 active links required */

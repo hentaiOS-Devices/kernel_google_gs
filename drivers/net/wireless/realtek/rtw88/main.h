@@ -583,6 +583,7 @@ struct rtw_tx_pkt_info {
 	u32 tx_pkt_size;
 	u8 offset;
 	u8 pkt_offset;
+	u8 tim_offset;
 	u8 mac_id;
 	u8 rate_id;
 	u8 rate;
@@ -1948,6 +1949,7 @@ struct rtw_dev {
 	struct work_struct c2h_work;
 	struct work_struct ips_work;
 	struct work_struct fw_recovery_work;
+	struct work_struct update_beacon_work;
 
 	/* used to protect txqs list */
 	spinlock_t txq_lock;
@@ -2088,6 +2090,7 @@ enum nl80211_band rtw_hw_to_nl80211_band(enum rtw_supported_band hw_band)
 }
 
 void rtw_set_rx_freq_band(struct rtw_rx_pkt_stat *pkt_stat, u8 channel);
+void rtw_set_dtim_period(struct rtw_dev *rtwdev, int dtim_period);
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,
 			    struct rtw_channel_params *ch_param);
 bool check_hw_ready(struct rtw_dev *rtwdev, u32 addr, u32 mask, u32 target);

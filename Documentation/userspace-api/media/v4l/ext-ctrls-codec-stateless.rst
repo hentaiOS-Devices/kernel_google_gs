@@ -3174,9 +3174,6 @@ of :ref:`av1`.
     * - ``V4L2_AV1_REF_ALTREF_FRAME``
       - 7
       - ALTREF Frame Reference.
-    * - ``V4L2_AV1_NUM_REF_FRAMES``
-      - 8
-      - Total number of reference frames.
 
 .. c:type:: v4l2_av1_global_motion
 
@@ -3200,7 +3197,7 @@ AV1 Global Motion parameters as described in section 6.8.17
     * - enum :c:type:`v4l2_av1_warp_model`
       - ``type[V4L2_AV1_TOTAL_REFS_PER_FRAME]``
       - The type of global motion transform used.
-    * - __u32
+    * - __s32
       - ``params[V4L2_AV1_TOTAL_REFS_PER_FRAME][6]``
       - This field has the same meaning as "gm_params" in :ref:`av1`.
     * - __u8
@@ -3493,12 +3490,6 @@ AV1 Loop filter params as defined in section 6.8.10. "Loop filter semantics" of
       - ``delta_lf_res``
       - specifies the left shift which should be applied to decoded loop filter
         delta values.
-    * - __u8
-      - ``delta_lf_multi``
-      - a value equal to 1 specifies that separate loop filter
-        deltas are sent for horizontal luma edges, vertical luma edges, the U
-        edges, and the V edges. A value of delta_lf_multi equal to 0 specifies
-        that the same loop filter delta is used for all edges.
 
 .. _av1_loop_filter_flags:
 
@@ -3798,7 +3789,7 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
     * - __u32
       - ``flags``
       - See
-        :ref:`AV1 Tile Info flags <av1_frame_flags>` for more details.
+        :ref:`AV1 Frame flags <av1_frame_flags>` for more details.
     * - enum :c:type:`v4l2_av1_frame_type`
       - ``frame_type``
       - Specifies the AV1 frame type
@@ -3850,14 +3841,12 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
       - Contains a bitmask that specifies which reference frame slots will be
         updated with the current frame after it is decoded.
     * - __u32
-      - ``ref_order_hint[V4L2_AV1_NUM_REF_FRAMES]``
+      - ``order_hints[V4L2_AV1_TOTAL_REFS_PER_FRAME]``
       - Specifies the expected output order hint for each reference frame.
-    * - __s8
-      - ``last_frame_idx``
-      - Specifies the reference frame to use for LAST_FRAME.
-    * - __s8
-      - ``gold_frame_idx``
-      - Specifies the reference frame to use for GOLDEN_FRAME.
+        This field corresponds to the OrderHints variable from the specification
+        (section 5.9.2.  Uncompressed header syntax). As such, this is only used
+        for non-intra frames and ignored otherwise. order_hints[0] is always
+        ignored.
     * - __u64
       - ``reference_frame_ts[V4L2_AV1_TOTAL_REFS_PER_FRAME]``
       - the V4L2 timestamp for each of the reference frames enumerated in
@@ -3868,7 +3857,7 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
         to the ``timestamp`` field in struct :c:type:`v4l2_buffer`. Use the
         :c:func:`v4l2_timeval_to_ns()` function to convert the struct
         :c:type:`timeval` in struct :c:type:`v4l2_buffer` to a __u64.
-    * - __u8
+    * - __s8
       - ``ref_frame_idx[V4L2_AV1_REFS_PER_FRAME]``
       - an index into ``reference_frame_ts`` representing the ordered list of
         references used by inter-frame. Matches the bitstream syntax
@@ -4053,7 +4042,7 @@ AV1 Tx mode as described in section 6.8.21 "TX mode semantics" of :ref:`av1`.
         piecewise linear scaling function for cr component.
     * - __u8
       - ``grain_scaling_minus_8``
-      - Represents the shift – 8 applied to the values of the chroma component.
+      - Represents the shift - 8 applied to the values of the chroma component.
         The grain_scaling_minus_8 can take values of 0..3 and determines the
         range and quantization step of the standard deviation of film grain.
     * - __u8

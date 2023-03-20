@@ -320,6 +320,8 @@ struct i2c_driver {
  *	userspace_devices list
  * @slave_cb: Callback when I2C slave mode of an adapter is used. The adapter
  *	calls it to pass on slave events to the slave driver.
+ * @power_off_on_remove: Record if we have turned on the device before probing
+ *	so we can turn off the device at removal.
  *
  * An i2c_client identifies a single device (i.e. chip) connected to an
  * i2c bus. The behaviour exposed to Linux is defined by the driver
@@ -348,6 +350,8 @@ struct i2c_client {
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
 	i2c_slave_cb_t slave_cb;	/* callback for slave mode	*/
 #endif
+	bool power_off_on_remove;	/* if device needs to be turned */
+					/* off by framework at removal. */
 };
 #define to_i2c_client(d) container_of(d, struct i2c_client, dev)
 

@@ -233,10 +233,23 @@ static void switch_mode(struct hid_device *hdev, struct hid_haptic_device *hapti
 	haptic->mode = mode;
 }
 
-void hid_haptic_reset(struct hid_device *hdev, struct hid_haptic_device *haptic)
+static void haptic_reset_work_handler(struct work_struct *work)
 {
+
+	struct hid_haptic_device *haptic = container_of(work,
+							struct hid_haptic_device,
+							reset_work);
+	struct hid_device *hdev = haptic->hdev;
+
 	if (haptic->press_ordinal_cur && haptic->release_ordinal_cur)
 		switch_mode(hdev, haptic, HID_HAPTIC_MODE_KERNEL);
+}
+
+
+void hid_haptic_reset(struct hid_device *hdev, struct hid_haptic_device *haptic)
+{
+	if (haptic->wq)
+		queue_work(haptic->wq, &haptic->reset_work);
 }
 EXPORT_SYMBOL_GPL(hid_haptic_reset);
 
@@ -526,6 +539,7 @@ int hid_haptic_init(struct hid_device *hdev,
 	haptic->hid_usage_map[HID_HAPTIC_ORDINAL_WAVEFORMSTOP] =
 		HID_HP_WAVEFORMSTOP & HID_USAGE;
 
+	INIT_WORK(&haptic->reset_work, haptic_reset_work_handler);
 	mutex_init(&haptic->auto_trigger_mutex);
 	for (r = 0; r < haptic->auto_trigger_report->maxfield; r++)
 		parse_auto_trigger_field(haptic, haptic->auto_trigger_report->field[r]);

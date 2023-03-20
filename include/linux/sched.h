@@ -831,8 +831,12 @@ struct task_struct {
 #ifndef TIF_RESTORE_SIGMASK
 	unsigned			restore_sigmask:1;
 #endif
-#ifdef CONFIG_MMU
+#ifdef CONFIG_MEMCG
 	unsigned			in_user_fault:1;
+#endif
+#ifdef CONFIG_LRU_GEN
+	/* whether the LRU algorithm may apply to this access */
+	unsigned			in_lru_fault:1;
 #endif
 #ifdef CONFIG_COMPAT_BRK
 	unsigned			brk_randomized:1;
@@ -903,6 +907,9 @@ struct task_struct {
 
 	/* CLONE_CHILD_CLEARTID: */
 	int __user			*clear_child_tid;
+
+	/* PF_IO_WORKER */
+	void				*pf_io_worker;
 
 	u64				utime;
 	u64				stime;

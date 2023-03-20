@@ -351,7 +351,7 @@ static int soc_tplg_add_kcontrol(struct soc_tplg *tplg,
 	struct snd_soc_component *comp = tplg->comp;
 
 	return soc_tplg_add_dcontrol(comp->card->snd_card,
-				comp->dev, k, comp->name_prefix, comp, kcontrol);
+				tplg->dev, k, comp->name_prefix, comp, kcontrol);
 }
 
 /* remove a mixer kcontrol */
@@ -1468,13 +1468,17 @@ static int soc_tplg_dapm_widget_create(struct soc_tplg *tplg,
 
 	template.num_kcontrols = le32_to_cpu(w->num_kcontrols);
 	kc = devm_kcalloc(tplg->dev, le32_to_cpu(w->num_kcontrols), sizeof(*kc), GFP_KERNEL);
-	if (!kc)
+	if (!kc) {
+		ret = -ENOMEM;
 		goto hdr_err;
+	}
 
 	kcontrol_type = devm_kcalloc(tplg->dev, le32_to_cpu(w->num_kcontrols), sizeof(unsigned int),
 				     GFP_KERNEL);
-	if (!kcontrol_type)
+	if (!kcontrol_type) {
+		ret = -ENOMEM;
 		goto hdr_err;
+	}
 
 	for (i = 0; i < w->num_kcontrols; i++) {
 		control_hdr = (struct snd_soc_tplg_ctl_hdr *)tplg->pos;
@@ -1580,8 +1584,25 @@ static int soc_tplg_dapm_widget_elems_load(struct soc_tplg *tplg,
 		struct snd_soc_tplg_dapm_widget *widget = (struct snd_soc_tplg_dapm_widget *) tplg->pos;
 		int ret;
 
+		/*
+		 * check if widget itself fits within topology file
+		 * use sizeof instead of widget->size, as we can't be sure
+		 * it is set properly yet (file may end before it is present)
+		 */
+		if (soc_tplg_get_offset(tplg) + sizeof(*widget) >= tplg->fw->size) {
+			dev_err(tplg->dev, "ASoC: invalid widget data size\n");
+			return -EINVAL;
+		}
+
+		/* check if widget has proper size */
 		if (le32_to_cpu(widget->size) != sizeof(*widget)) {
 			dev_err(tplg->dev, "ASoC: invalid widget size\n");
+			return -EINVAL;
+		}
+
+		/* check if widget private data fits within topology file */
+		if (soc_tplg_get_offset(tplg) + le32_to_cpu(widget->priv.size) >= tplg->fw->size) {
+			dev_err(tplg->dev, "ASoC: invalid widget private data size\n");
 			return -EINVAL;
 		}
 
@@ -2427,6 +2448,7 @@ static int soc_tplg_manifest_load(struct soc_tplg *tplg,
 		_manifest = manifest;
 	} else {
 		abi_match = false;
+
 		ret = manifest_new_ver(tplg, manifest, &_manifest);
 		if (ret < 0)
 			return ret;
@@ -2454,6 +2476,14 @@ static int soc_valid_header(struct soc_tplg *tplg,
 			"ASoC: invalid header size for type %d at offset 0x%lx size 0x%zx.\n",
 			le32_to_cpu(hdr->type), soc_tplg_get_hdr_offset(tplg),
 			tplg->fw->size);
+		return -EINVAL;
+	}
+
+	if (soc_tplg_get_hdr_offset(tplg) + hdr->payload_size >= tplg->fw->size) {
+		dev_err(tplg->dev,
+			"ASoC: invalid header of type %d at offset %ld payload_size %d\n",
+			le32_to_cpu(hdr->type), soc_tplg_get_hdr_offset(tplg),
+			hdr->payload_size);
 		return -EINVAL;
 	}
 

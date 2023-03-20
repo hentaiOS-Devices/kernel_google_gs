@@ -48,6 +48,20 @@ enum mtk_ovl_adaptor_comp_id {
 	OVL_ADAPTOR_ID_MAX
 };
 
+static const u32 supported_formats[] = {
+	DRM_FORMAT_XRGB8888,
+	DRM_FORMAT_ARGB8888,
+	DRM_FORMAT_BGRX8888,
+	DRM_FORMAT_BGRA8888,
+	DRM_FORMAT_ABGR8888,
+	DRM_FORMAT_XBGR8888,
+	DRM_FORMAT_RGB888,
+	DRM_FORMAT_BGR888,
+	DRM_FORMAT_RGB565,
+	DRM_FORMAT_UYVY,
+	DRM_FORMAT_YUYV,
+};
+
 struct ovl_adaptor_comp_match {
 	enum mtk_ovl_adaptor_comp_type type;
 	int alias_id;
@@ -181,6 +195,16 @@ void mtk_ovl_adaptor_stop(struct device *dev)
 	struct mtk_disp_ovl_adaptor *ovl_adaptor = dev_get_drvdata(dev);
 
 	mtk_ethdr_stop(ovl_adaptor->ovl_adaptor_comp[OVL_ADAPTOR_ETHDR0]);
+}
+
+const u32 *mtk_ovl_adaptor_get_formats(struct device *dev)
+{
+	return supported_formats;
+}
+
+size_t mtk_ovl_adaptor_get_num_formats(struct device *dev)
+{
+	return ARRAY_SIZE(supported_formats);
 }
 
 int mtk_ovl_adaptor_clk_enable(struct device *dev)
