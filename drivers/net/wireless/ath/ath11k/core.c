@@ -209,8 +209,7 @@ static const struct ath11k_hw_params ath11k_hw_params[] = {
 			.max_fft_bins = 0,
 		},
 
-		.interface_modes = BIT(NL80211_IFTYPE_STATION) |
-					BIT(NL80211_IFTYPE_AP),
+		.interface_modes = BIT(NL80211_IFTYPE_STATION),
 		.supports_monitor = false,
 		.full_monitor_mode = false,
 		.supports_shadow_regs = true,
@@ -343,8 +342,7 @@ static const struct ath11k_hw_params ath11k_hw_params[] = {
 			.max_fft_bins = 0,
 		},
 
-		.interface_modes = BIT(NL80211_IFTYPE_STATION) |
-					BIT(NL80211_IFTYPE_AP),
+		.interface_modes = BIT(NL80211_IFTYPE_STATION),
 		.supports_monitor = false,
 		.full_monitor_mode = false,
 		.supports_shadow_regs = true,
@@ -414,8 +412,7 @@ static const struct ath11k_hw_params ath11k_hw_params[] = {
 			.max_fft_bins = 0,
 		},
 
-		.interface_modes = BIT(NL80211_IFTYPE_STATION) |
-					BIT(NL80211_IFTYPE_AP),
+		.interface_modes = BIT(NL80211_IFTYPE_STATION),
 		.supports_monitor = false,
 		.supports_shadow_regs = true,
 		.idle_ps = true,

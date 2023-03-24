@@ -8821,13 +8821,25 @@ static int ath11k_mac_setup_iface_combinations(struct ath11k *ar)
 	struct ath11k_base *ab = ar->ab;
 	struct ieee80211_iface_combination *combinations;
 	struct ieee80211_iface_limit *limits;
-	int n_limits;
+	int n_limits, max_interfaces;
+	bool ap, mesh;
+
+	ap = ab->hw_params.interface_modes & BIT(NL80211_IFTYPE_AP);
+
+	mesh = IS_ENABLED(CONFIG_MAC80211_MESH) &&
+		ab->hw_params.interface_modes & BIT(NL80211_IFTYPE_MESH_POINT);
 
 	combinations = kzalloc(sizeof(*combinations), GFP_KERNEL);
 	if (!combinations)
 		return -ENOMEM;
 
-	n_limits = 2;
+	if (ap || mesh) {
+		n_limits = 2;
+		max_interfaces = 16;
+	} else {
+		n_limits = 1;
+		max_interfaces = 1;
+	}
 
 	limits = kcalloc(n_limits, sizeof(*limits), GFP_KERNEL);
 	if (!limits) {
@@ -8838,12 +8850,15 @@ static int ath11k_mac_setup_iface_combinations(struct ath11k *ar)
 	limits[0].max = 1;
 	limits[0].types |= BIT(NL80211_IFTYPE_STATION);
 
-	limits[1].max = 16;
-	limits[1].types |= BIT(NL80211_IFTYPE_AP);
+	if (ap) {
+		limits[1].max = max_interfaces;
+		limits[1].types |= BIT(NL80211_IFTYPE_AP);
+	}
 
-	if (IS_ENABLED(CONFIG_MAC80211_MESH) &&
-	    ab->hw_params.interface_modes & BIT(NL80211_IFTYPE_MESH_POINT))
+	if (mesh) {
+		limits[1].max = max_interfaces;
 		limits[1].types |= BIT(NL80211_IFTYPE_MESH_POINT);
+	}
 
 	combinations[0].limits = limits;
 	combinations[0].n_limits = n_limits;
@@ -8861,7 +8876,7 @@ static int ath11k_mac_setup_iface_combinations(struct ath11k *ar)
 	    ath11k_hw_supports_6g_cc_ext(ar))
 		combinations[0].max_interfaces = 1;
 	else
-		combinations[0].max_interfaces = 16;
+		combinations[0].max_interfaces = max_interfaces;
 
 	combinations[0].num_different_channels = 1;
 	combinations[0].beacon_int_infra_match = true;
