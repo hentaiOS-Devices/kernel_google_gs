@@ -6602,7 +6602,7 @@ static int emulator_cmpxchg_emulated(struct x86_emulate_ctxt *ctxt,
 		goto emul_write;
 
 	hva = kvm_vcpu_gfn_to_hva(vcpu, gpa_to_gfn(gpa));
-	if (kvm_is_error_hva(hva))
+	if (kvm_is_error_hva(addr))
 		goto emul_write;
 
 	hva += offset_in_page(gpa);
