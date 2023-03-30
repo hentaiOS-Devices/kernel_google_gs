@@ -185,11 +185,35 @@ static int chromiumos_security_inode_follow_link(struct dentry *dentry,
 	return policy == CHROMIUMOS_INODE_POLICY_BLOCK ? -EACCES : 0;
 }
 
+#define DM_LOCKED_PREFIX "dm_locked-"
+static bool chromiumos_locked_down_dm_device(dev_t dev)
+{
+	bool ret = false;
+	struct mapped_device *md;
+	char dm_uuid[DM_UUID_LEN]; /* 129 bytes */
+
+	md = dm_get_md(dev);
+	if (!md)
+		return false;
+
+	if (!dm_copy_name_and_uuid(md, NULL, dm_uuid) &&
+			str_has_prefix(dm_uuid, DM_LOCKED_PREFIX))
+			ret = true;
+
+	dm_put(md);
+	return ret;
+}
+
 static int chromiumos_security_file_open(struct file *file)
 {
 	static char accessed_path[PATH_MAX];
 	enum chromiumos_inode_security_policy policy;
 	struct dentry *dentry = file->f_path.dentry;
+
+	/* if it's a dm block device that's locked down return -EPERM */
+	if (S_ISBLK(file->f_inode->i_mode) &&
+			chromiumos_locked_down_dm_device(file->f_inode->i_rdev))
+		return -EPERM;
 
 	/* Returns 0 if file is not a FIFO */
 	if (!S_ISFIFO(file->f_inode->i_mode))
@@ -242,25 +266,6 @@ static int chromiumos_locked_down(enum lockdown_reason what)
 	}
 
 	return 0;
-}
-
-#define DM_LOCKED_PREFIX "dm_locked-"
-static int chromiumos_locked_down_dm_device(dev_t dev)
-{
-	int ret = 0;
-	struct mapped_device *md = NULL;
-	char dm_uuid[DM_UUID_LEN];
-
-	md = dm_get_md(dev);
-	if (!md)
-		return 0;
-
-	if (!dm_copy_name_and_uuid(md, NULL, dm_uuid) &&
-		strncmp(dm_uuid, DM_LOCKED_PREFIX, strlen(DM_LOCKED_PREFIX)) == 0)
-			ret = 1;
-
-	dm_put(md);
-	return ret;
 }
 
 /*
