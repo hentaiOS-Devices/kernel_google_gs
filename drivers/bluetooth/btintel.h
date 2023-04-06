@@ -137,12 +137,6 @@ struct intel_offload_use_cases {
 	__u8	preset[8];
 } __packed;
 
-#define INTEL_TLV_TYPE_ID		0x1
-
-#define INTEL_TLV_SYSTEM_EXCEPTION	0x0
-#define INTEL_TLV_FATAL_EXCEPTION	0x1
-#define INTEL_TLV_DEBUG_EXCEPTION	0x2
-
 #define INTEL_HW_PLATFORM(cnvx_bt)	((u8)(((cnvx_bt) & 0x0000ff00) >> 8))
 #define INTEL_HW_VARIANT(cnvx_bt)	((u8)(((cnvx_bt) & 0x003f0000) >> 16))
 #define INTEL_CNVX_TOP_TYPE(cnvx_top)	((cnvx_top) & 0x00000fff)
@@ -214,7 +208,7 @@ int btintel_read_boot_params(struct hci_dev *hdev,
 int btintel_download_firmware(struct hci_dev *dev, struct intel_version *ver,
 			      const struct firmware *fw, u32 *boot_param);
 int btintel_set_quality_report(struct hci_dev *hdev, bool enable);
-int btintel_configure_setup(struct hci_dev *hdev, const char *driver_name);
+int btintel_configure_setup(struct hci_dev *hdev);
 void btintel_bootup(struct hci_dev *hdev, const void *ptr, unsigned int len);
 void btintel_secure_send_result(struct hci_dev *hdev,
 				const void *ptr, unsigned int len);
@@ -301,8 +295,7 @@ static inline int btintel_set_quality_report(struct hci_dev *hdev, bool enable)
 	return -ENODEV;
 }
 
-static inline int btintel_configure_setup(struct hci_dev *hdev,
-					  const char *driver_name)
+static inline int btintel_configure_setup(struct hci_dev *hdev)
 {
 	return -ENODEV;
 }
