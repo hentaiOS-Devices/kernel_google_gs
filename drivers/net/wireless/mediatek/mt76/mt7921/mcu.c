@@ -146,7 +146,6 @@ static int
 mt7921_mcu_parse_eeprom(struct mt76_dev *dev, struct sk_buff *skb)
 {
 	struct mt7921_mcu_eeprom_info *res;
-	u8 *buf;
 
 	if (!skb)
 		return -EINVAL;
@@ -154,8 +153,6 @@ mt7921_mcu_parse_eeprom(struct mt76_dev *dev, struct sk_buff *skb)
 	skb_pull(skb, sizeof(struct mt7921_mcu_rxd));
 
 	res = (struct mt7921_mcu_eeprom_info *)skb->data;
-	buf = dev->eeprom.data + le32_to_cpu(res->addr);
-	memcpy(buf, res->data, 16);
 
 	return 0;
 }
