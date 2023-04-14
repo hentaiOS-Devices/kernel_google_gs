@@ -159,14 +159,10 @@ MODULE_PARM_DESC(disable_clc, "disable CLC support");
 static int
 mt7921_mcu_parse_eeprom(struct mt76_dev *dev, struct sk_buff *skb)
 {
-	struct mt7921_mcu_eeprom_info *res;
-
 	if (!skb)
 		return -EINVAL;
 
 	skb_pull(skb, sizeof(struct mt7921_mcu_rxd));
-
-	res = (struct mt7921_mcu_eeprom_info *)skb->data;
 
 	return 0;
 }
