@@ -192,6 +192,6 @@ config MALI_PWRSOFT_765
 # Instrumentation options.
 
 # config MALI_JOB_DUMP exists in the Kernel Kconfig but is configured using CINSTR_JOB_DUMP in Mconfig.
-# config MALI_PRFCNT_SET_SECONDARY exists in the Kernel Kconfig but is configured using CINSTR_SECONDARY_HWC in Mconfig.
+# config MALI_MIDGARD_PRFCNT_SET_SECONDARY exists in the Kernel Kconfig but is configured using CINSTR_SECONDARY_HWC in Mconfig.
 
 source "kernel/drivers/gpu/arm/midgard/tests/Mconfig"

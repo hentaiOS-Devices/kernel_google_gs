@@ -203,7 +203,7 @@ config MALI_JOB_DUMP
 	  minimal overhead when not in use. Enable only if you know what
 	  you are doing.
 
-config MALI_PRFCNT_SET_SECONDARY
+config MALI_MIDGARD_PRFCNT_SET_SECONDARY
 	bool "Use secondary set of performance counters"
 	depends on MALI_MIDGARD && MALI_EXPERT
 	default n

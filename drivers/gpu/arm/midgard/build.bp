@@ -87,7 +87,7 @@ bob_kernel_module {
         kbuild_options: ["CONFIG_MALI_ERROR_INJECT_RANDOM=y"],
     },
     cinstr_secondary_hwc: {
-        kbuild_options: ["CONFIG_MALI_PRFCNT_SET_SECONDARY=y"],
+        kbuild_options: ["CONFIG_MALI_MIDGARD_PRFCNT_SET_SECONDARY=y"],
     },
     mali_2mb_alloc: {
         kbuild_options: ["CONFIG_MALI_2MB_ALLOC=y"],
