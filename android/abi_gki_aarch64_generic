@@ -1526,11 +1526,9 @@
   pci_clear_master
   pci_disable_device
   pci_disable_msi
-  pcie_get_mps
   pcie_capability_read_word
   pci_enable_device
   pci_enable_wake
-  pcie_set_mps
   pci_find_bus
   pci_find_capability
   pci_find_ext_capability

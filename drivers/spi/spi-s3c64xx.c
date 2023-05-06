@@ -1173,13 +1173,6 @@ out:
 	return 0;
 }
 
-static size_t s3c64xx_spi_max_transfer_size(struct spi_device *spi)
-{
-	struct spi_controller *ctlr = spi->controller;
-
-	return ctlr->can_dma ? S3C64XX_SPI_PACKET_CNT_MASK : SIZE_MAX;
-}
-
 static struct s3c64xx_spi_csinfo *s3c64xx_get_slave_ctrldata
 (struct spi_device *spi)
 {
