@@ -27,8 +27,6 @@
 
 #include <drm/drm_mipi_dsi.h>
 
-#include <linux/debugfs.h>
-#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -692,19 +690,6 @@ ssize_t mipi_dsi_generic_read(struct mipi_dsi_device *dsi, const void *params,
 }
 EXPORT_SYMBOL(mipi_dsi_generic_read);
 
-static ssize_t mipi_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type,
-				     const void *data, size_t len)
-{
-	struct mipi_dsi_msg msg = {
-		.channel = dsi->channel,
-		.tx_buf = data,
-		.tx_len = len,
-		.type = type,
-	};
-
-	return mipi_dsi_device_transfer(dsi, &msg);
-}
-
 /**
  * mipi_dsi_dcs_write_buffer() - transmit a DCS command with payload
  * @dsi: DSI peripheral device
@@ -720,26 +705,30 @@ static ssize_t mipi_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type,
 ssize_t mipi_dsi_dcs_write_buffer(struct mipi_dsi_device *dsi,
 				  const void *data, size_t len)
 {
-	u8 type;
+	struct mipi_dsi_msg msg = {
+		.channel = dsi->channel,
+		.tx_buf = data,
+		.tx_len = len
+	};
 
 	switch (len) {
 	case 0:
 		return -EINVAL;
 
 	case 1:
-		type = MIPI_DSI_DCS_SHORT_WRITE;
+		msg.type = MIPI_DSI_DCS_SHORT_WRITE;
 		break;
 
 	case 2:
-		type = MIPI_DSI_DCS_SHORT_WRITE_PARAM;
+		msg.type = MIPI_DSI_DCS_SHORT_WRITE_PARAM;
 		break;
 
 	default:
-		type = MIPI_DSI_DCS_LONG_WRITE;
+		msg.type = MIPI_DSI_DCS_LONG_WRITE;
 		break;
 	}
 
-	return mipi_dsi_dcs_transfer(dsi, type, data, len);
+	return mipi_dsi_device_transfer(dsi, &msg);
 }
 EXPORT_SYMBOL(mipi_dsi_dcs_write_buffer);
 
@@ -1156,149 +1145,57 @@ int mipi_dsi_dcs_get_display_brightness(struct mipi_dsi_device *dsi,
 }
 EXPORT_SYMBOL(mipi_dsi_dcs_get_display_brightness);
 
-#ifdef CONFIG_DRM_DEBUGFS_PANEL
-static int mipi_dsi_name_show(struct seq_file *m, void *data)
+/**
+ * mipi_dsi_dcs_set_display_brightness_large() - sets the 16-bit brightness value
+ *    of the display
+ * @dsi: DSI peripheral device
+ * @brightness: brightness value
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int mipi_dsi_dcs_set_display_brightness_large(struct mipi_dsi_device *dsi,
+					     u16 brightness)
 {
-	struct mipi_dsi_device *dsi = m->private;
+	u8 payload[2] = { brightness >> 8, brightness & 0xff };
+	ssize_t err;
 
-	seq_puts(m, dsi->name);
-	seq_putc(m, '\n');
+	err = mipi_dsi_dcs_write(dsi, MIPI_DCS_SET_DISPLAY_BRIGHTNESS,
+				 payload, sizeof(payload));
+	if (err < 0)
+		return err;
 
 	return 0;
 }
-DEFINE_SHOW_ATTRIBUTE(mipi_dsi_name);
+EXPORT_SYMBOL(mipi_dsi_dcs_set_display_brightness_large);
 
-static ssize_t parse_byte_buf(u8 *out, size_t len, char *src)
+/**
+ * mipi_dsi_dcs_get_display_brightness_large() - gets the current 16-bit
+ *    brightness value of the display
+ * @dsi: DSI peripheral device
+ * @brightness: brightness value
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int mipi_dsi_dcs_get_display_brightness_large(struct mipi_dsi_device *dsi,
+					     u16 *brightness)
 {
-	const char *skip = "\n ";
-	size_t i = 0;
-	int rc = 0;
-	char *s;
+	u8 brightness_be[2];
+	ssize_t err;
 
-	while (src && !rc && i < len) {
-		s = strsep(&src, skip);
-		if (*s != '\0') {
-			rc = kstrtou8(s, 16, out + i);
-			i++;
-		}
+	err = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_DISPLAY_BRIGHTNESS,
+				brightness_be, sizeof(brightness_be));
+	if (err <= 0) {
+		if (err == 0)
+			err = -ENODATA;
+
+		return err;
 	}
 
-	return rc ? : i;
-}
-
-struct mipi_dsi_reg_data {
-	struct mipi_dsi_device *dsi;
-	u8 address;
-	u8 type;
-	size_t count;
-};
-
-ssize_t mipi_dsi_payload_write(struct file *file,
-			       const char __user *user_buf,
-			       size_t count, loff_t *ppos)
-{
-	struct seq_file *m = file->private_data;
-	struct mipi_dsi_reg_data *reg_data = m->private;
-	char *buf;
-	char *payload;
-	size_t len;
-	int ret;
-
-	buf = memdup_user_nul(user_buf, count);
-	if (IS_ERR(buf))
-		return PTR_ERR(buf);
-
-	/* calculate length for worst case (1 digit per byte + whitespace) */
-	len = (count + 1) / 2;
-	payload = kmalloc(len, GFP_KERNEL);
-	if (!payload) {
-		kfree(buf);
-		return -ENOMEM;
-	}
-
-	ret = parse_byte_buf(payload, len, buf);
-	if (ret <= 0) {
-		ret = -EINVAL;
-	} else if (reg_data->type) {
-		ret = mipi_dsi_dcs_transfer(reg_data->dsi, reg_data->type,
-					    payload, ret);
-	} else {
-		ret = mipi_dsi_dcs_write_buffer(reg_data->dsi, payload, ret);
-	}
-
-	kfree(buf);
-	kfree(payload);
-
-	return ret ? : count;
-}
-
-static int mipi_dsi_payload_show(struct seq_file *m, void *data)
-{
-	struct mipi_dsi_reg_data *reg_data = m->private;
-	char *buf;
-	ssize_t rc;
-
-	if (!reg_data->count)
-		return -EINVAL;
-
-	buf = kmalloc(reg_data->count, GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
-
-	rc = mipi_dsi_dcs_read(reg_data->dsi, reg_data->address, buf,
-			       reg_data->count);
-	if (rc > 0) {
-		seq_hex_dump(m, "", DUMP_PREFIX_NONE, 16, 1, buf, rc, false);
-		rc = 0;
-	} else if (rc == 0) {
-		pr_debug("no response back\n");
-	}
-	kfree(buf);
+	*brightness = (brightness_be[0] << 8) | brightness_be[1];
 
 	return 0;
 }
-
-static int mipi_dsi_payload_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, mipi_dsi_payload_show, inode->i_private);
-}
-
-static const struct file_operations mipi_dsi_payload_fops = {
-	.owner		= THIS_MODULE,
-	.open		= mipi_dsi_payload_open,
-	.write		= mipi_dsi_payload_write,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
-
-int mipi_dsi_debugfs_add(struct mipi_dsi_device *dsi,
-			 struct dentry *parent)
-{
-	struct dentry *reg_root;
-	struct mipi_dsi_reg_data *reg_data;
-
-	reg_root = debugfs_create_dir("reg", parent);
-	if (!reg_root)
-		return -EFAULT;
-
-	reg_data = devm_kzalloc(&dsi->dev, sizeof(*reg_data), GFP_KERNEL);
-	if (!reg_data)
-		return -ENOMEM;
-
-	reg_data->dsi = dsi;
-
-	debugfs_create_u8("address", 0600, reg_root, &reg_data->address);
-	debugfs_create_u8("type", 0600, reg_root, &reg_data->type);
-	debugfs_create_size_t("count", 0600, reg_root, &reg_data->count);
-	debugfs_create_file("payload", 0600, reg_root, reg_data,
-			    &mipi_dsi_payload_fops);
-
-	debugfs_create_file("name", 0600, parent, dsi, &mipi_dsi_name_fops);
-
-	return 0;
-}
-#endif
+EXPORT_SYMBOL(mipi_dsi_dcs_get_display_brightness_large);
 
 static int mipi_dsi_drv_probe(struct device *dev)
 {
