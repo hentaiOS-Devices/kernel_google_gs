@@ -688,9 +688,13 @@
 			/* vptid 3, 1536-256KB size, priority 0, pbha 0 */
 			id_size_priority = < 0x3 0x0003f001 0x0 0x0 >;
 		};
-		MFC {
-			/* vptid 9, 2*256KB, priority 0 (highest), pbha ? */
-			id_size_priority = < 0x9 0x00002001 0x0 0x0>;
+		MFC_p0 {
+			/* vptid 9, 512KB, priority 0 (highest), pbha 0 */
+			id_size_priority = < 0x9 0x00001001 0x0 0x0 >;
+		};
+		MFC_p1 {
+			/* vptid 9, 1024KB, priority 0 (highest), pbha 0 */
+			id_size_priority = < 0x9 0x00002001 0x0 0x0 >;
 		};
 	};
 
