@@ -130,6 +130,7 @@ struct um_exynos {
 	u32 *um_count;
 	u32 um_count_total;
 	struct ppc_data *ppc_val;
+	bool ppc_read_reset_disable;
 };
 
 struct exynos_devfreq_data {
