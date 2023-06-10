@@ -444,7 +444,8 @@ static void exynos_ufs_set_features(struct ufs_hba *hba)
 	struct device_node *np = hba->dev->of_node;
 
 	/* caps */
-	hba->caps = UFSHCD_CAP_CLK_GATING |
+	hba->caps = UFSHCD_CAP_WB_EN |
+			UFSHCD_CAP_CLK_GATING |
 			UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
 
 	/* quirks of common driver */
