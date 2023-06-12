@@ -158,7 +158,7 @@
 				pktproc_dl_use_exclusive_irq = <0>;
 				/* H/W IO cache coherency */
 				pktproc_dl_use_hw_iocc = <1>;
-				pktproc_dl_max_packet_size = <1584>;
+				pktproc_dl_max_packet_size = <2048>;
 				pktproc_dl_use_dedicated_baaw = <0>;
 
 				/* Packet processor for UL */
@@ -166,13 +166,12 @@
 				pktproc_ul_info_rgn_offset = <0x06000000>;
 				pktproc_ul_info_rgn_size = <0x00001000>;
 				pktproc_ul_desc_rgn_offset = <0x06001000>;
-				pktproc_ul_desc_rgn_size = <0x0008F000>;
-				pktproc_ul_buff_rgn_offset = <0x06090000>;
-				pktproc_ul_buff_rgn_size = <0x00370000>;
+				pktproc_ul_desc_rgn_size = <0x00020000>;
+				pktproc_ul_buff_rgn_offset = <0x06021000>;
+				pktproc_ul_buff_rgn_size = <0x003DF000>;
 				pktproc_ul_padding_required = <1>; /* for s5123 EVT1 only */
 				pktproc_ul_num_queue = <2>;
 				pktproc_ul_max_packet_size = <2048>;
-				pktproc_ul_hiprio_ack_only = <1>;
 				pktproc_ul_info_rgn_cached = <1>;
 				pktproc_ul_desc_rgn_cached = <1>;
 				pktproc_ul_buff_rgn_cached = <1>;
@@ -226,7 +225,7 @@
 						level = <0 1014000>;
 
 						boost0 {
-							enable = <1>;
+							enable = <0>;
 							measure = <TPMON_MEASURE_TP>;
 							proto = <TPMON_PROTO_TCP>;
 							boost_threshold = <1100>;
@@ -253,7 +252,7 @@
 						boost_name = "CL1";
 						target = <TPMON_TARGET_CPU_CL1>;
 						extra_idx = <4>;
-						level = <0 1663000>;
+						level = <0 799000>;
 
 						boost0 {
 							enable = <1>;
@@ -286,7 +285,7 @@
 						level = <0x0C 0x30>;
 
 						boost0 {
-							enable = <0>;
+							enable = <1>;
 							measure = <TPMON_MEASURE_TP>;
 							proto = <TPMON_PROTO_ALL>;
 							boost_threshold = <500>;
