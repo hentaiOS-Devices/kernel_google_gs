@@ -81,6 +81,9 @@ struct exynos_cpufreq_domain {
 	/* list head of DVFS Manager constraints */
 	struct list_head		dm_list;
 
+	/* fake boot freq flag */
+	bool				valid_freq_flag;
+
 	bool				need_awake;
 
 	struct thermal_cooling_device *cdev;

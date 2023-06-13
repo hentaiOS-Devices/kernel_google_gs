@@ -97,6 +97,27 @@ static unsigned int resolve_freq(struct cpufreq_policy *policy,
 	return policy->freq_table[index].frequency;
 }
 
+/* Find lowest freq at or above target in a table in ascending order */
+static inline int exynos_cpufreq_find_index(struct exynos_cpufreq_domain *domain,
+					unsigned int target_freq)
+{
+	struct cpufreq_frequency_table *table = domain->freq_table;
+	struct cpufreq_frequency_table *pos;
+	unsigned int freq;
+	int idx, best = -1;
+
+	cpufreq_for_each_valid_entry_idx(pos, table, idx) {
+		freq = pos->frequency;
+
+		if (freq >= target_freq)
+			return idx;
+
+		best = idx;
+	}
+
+	return best;
+}
+
 /*********************************************************************
  *                   PRE/POST HANDLING FOR SCALING                   *
  *********************************************************************/
@@ -120,31 +141,20 @@ static int post_scale(struct cpufreq_freqs *freqs)
  */
 static unsigned int get_freq(struct exynos_cpufreq_domain *domain)
 {
-	int wakeup_flag = 0;
 	unsigned int freq;
-	struct cpumask temp;
 
-	cpumask_and(&temp, &domain->cpus, cpu_online_mask);
-
-	if (cpumask_empty(&temp))
+	/* valid_freq_flag indicates whether boot freq is in the freq table or not.
+	 * so, to prevent cpufreq mulfuntion, return old freq instead of cal freq
+	 * until the frequency changes even once.
+	 */
+	if (unlikely(!domain->valid_freq_flag && domain->old))
 		return domain->old;
-
-	if (domain->need_awake) {
-		if (likely(domain->old))
-			return domain->old;
-
-		wakeup_flag = 1;
-		disable_power_mode(cpumask_any(&domain->cpus), POWERMODE_TYPE_CLUSTER);
-	}
 
 	freq = (unsigned int)cal_dfs_get_rate(domain->cal_id);
 	if (!freq) {
 		/* On changing state, CAL returns 0 */
 		freq = domain->old;
 	}
-
-	if (unlikely(wakeup_flag))
-		enable_power_mode(cpumask_any(&domain->cpus), POWERMODE_TYPE_CLUSTER);
 
 	return freq;
 }
@@ -157,9 +167,6 @@ static int set_freq(struct exynos_cpufreq_domain *domain,
 	dbg_snapshot_printk("ID %d: %d -> %d (%d)\n",
 			    domain->id, domain->old, target_freq, DSS_FLAG_IN);
 
-	if (domain->need_awake)
-		disable_power_mode(cpumask_any(&domain->cpus), POWERMODE_TYPE_CLUSTER);
-
 	err = cal_dfs_set_rate(domain->cal_id, target_freq);
 	if (err < 0) {
 		pr_err("failed to scale frequency of domain%d (%d -> %d)\n",
@@ -168,8 +175,6 @@ static int set_freq(struct exynos_cpufreq_domain *domain,
 		trace_clock_set_rate(domain->dn->full_name, target_freq,
 				     raw_smp_processor_id());
 	}
-	if (domain->need_awake)
-		enable_power_mode(cpumask_any(&domain->cpus), POWERMODE_TYPE_CLUSTER);
 
 	dbg_snapshot_printk("ID %d: %d -> %d (%d)\n", domain->id, domain->old,
 			    target_freq, DSS_FLAG_OUT);
@@ -209,6 +214,11 @@ fail_scale:
 	/* In scaling failure case, logs -1 to exynos snapshot */
 	dbg_snapshot_freq(domain->id, domain->old, target_freq,
 			  ret < 0 ? ret : DSS_FLAG_OUT);
+
+	/* if error occur during frequency scaling, do not set valid_freq_flag */
+	if (unlikely(!(ret || domain->valid_freq_flag)))
+		domain->valid_freq_flag = true;
+
 	cpufreq_freq_transition_end(policy, &freqs, ret);
 
 	return ret;
@@ -300,7 +310,6 @@ static int exynos_cpufreq_init(struct cpufreq_policy *policy)
 		return -EINVAL;
 
 	policy->freq_table = domain->freq_table;
-	policy->cur = get_freq(domain);
 	policy->cpuinfo.transition_latency = TRANSITION_LATENCY;
 	policy->dvfs_possible_from_any_cpu = true;
 	cpumask_copy(policy->cpus, &domain->cpus);
@@ -432,8 +441,10 @@ static int __exynos_cpufreq_target(struct cpufreq_policy *policy,
 	}
 
 	/* Target is same as current, skip scaling */
-	if (domain->old == target_freq)
+	if (domain->old == target_freq) {
+		ret = -EINVAL;
 		goto out;
+	}
 
 	ret = scale(domain, policy, target_freq);
 	if (ret)
@@ -551,15 +562,17 @@ static void exynos_cpufreq_ready(struct cpufreq_policy *policy)
 }
 
 static int exynos_cpufreq_pm_notifier(struct notifier_block *notifier,
-				      unsigned long pm_event, void *v)
+				    unsigned long pm_event, void *v)
 {
 	struct exynos_cpufreq_domain *domain;
 	struct cpufreq_policy *policy;
+	struct cpumask active_cpus;
 
 	switch (pm_event) {
 	case PM_SUSPEND_PREPARE:
 		list_for_each_entry_reverse(domain, &domains, list) {
-			policy = cpufreq_cpu_get(cpumask_any(&domain->cpus));
+			cpumask_and(&active_cpus, cpu_active_mask, &domain->cpus);
+			policy = cpufreq_cpu_get(cpumask_any(&active_cpus));
 			if (!policy)
 				continue;
 			if (__exynos_cpufreq_suspend(policy, domain)) {
@@ -571,7 +584,8 @@ static int exynos_cpufreq_pm_notifier(struct notifier_block *notifier,
 		break;
 	case PM_POST_SUSPEND:
 		list_for_each_entry(domain, &domains, list) {
-			policy = cpufreq_cpu_get(cpumask_any(&domain->cpus));
+			cpumask_and(&active_cpus, cpu_active_mask, &domain->cpus);
+			policy = cpufreq_cpu_get(cpumask_any(&active_cpus));
 			if (!policy)
 				continue;
 			if (__exynos_cpufreq_resume(policy, domain)) {
@@ -1197,6 +1211,7 @@ static int init_domain(struct exynos_cpufreq_domain *domain,
 	const char *buf;
 	struct device *cpu_dev;
 	int ret;
+	int cur_idx;
 
 	/* Get CAL ID */
 	ret = of_property_read_u32(dn, "cal-id", &domain->cal_id);
@@ -1214,7 +1229,7 @@ static int init_domain(struct exynos_cpufreq_domain *domain,
 	domain->min_freq = cal_dfs_get_min_freq(domain->cal_id);
 
 	if (!of_property_read_u32(dn, "max-freq", &val))
-		domain->max_freq = min(domain->max_freq, val);
+		domain->max_freq = val;
 	if (!of_property_read_u32(dn, "min-freq", &val))
 		domain->min_freq = max(domain->min_freq, val);
 
@@ -1341,9 +1356,6 @@ static int init_domain(struct exynos_cpufreq_domain *domain,
 	/*
 	 * Initialize other items.
 	 */
-	if (of_property_read_bool(dn, "need-awake"))
-		domain->need_awake = true;
-
 	domain->boot_freq = cal_dfs_get_boot_freq(domain->cal_id);
 	domain->resume_freq = cal_dfs_get_resume_freq(domain->cal_id);
 	domain->old = get_freq(domain);
@@ -1352,6 +1364,9 @@ static int init_domain(struct exynos_cpufreq_domain *domain,
 		     domain->old, domain->id);
 		domain->old = domain->boot_freq;
 	}
+
+	cur_idx = exynos_cpufreq_find_index(domain, domain->old);
+	domain->old = domain->freq_table[cur_idx].frequency;
 
 	mutex_init(&domain->lock);
 	spin_lock_init(&domain->thermal_update_lock);
