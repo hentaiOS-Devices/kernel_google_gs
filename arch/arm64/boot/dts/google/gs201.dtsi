@@ -961,11 +961,11 @@
 
 			use_alt_dvfs;
 			polling_ms = <0>;
-			target_load = <60 10 40>;
-			min_sample_time = <20>;
-			hold_sample_time = <60>;
+			target_load = <20 10 90>;
+			min_sample_time = <50>;
+			hold_sample_time = <100>;
 			hispeed_load = <100>;
-			hispeed_freq = <1352000>;
+			hispeed_freq = <1014000>;
 
 			/* MIF to INT mapping table used in ALT DVFS */
 			mif_int_map = <
