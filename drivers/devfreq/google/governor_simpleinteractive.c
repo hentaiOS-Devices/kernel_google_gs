@@ -372,13 +372,13 @@ static int devfreq_simple_interactive_register_notifier(struct devfreq *df)
 {
 	int ret;
 	struct devfreq_simple_interactive_data *data = df->data;
-	struct sched_param param = {.sched_priority = (MAX_USER_RT_PRIO / 2)};
 
 	if (!data)
 		return -EINVAL;
 
 	data->nb.df = df;
 	data->nb.nb.notifier_call = devfreq_simple_interactive_notifier;
+	data->nb.nb.priority = INT_MAX - 1;
 
 	ret = exynos_pm_qos_add_notifier(data->pm_qos_class, &data->nb.nb);
 	if (ret < 0)
@@ -408,13 +408,6 @@ static int devfreq_simple_interactive_register_notifier(struct devfreq *df)
 	if (IS_ERR(data->change_freq_task)) {
 		pr_err("%s: failed kthread_create for simpleinteractive governor\n", __func__);
 		ret = PTR_ERR(data->change_freq_task);
-		goto err3;
-	}
-
-	ret = sched_setscheduler_nocheck(data->change_freq_task, SCHED_FIFO, &param);
-	if (ret) {
-		kthread_stop(data->change_freq_task);
-		pr_err("%s: failed to set SCHED_FIFO\n", __func__);
 		goto err3;
 	}
 
