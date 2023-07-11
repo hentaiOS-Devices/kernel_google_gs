@@ -28,6 +28,7 @@
 #include <soc/google/exynos-pmu-if.h>
 #include <soc/google/debug-snapshot.h>
 #include <soc/google/acpm_ipc_ctrl.h>
+#include <soc/google/cpuidle_metrics.h>
 
 /*
  * State of CPUPM objects
@@ -90,6 +91,9 @@ struct wakeup_mask_config {
 struct power_mode {
 	/* name of power mode, it is declared in device tree */
 	char		name[NAME_LEN];
+
+	/* unique identifier for power mode */
+	int		uid;
 
 	/* file node name of target_residency */
 	char		target_residency_name[NAME_LEN];
@@ -404,8 +408,9 @@ static void cpupm_profile_begin(struct cpupm_stats *stat)
 	stat->entry_count++;
 }
 
-static void cpupm_profile_end(struct cpupm_stats *stat, int cancel)
+static void cpupm_profile_end(struct cpupm_stats *stat, int cancel, int uid)
 {
+	s64 time_delta;
 	if (!stat->entry_time)
 		return;
 
@@ -414,8 +419,11 @@ static void cpupm_profile_end(struct cpupm_stats *stat, int cancel)
 		return;
 	}
 
-	stat->residency_time +=
-		ktime_to_us(ktime_sub(ktime_get(), stat->entry_time));
+	time_delta = ktime_to_us(ktime_sub(ktime_get(), stat->entry_time));
+
+	cpuidle_metrics_histogram_append(uid, time_delta);
+
+	stat->residency_time += time_delta;
 	stat->entry_time = 0;
 }
 
@@ -878,7 +886,7 @@ static void enter_power_mode(int cpu, struct power_mode *mode)
 
 static void exit_power_mode(int cpu, struct power_mode *mode, int cancel)
 {
-	cpupm_profile_end(&mode->stat, cancel);
+	cpupm_profile_end(&mode->stat, cancel, mode->uid);
 
 	/*
 	 * Configure settings to exit power mode. This is executed by the
@@ -1261,6 +1269,7 @@ fail:
 
 static int exynos_cpupm_mode_init(struct platform_device *pdev)
 {
+	int uid = 0;
 	struct device_node *dn = pdev->dev.of_node;
 
 	cpupm = alloc_percpu(struct exynos_cpupm);
@@ -1316,6 +1325,11 @@ static int exynos_cpupm_mode_init(struct platform_device *pdev)
 		 * state of power mode is enabled.
 		 */
 		mode->user_request = true;
+
+		// set uid and register with cpuidle metrics histogram
+		mode->uid = uid;
+		uid += 1;
+		cpuidle_metrics_histogram_register(mode->name, mode->uid, mode->target_residency);
 
 		/*
 		 * Initialize attribute for sysfs.
