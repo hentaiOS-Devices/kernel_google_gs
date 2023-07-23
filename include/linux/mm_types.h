@@ -724,7 +724,8 @@ static inline void lru_gen_use_mm(struct mm_struct *mm)
 struct mmu_gather;
 extern void tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm,
 				unsigned long start, unsigned long end);
-extern void tlb_finish_mmu(struct mmu_gather *tlb);
+extern void tlb_finish_mmu(struct mmu_gather *tlb,
+				unsigned long start, unsigned long end);
 
 static inline void init_tlb_flush_pending(struct mm_struct *mm)
 {
