@@ -1567,16 +1567,16 @@ abort:
 	goto drop_hpage;
 }
 
-static void khugepaged_collapse_pte_mapped_thps(struct mm_slot *mm_slot)
+static int khugepaged_collapse_pte_mapped_thps(struct mm_slot *mm_slot)
 {
 	struct mm_struct *mm = mm_slot->mm;
 	int i;
 
 	if (likely(mm_slot->nr_pte_mapped_thp == 0))
-		return;
+		return 0;
 
 	if (!mmap_write_trylock(mm))
-		return;
+		return -EBUSY;
 
 	if (unlikely(khugepaged_test_exit(mm)))
 		goto out;
@@ -1587,6 +1587,7 @@ static void khugepaged_collapse_pte_mapped_thps(struct mm_slot *mm_slot)
 out:
 	mm_slot->nr_pte_mapped_thp = 0;
 	mmap_write_unlock(mm);
+	return 0;
 }
 
 static void retract_page_tables(struct address_space *mapping, pgoff_t pgoff)
@@ -2110,8 +2111,9 @@ static void khugepaged_scan_file(struct mm_struct *mm,
 	BUILD_BUG();
 }
 
-static void khugepaged_collapse_pte_mapped_thps(struct mm_slot *mm_slot)
+static int khugepaged_collapse_pte_mapped_thps(struct mm_slot *mm_slot)
 {
+	return 0;
 }
 #endif
 
