@@ -1150,8 +1150,8 @@ update:
 	dom->dirty_limit = limit;
 }
 
-static void domain_update_dirty_limit(struct dirty_throttle_control *dtc,
-				      unsigned long now)
+static void domain_update_bandwidth(struct dirty_throttle_control *dtc,
+				    unsigned long now)
 {
 	struct wb_domain *dom = dtc_dom(dtc);
 
@@ -1356,7 +1356,7 @@ static void __wb_update_bandwidth(struct dirty_throttle_control *gdtc,
 	written = percpu_counter_read(&wb->stat[WB_WRITTEN]);
 
 	if (update_ratelimit) {
-		domain_update_dirty_limit(gdtc, now);
+		domain_update_bandwidth(gdtc, now);
 		wb_update_dirty_ratelimit(gdtc, dirtied, elapsed);
 
 		/*
@@ -1364,7 +1364,7 @@ static void __wb_update_bandwidth(struct dirty_throttle_control *gdtc,
 		 * compiler has no way to figure that out.  Help it.
 		 */
 		if (IS_ENABLED(CONFIG_CGROUP_WRITEBACK) && mdtc) {
-			domain_update_dirty_limit(mdtc, now);
+			domain_update_bandwidth(mdtc, now);
 			wb_update_dirty_ratelimit(mdtc, dirtied, elapsed);
 		}
 	}
