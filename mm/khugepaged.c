@@ -2256,8 +2256,10 @@ static void khugepaged_do_scan(void)
 {
 	struct page *hpage = NULL;
 	unsigned int progress = 0, pass_through_head = 0;
-	unsigned int pages = READ_ONCE(khugepaged_pages_to_scan);
+	unsigned int pages = khugepaged_pages_to_scan;
 	bool wait = true;
+
+	barrier(); /* write khugepaged_pages_to_scan to local stack */
 
 	lru_add_drain_all();
 
