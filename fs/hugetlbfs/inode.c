@@ -488,9 +488,10 @@ static void remove_inode_hugepages(struct inode *inode, loff_t lstart,
 
 		for (i = 0; i < pagevec_count(&pvec); ++i) {
 			struct page *page = pvec.pages[i];
-			u32 hash = 0;
+			u32 hash;
 
 			index = page->index;
+			hash = hugetlb_fault_mutex_hash(mapping, index);
 			if (!truncate_op) {
 				/*
 				 * Only need to hold the fault mutex in the
@@ -498,7 +499,6 @@ static void remove_inode_hugepages(struct inode *inode, loff_t lstart,
 				 * page faults.  Races are not possible in the
 				 * case of truncation.
 				 */
-				hash = hugetlb_fault_mutex_hash(mapping, index);
 				mutex_lock(&hugetlb_fault_mutex_table[hash]);
 			}
 
