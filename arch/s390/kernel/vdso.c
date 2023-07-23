@@ -61,8 +61,17 @@ static vm_fault_t vdso_fault(const struct vm_special_mapping *sm,
 static int vdso_mremap(const struct vm_special_mapping *sm,
 		       struct vm_area_struct *vma)
 {
-	current->mm->context.vdso_base = vma->vm_start;
+	unsigned long vdso_pages;
 
+	vdso_pages = vdso64_pages;
+
+	if ((vdso_pages << PAGE_SHIFT) != vma->vm_end - vma->vm_start)
+		return -EINVAL;
+
+	if (WARN_ON_ONCE(current->mm != vma->vm_mm))
+		return -EFAULT;
+
+	current->mm->context.vdso_base = vma->vm_start;
 	return 0;
 }
 
