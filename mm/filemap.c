@@ -1679,7 +1679,7 @@ pgoff_t page_cache_prev_miss(struct address_space *mapping,
 }
 EXPORT_SYMBOL(page_cache_prev_miss);
 
-/*
+/**
  * find_get_entry - find and get a page cache entry
  * @mapping: the address_space to search
  * @index: The page cache index.
@@ -1692,7 +1692,7 @@ EXPORT_SYMBOL(page_cache_prev_miss);
  *
  * Return: The head page or shadow entry, %NULL if nothing is found.
  */
-static struct page *find_get_entry(struct address_space *mapping, pgoff_t index)
+struct page *find_get_entry(struct address_space *mapping, pgoff_t index)
 {
 	XA_STATE(xas, &mapping->i_pages, index);
 	struct page *page;
@@ -1729,6 +1729,39 @@ out:
 }
 
 /**
+ * find_lock_entry - Locate and lock a page cache entry.
+ * @mapping: The address_space to search.
+ * @index: The page cache index.
+ *
+ * Looks up the page at @mapping & @index.  If there is a page in the
+ * cache, the head page is returned locked and with an increased refcount.
+ *
+ * If the slot holds a shadow entry of a previously evicted page, or a
+ * swap entry from shmem/tmpfs, it is returned.
+ *
+ * Context: May sleep.
+ * Return: The head page or shadow entry, %NULL if nothing is found.
+ */
+struct page *find_lock_entry(struct address_space *mapping, pgoff_t index)
+{
+	struct page *page;
+
+repeat:
+	page = find_get_entry(mapping, index);
+	if (page && !xa_is_value(page)) {
+		lock_page(page);
+		/* Has the page been truncated? */
+		if (unlikely(page->mapping != mapping)) {
+			unlock_page(page);
+			put_page(page);
+			goto repeat;
+		}
+		VM_BUG_ON_PAGE(!thp_contains(page, index), page);
+	}
+	return page;
+}
+
+/**
  * pagecache_get_page - Find and get a reference to a page.
  * @mapping: The address_space to search.
  * @index: The page index.
@@ -1743,8 +1776,6 @@ out:
  * * %FGP_LOCK - The page is returned locked.
  * * %FGP_HEAD - If the page is present and a THP, return the head page
  *   rather than the exact page specified by the index.
- * * %FGP_ENTRY - If there is a shadow / swap / DAX entry, return it
- *   instead of allocating a new page to replace it.
  * * %FGP_CREAT - If no page is present then a new page is allocated using
  *   @gfp_mask and added to the page cache and the VM's LRU list.
  *   The page is returned locked and with an increased refcount.
@@ -1769,14 +1800,11 @@ struct page *pagecache_get_page(struct address_space *mapping, pgoff_t index,
 
 repeat:
 	page = find_get_entry(mapping, index);
-	if (xa_is_value(page)) {
-		if (fgp_flags & FGP_ENTRY)
-			return page;
+	if (xa_is_value(page))
 		page = NULL;
 
-		trace_android_vh_pagecache_get_page(mapping, index, fgp_flags,
+	trace_android_vh_pagecache_get_page(mapping, index, fgp_flags,
 					gfp_mask, page);
-	}
 	if (!page)
 		goto no_page;
 
