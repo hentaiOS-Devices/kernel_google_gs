@@ -251,17 +251,21 @@ void tlb_flush_mmu(struct mmu_gather *tlb)
  * tlb_gather_mmu - initialize an mmu_gather structure for page-table tear-down
  * @tlb: the mmu_gather structure to initialize
  * @mm: the mm_struct of the target address space
- * @fullmm: @mm is without users and we're going to destroy the full address
- *	    space (exit/execve)
+ * @start: start of the region that will be removed from the page-table
+ * @end: end of the region that will be removed from the page-table
  *
  * Called to initialize an (on-stack) mmu_gather structure for page-table
- * tear-down from @mm.
+ * tear-down from @mm. The @start and @end are set to 0 and -1
+ * respectively when @mm is without users and we're going to destroy
+ * the full address space (exit/execve).
  */
 static void __tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm,
-			     bool fullmm)
+			     unsigned long start, unsigned long end)
 {
 	tlb->mm = mm;
-	tlb->fullmm = fullmm;
+
+	/* Is it from 0 to ~0? */
+	tlb->fullmm     = !(start | (end+1));
 
 #ifndef CONFIG_MMU_GATHER_NO_GATHER
 	tlb->need_flush_all = 0;
@@ -281,14 +285,16 @@ static void __tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm,
 	inc_tlb_flush_pending(tlb->mm);
 }
 
-void tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm)
+void tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm,
+		    unsigned long start, unsigned long end)
 {
-	__tlb_gather_mmu(tlb, mm, false);
+	WARN_ON(!(start | (end + 1))); /* Use _fullmm() instead */
+	__tlb_gather_mmu(tlb, mm, start, end);
 }
 
 void tlb_gather_mmu_fullmm(struct mmu_gather *tlb, struct mm_struct *mm)
 {
-	__tlb_gather_mmu(tlb, mm, true);
+	__tlb_gather_mmu(tlb, mm, 0, -1);
 }
 
 /**

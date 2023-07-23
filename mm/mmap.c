@@ -2783,7 +2783,7 @@ static void unmap_region(struct mm_struct *mm,
 	struct vm_area_struct *cur_vma;
 
 	lru_add_drain();
-	tlb_gather_mmu(&tlb, mm);
+	tlb_gather_mmu(&tlb, mm, start, end);
 	update_hiwater_rss(mm);
 	unmap_vmas(&tlb, vma, start, end);
 
