@@ -114,9 +114,11 @@ void *get_shadow_from_swap_cache(swp_entry_t entry)
 	pgoff_t idx = swp_offset(entry);
 	struct page *page;
 
-	page = xa_load(&address_space->i_pages, idx);
+	page = find_get_entry(address_space, idx);
 	if (xa_is_value(page))
 		return page;
+	if (page)
+		put_page(page);
 	return NULL;
 }
 
