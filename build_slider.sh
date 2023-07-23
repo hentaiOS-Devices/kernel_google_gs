@@ -19,7 +19,6 @@ GKI_KERNEL_BUILD_CONFIG=
 GKI_KERNEL_OUT_DIR=
 CHECK_DIRTY_AOSP=0
 MAKE_CORE_KERNEL=0
-BUILD_AOSP_KERNEL=1
 if [ "${BUILD_AOSP_KERNEL}" = "1" -o "${BUILD_STAGING_KERNEL}" = "1" -o -n "${GKI_DEFCONFIG_FRAGMENT}" ]; then
   MAKE_CORE_KERNEL=1
 else
@@ -37,7 +36,7 @@ else
     GKI_KERNEL_BUILD_CONFIG=aosp-staging/build.config.gki.aarch64
   else
     GKI_KERNEL_OUT_DIR=android13-5.10
-    GKI_KERNEL_BUILD_CONFIG=private/gs-google/build.config.gki.aarch64
+    GKI_KERNEL_BUILD_CONFIG=aosp/build.config.gki.aarch64
   fi
 fi
 
@@ -65,8 +64,8 @@ fi
 
 # These are for build.sh, so they should be exported.
 export LTO
-#export KMI_SYMBOL_LIST_STRICT_MODE
-#export TRIM_NONLISTED_KMI
+export KMI_SYMBOL_LIST_STRICT_MODE
+export TRIM_NONLISTED_KMI
 export BASE_OUT=${OUT_DIR:-out}/mixed/
 export DIST_DIR=${DIST_DIR:-${BASE_OUT}/dist/}
 export USING_PREBUILTS
