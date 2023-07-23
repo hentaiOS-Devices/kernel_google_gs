@@ -1101,7 +1101,6 @@ static int trusty_probe(struct platform_device *pdev)
 					__func__, cpu, tw->nop_thread);
 			goto err_thread_create;
 		}
-		kthread_set_per_cpu(tw->nop_thread, cpu);
 		kthread_park(tw->nop_thread);
 	}
 
