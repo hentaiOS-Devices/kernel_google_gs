@@ -3053,7 +3053,9 @@ static int handle_truncate(struct file *filp)
 	/*
 	 * Refuse to truncate files with mandatory locks held on them.
 	 */
-	error = security_path_truncate(path);
+	error = locks_verify_locked(filp);
+	if (!error)
+		error = security_path_truncate(path);
 	if (!error) {
 		error = do_truncate(path->dentry, 0,
 				    ATTR_MTIME|ATTR_CTIME|ATTR_OPEN,

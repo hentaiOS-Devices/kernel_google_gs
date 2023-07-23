@@ -836,6 +836,9 @@ static int validate_mmap_request(struct file *file,
 			    (file->f_mode & FMODE_WRITE))
 				return -EACCES;
 
+			if (locks_verify_locked(file))
+				return -EAGAIN;
+
 			if (!(capabilities & NOMMU_MAP_DIRECT))
 				return -ENODEV;
 
