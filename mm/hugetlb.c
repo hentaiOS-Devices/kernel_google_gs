@@ -555,6 +555,7 @@ retry:
 	resv->adds_in_progress -= in_regions_needed;
 
 	spin_unlock(&resv->lock);
+	VM_BUG_ON(add < 0);
 	return add;
 }
 
