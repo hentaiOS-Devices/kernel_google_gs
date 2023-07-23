@@ -5350,9 +5350,6 @@ long hugetlb_unreserve_pages(struct inode *inode, long start, long end,
 	/*
 	 * If the subpool has a minimum size, the number of global
 	 * reservations to be released may be adjusted.
-	 *
-	 * Note that !resv_map implies freed == 0. So (chg - freed)
-	 * won't go negative.
 	 */
 	gbl_reserve = hugepage_subpool_put_pages(spool, (chg - freed));
 	hugetlb_acct_memory(h, -gbl_reserve);
