@@ -263,13 +263,7 @@ struct compact_control {
 	unsigned int nr_migratepages;	/* Number of pages to migrate */
 	unsigned int nr_migrate_file_pages;	/* Number of file pages to migrate */
 	unsigned long free_pfn;		/* isolate_freepages search base */
-	/*
-	 * Acts as an in/out parameter to page isolation for migration.
-	 * isolate_migratepages uses it as a search base.
-	 * isolate_migratepages_block will update the value to the next pfn
-	 * after the last isolated one.
-	 */
-	unsigned long migrate_pfn;
+	unsigned long migrate_pfn;	/* isolate_migratepages search base */
 	unsigned long fast_start_pfn;	/* a pfn to start linear scan from */
 	struct zone *zone;
 	unsigned long total_migrate_scanned;
@@ -310,7 +304,7 @@ struct capture_control {
 unsigned long
 isolate_freepages_range(struct compact_control *cc,
 			unsigned long start_pfn, unsigned long end_pfn);
-int
+unsigned long
 isolate_migratepages_range(struct compact_control *cc,
 			   unsigned long low_pfn, unsigned long end_pfn);
 int find_suitable_fallback(struct free_area *area, unsigned int order,
