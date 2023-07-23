@@ -1444,7 +1444,7 @@ static int get_hstate_idx(int page_size_log)
 
 	if (!h)
 		return -1;
-	return hstate_index(h);
+	return h - hstates;
 }
 
 /*
