@@ -1465,7 +1465,7 @@ static void __free_huge_page(struct page *page)
 	 * reservation.  If the page was associated with a subpool, there
 	 * would have been a page reserved in the subpool before allocation
 	 * via hugepage_subpool_get_pages().  Since we are 'restoring' the
-	 * reservation, do not call hugepage_subpool_put_pages() as this will
+	 * reservtion, do not call hugepage_subpool_put_pages() as this will
 	 * remove the reserved page from the subpool.
 	 */
 	if (!restore_reserve) {
@@ -3745,7 +3745,7 @@ static unsigned long hugetlb_vm_op_pagesize(struct vm_area_struct *vma)
 /*
  * We cannot handle pagefaults against hugetlb pages at all.  They cause
  * handle_mm_fault() to try to instantiate regular-sized pages in the
- * hugepage VMA.  do_page_fault() is supposed to trap this, so BUG is we get
+ * hugegpage VMA.  do_page_fault() is supposed to trap this, so BUG is we get
  * this far.
  */
 static vm_fault_t hugetlb_vm_op_fault(struct vm_fault *vmf)
@@ -4565,7 +4565,7 @@ u32 hugetlb_fault_mutex_hash(struct address_space *mapping, pgoff_t idx)
 }
 #else
 /*
- * For uniprocessor systems we always use a single mutex, so just
+ * For uniprocesor systems we always use a single mutex, so just
  * return 0 and avoid the hashing overhead.
  */
 u32 hugetlb_fault_mutex_hash(struct address_space *mapping, pgoff_t idx)
