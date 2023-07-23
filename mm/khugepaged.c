@@ -1451,7 +1451,7 @@ void collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr)
 	struct mmu_notifier_range range;
 
 	if (!vma || !vma->vm_file ||
-	    !range_in_vma(vma, haddr, haddr + HPAGE_PMD_SIZE))
+	    vma->vm_start > haddr || vma->vm_end < haddr + HPAGE_PMD_SIZE)
 		return;
 
 	/*
