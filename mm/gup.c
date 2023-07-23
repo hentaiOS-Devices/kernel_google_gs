@@ -304,15 +304,20 @@ void unpin_user_pages_dirty_lock(struct page **pages, unsigned long npages,
 				 bool make_dirty)
 {
 	unsigned long index;
-	struct page *head;
-	unsigned int ntails;
+
+	/*
+	 * TODO: this can be optimized for huge pages: if a series of pages is
+	 * physically contiguous and part of the same compound page, then a
+	 * single operation to the head page should suffice.
+	 */
 
 	if (!make_dirty) {
 		unpin_user_pages(pages, npages);
 		return;
 	}
 
-	for_each_compound_head(index, pages, npages, head, ntails) {
+	for (index = 0; index < npages; index++) {
+		struct page *page = compound_head(pages[index]);
 		/*
 		 * Checking PageDirty at this point may race with
 		 * clear_page_dirty_for_io(), but that's OK. Two key
@@ -333,9 +338,9 @@ void unpin_user_pages_dirty_lock(struct page **pages, unsigned long npages,
 		 * written back, so it gets written back again in the
 		 * next writeback cycle. This is harmless.
 		 */
-		if (!PageDirty(head))
-			set_page_dirty_lock(head);
-		put_compound_head(head, ntails, FOLL_PIN);
+		if (!PageDirty(page))
+			set_page_dirty_lock(page);
+		unpin_user_page(page);
 	}
 }
 EXPORT_SYMBOL(unpin_user_pages_dirty_lock);
@@ -352,8 +357,6 @@ EXPORT_SYMBOL(unpin_user_pages_dirty_lock);
 void unpin_user_pages(struct page **pages, unsigned long npages)
 {
 	unsigned long index;
-	struct page *head;
-	unsigned int ntails;
 
 	/*
 	 * If this WARN_ON() fires, then the system *might* be leaking pages (by
@@ -362,9 +365,13 @@ void unpin_user_pages(struct page **pages, unsigned long npages)
 	 */
 	if (WARN_ON(IS_ERR_VALUE(npages)))
 		return;
-
-	for_each_compound_head(index, pages, npages, head, ntails)
-		put_compound_head(head, ntails, FOLL_PIN);
+	/*
+	 * TODO: this can be optimized for huge pages: if a series of pages is
+	 * physically contiguous and part of the same compound page, then a
+	 * single operation to the head page should suffice.
+	 */
+	for (index = 0; index < npages; index++)
+		unpin_user_page(pages[index]);
 }
 EXPORT_SYMBOL(unpin_user_pages);
 
