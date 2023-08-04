@@ -87,6 +87,7 @@ static int find_least_loaded_cpu(struct task_struct *p, struct cpumask *lowest_m
 	bool task_fits_original[CPU_NUM] = { 0 };
 	bool overutilize[CPU_NUM] = { 0 };
 	int cpu, best_cpu = -1, best_busy_cpu, least_used_best_cpu;
+	unsigned long highest_cap = 0;
 	unsigned long min_cpu_util, min_unimportant_cpu_util;
 	unsigned long min_cpu_capacity;
 	unsigned int min_exit_lat;
@@ -146,9 +147,20 @@ static int find_least_loaded_cpu(struct task_struct *p, struct cpumask *lowest_m
 					exit_lat[cpu], cpu_importance[cpu], task_fits[cpu],
 					task_fits_original[cpu], overutilize[cpu], is_idle);
 
-		// To prefer idle cpu than non-idle cpu
-		if (is_idle)
-			util[cpu] = 0;
+		if (is_idle) {
+			/* To prefer an idle CPU rather than a non-idle CPU */
+			if (p->prio)
+				util[cpu] = 0;
+		} else if (!p->prio) {
+			/*
+			 * Target the highest capacity CPU which isn't idle for
+			 * maximum RT priority tasks (like sugov).
+			 */
+			if (capacity[cpu] > highest_cap) {
+				highest_cap = capacity[cpu];
+				best_cpu = cpu;
+			}
+		}
 
 		if (task_fits[cpu]) {
 			fit_and_non_overutilized_found |= !overutilize[cpu];
@@ -166,6 +178,9 @@ static int find_least_loaded_cpu(struct task_struct *p, struct cpumask *lowest_m
 		rcu_read_unlock();
 		goto out;
 	}
+
+	if (best_cpu >= 0)
+		goto done;
 
 	for_each_cpu(cpu, lowest_mask) {
 		if (fit_and_non_overutilized_found && (overutilize[cpu] || !task_fits[cpu]))
@@ -231,6 +246,7 @@ static int find_least_loaded_cpu(struct task_struct *p, struct cpumask *lowest_m
 		least_used_best_cpu = cpu;
 	}
 
+done:
 	rcu_read_unlock();
 
 	if (best_busy_cpu != -1) {
