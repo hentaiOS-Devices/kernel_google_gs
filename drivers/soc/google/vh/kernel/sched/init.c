@@ -253,10 +253,6 @@ static int vh_sched_init(void)
 	if (ret)
 		return ret;
 
-	ret = register_trace_android_rvh_cpu_overutilized(rvh_cpu_overutilized_pixel_mod, NULL);
-	if (ret)
-		return ret;
-
 	ret = register_trace_android_rvh_uclamp_eff_get(rvh_uclamp_eff_get_pixel_mod, NULL);
 	if (ret)
 		return ret;
