@@ -1083,6 +1083,7 @@
 		samsung,usi-serial-v2;
 		samsung,rts-gpio-control;
 		samsung,uart-logging;
+		goog,ioctl-suspend;
 		#address-cells = <0x00000001>;
 		#size-cells = <0x00000000>;
 		pinctrl-names = "default", "rts", "tx_dat";
