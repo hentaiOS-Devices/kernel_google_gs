@@ -1304,7 +1304,7 @@
 			cpulist = <&cpu0>;
 			target-dev = <&mif_cpu0_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<  300000  421000 >,
 				<  574000  546000 >,
 				<  738000  676000 >,
@@ -1327,7 +1327,7 @@
 			cpulist = <&cpu1>;
 			target-dev = <&mif_cpu1_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<  300000  421000 >,
 				<  574000  546000 >,
 				<  738000  676000 >,
@@ -1350,7 +1350,7 @@
 			cpulist = <&cpu2>;
 			target-dev = <&mif_cpu2_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<  300000  421000 >,
 				<  574000  546000 >,
 				<  738000  676000 >,
@@ -1373,7 +1373,7 @@
 			cpulist = <&cpu3>;
 			target-dev = <&mif_cpu3_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<  300000  421000 >,
 				<  574000  546000 >,
 				<  738000  676000 >,
@@ -1397,7 +1397,7 @@
 			cpulist = <&cpu4>;
 			target-dev = <&mif_cpu4_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<  400000  421000 >,
 				<  553000  546000 >,
 				<  696000  676000 >,
@@ -1419,7 +1419,7 @@
 			cpulist = <&cpu5>;
 			target-dev = <&mif_cpu5_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<  400000  421000 >,
 				<  553000  546000 >,
 				<  696000  676000 >,
@@ -1441,7 +1441,7 @@
 			cpulist = <&cpu6>;
 			target-dev = <&mif_cpu6_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<   10000  421000 >,
 				<  100000  845000 >,
 				<  851000 1014000 >,
@@ -1464,7 +1464,7 @@
 			cpulist = <&cpu7>;
 			target-dev = <&mif_cpu7_mem_lat>;
 			cachemiss-ev = <0x2A>;
-			core-dev-table =
+			core-dev-table-v2 =
 				<   10000  421000 >,
 				<  100000  845000 >,
 				<  851000 1014000 >,
