@@ -9,7 +9,6 @@
 #include <kernel/sched/sched.h>
 #include <linux/cpufreq.h>
 #include <linux/module.h>
-#include <trace/hooks/power.h>
 #include <trace/hooks/binder.h>
 #include <trace/hooks/sched.h>
 #include <trace/hooks/topology.h>
@@ -71,7 +70,6 @@ extern void rvh_rtmutex_prepare_setprio_pixel_mod(void *data, struct task_struct
 	struct task_struct *pi_task);
 extern void vh_dump_throttled_rt_tasks_mod(void *data, int cpu, u64 clock, ktime_t rt_period,
 					   u64 rt_runtime, s64 rt_period_timer_expires);
-extern void vh_try_to_freeze_todo_logging_pixel_mod(void *data, bool *logging_on);
 extern void rvh_cpumask_any_and_distribute(void *data, struct task_struct *p,
 	const struct cpumask *cpu_valid_mask, const struct cpumask *new_mask, int *dest_cpu);
 void sched_newidle_balance_pixel_mod(void *data, struct rq *this_rq, struct rq_flags *rf,
@@ -326,11 +324,6 @@ static int vh_sched_init(void)
 
 	ret = register_trace_android_vh_dump_throttled_rt_tasks(vh_dump_throttled_rt_tasks_mod,
 								NULL);
-	if (ret)
-		return ret;
-
-	ret = register_trace_android_vh_try_to_freeze_todo_logging(
-		vh_try_to_freeze_todo_logging_pixel_mod, NULL);
 	if (ret)
 		return ret;
 
