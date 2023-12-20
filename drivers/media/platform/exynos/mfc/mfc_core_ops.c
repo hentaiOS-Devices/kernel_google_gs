@@ -20,6 +20,7 @@
 
 #include "mfc_common.h"
 
+#include "mfc_core_ops.h"
 #include "mfc_core_hwlock.h"
 #include "mfc_core_pm.h"
 #include "mfc_core_run.h"
@@ -246,9 +247,7 @@ static int __mfc_core_deinit(struct mfc_core *core, struct mfc_ctx *ctx)
 #if IS_ENABLED(CONFIG_EXYNOS_IMGLOADER)
 		imgloader_shutdown(&core->mfc_imgloader_desc);
 #else
-#if IS_ENABLED(CONFIG_EXYNOS_S2MPU)
 		mfc_release_verify_fw(core);
-#endif
 #endif
 		mfc_core_change_fw_state(core, 0, MFC_FW_LOADED, 0);
 	}

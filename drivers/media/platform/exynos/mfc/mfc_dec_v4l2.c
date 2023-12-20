@@ -1068,8 +1068,7 @@ static int mfc_dec_dqbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 		if (dec->hdr10_plus_full) {
 			src_sei_full = HDR10_PLUS_ADDR(dec->hdr10_plus_full, buf->index);
 			if (dec->sh_handle_hdr.vaddr != NULL) {
-				dst_sei_full = HDR10_PLUS_ADDR(dec->sh_handle_hdr.vaddr,
-								buf->index);
+				dst_sei_full = HDR10_PLUS_ADDR(dec->sh_handle_hdr.vaddr, buf->index);
 				memcpy(dst_sei_full, src_sei_full, HDR10_PLUS_DATA_SIZE);
 				if (hdr_dump == 1) {
 					mfc_ctx_err("[HDR+][DUMP] SH_HANDLE data (idx %d)....\n",

@@ -2280,7 +2280,9 @@ static int mfc_enc_s_ext_ctrls(struct file *file, void *priv,
 	int i;
 	int ret = 0;
 
-	if (f->which != V4L2_CTRL_CLASS_CODEC)
+	mfc_debug_enter();
+
+	if (f->which != V4L2_CTRL_CLASS_MPEG)
 		return -EINVAL;
 
 	for (i = 0; i < f->count; i++) {
@@ -2316,7 +2318,9 @@ static int mfc_enc_try_ext_ctrls(struct file *file, void *priv,
 	int i;
 	int ret = 0;
 
-	if (f->which != V4L2_CTRL_CLASS_CODEC)
+	mfc_debug_enter();
+
+	if (f->which != V4L2_CTRL_CLASS_MPEG)
 		return -EINVAL;
 
 	for (i = 0; i < f->count; i++) {

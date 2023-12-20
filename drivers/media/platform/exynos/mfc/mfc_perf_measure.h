@@ -17,7 +17,7 @@
 
 #include "mfc_core_reg_api.h"
 
-#include <trace/hooks/systrace.h>
+#include "../../../../soc/google/vh/kernel/systrace.h"
 
 void mfc_perf_register(struct mfc_core *core);
 void __mfc_measure_init(void);
