@@ -2396,12 +2396,10 @@ static int exynos_devfreq_probe(struct platform_device *pdev)
 	data->devfreq_disabled = false;
 
 	if (!data->pm_domain) {
-		if (data->devfreq_type != 0 || num_online_cpus() > 4)
-			/* set booting frequency during booting time */
-			exynos_pm_qos_update_request_timeout(&data->boot_pm_qos, data->boot_freq,
-						data->boot_qos_timeout * USEC_PER_SEC);
-		else
-			dev_info(data->dev, "skip boot freq setup\n");
+		/* set booting frequency during booting time */
+		exynos_pm_qos_update_request_timeout(&data->boot_pm_qos,
+						     data->boot_freq,
+						     data->boot_qos_timeout * USEC_PER_SEC);
 	} else {
 		pm_runtime_enable(&pdev->dev);
 		pm_runtime_get_sync(&pdev->dev);
