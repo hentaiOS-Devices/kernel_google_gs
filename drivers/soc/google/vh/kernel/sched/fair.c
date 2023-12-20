@@ -1518,7 +1518,8 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, bool s
 	unsigned int exit_lat, pd_best_exit_lat, best_exit_lat;
 	bool is_idle, task_fits, util_fits;
 	bool idle_target_found = false, importance_target_found = false;
-	bool prefer_idle = get_prefer_idle(p), prefer_high_cap = get_prefer_high_cap(p);
+	bool prefer_idle = get_prefer_idle(p);
+	bool prefer_high_cap = get_prefer_high_cap(p) || sync_boost;
 	unsigned long capacity, wake_util, cpu_importance, pd_least_cpu_importantce;
 #if IS_ENABLED(CONFIG_USE_GROUP_THROTTLE)
 	bool group_overutilize;
@@ -2191,6 +2192,17 @@ void rvh_check_preempt_wakeup_pixel_mod(void *data, struct rq *rq, struct task_s
 
 	if (entity_is_task(pse) || entity_is_task(se))
 		return;
+
+	/*
+	 * Let ADPF task preempt non-ADPF task.
+	 */
+	if(!get_uclamp_fork_reset(task_of(se), true) && get_uclamp_fork_reset(task_of(pse), true)) {
+		if (!next_buddy_marked)
+			set_next_buddy(pse);
+
+		*preempt = true;
+		return;
+	}
 
 	ideal_runtime = sched_slice(cfs_rq_of(se), se);
 	delta_exec = se->sum_exec_runtime - se->prev_sum_exec_runtime;
