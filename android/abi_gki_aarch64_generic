@@ -2505,6 +2505,7 @@
   __tracepoint_android_vh_zap_pte_range_tlb_start
   __tracepoint_clock_set_rate
   __tracepoint_cpu_frequency
+  __tracepoint_cpu_idle
   __tracepoint_device_pm_callback_end
   __tracepoint_device_pm_callback_start
   __tracepoint_dwc3_readl
