@@ -2784,8 +2784,6 @@ void rvh_can_migrate_task_pixel_mod(void *data, struct task_struct *p,
 	if (!get_prefer_idle(p))
 		return;
 
-	lockdep_assert_held(&cpu_rq(dst_cpu)->lock);
-
 	if (atomic_read(&vrq->num_adpf_tasks))
 		*can_migrate = 0;
 }
