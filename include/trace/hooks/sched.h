@@ -421,6 +421,14 @@ DECLARE_HOOK(android_vh_mmput,
 DECLARE_HOOK(android_vh_rebuild_root_domains_bypass,
 	TP_PROTO(bool tasks_frozen, bool *bypass),
 	TP_ARGS(tasks_frozen, bypass));
+
+DECLARE_HOOK(android_vh_prio_inheritance,
+	TP_PROTO(struct task_struct *p, int *saved_prio, bool *prio_inherited),
+	TP_ARGS(p, saved_prio, prio_inherited));
+
+DECLARE_HOOK(android_vh_prio_restore,
+	TP_PROTO(int saved_prio),
+	TP_ARGS(saved_prio));
 /* macro versions of hooks are no longer required */
 
 #endif /* _TRACE_HOOK_SCHED_H */
