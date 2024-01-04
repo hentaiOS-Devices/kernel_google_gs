@@ -15,7 +15,6 @@
 #include <trace/hooks/cpufreq.h>
 
 #include "sched_priv.h"
-#include "../../../../../android/binder_internal.h"
 
 extern void init_uclamp_stats(void);
 extern int create_procfs_node(void);
