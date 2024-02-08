@@ -187,6 +187,8 @@ DECLARE_STATIC_KEY_FALSE(uclamp_max_filter_enable);
 
 DECLARE_STATIC_KEY_FALSE(tapered_dvfs_headroom_enable);
 
+DECLARE_STATIC_KEY_FALSE(enqueue_dequeue_ready);
+
 #define SCHED_PIXEL_FORCE_UPDATE		BIT(8)
 
 /*****************************************************************************/
@@ -774,5 +776,11 @@ static inline void dec_adpf_counter(struct task_struct *p, struct rq *rq)
 
 	vrq = get_vendor_rq_struct(rq);
 
-	atomic_dec(&vrq->num_adpf_tasks);
+	/*
+	 * An enqueue could have happened before our dequeue hook was
+	 * registered, which can lead to imbalance.
+	 *
+	 * Make sure to never go below 0.
+	 */
+	atomic_dec_if_positive(&vrq->num_adpf_tasks);
 }

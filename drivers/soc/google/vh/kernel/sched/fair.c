@@ -2829,6 +2829,9 @@ void rvh_enqueue_task_fair_pixel_mod(void *data, struct rq *rq, struct task_stru
 {
 	bool force_cpufreq_update = false;
 
+	if (!static_branch_unlikely(&enqueue_dequeue_ready))
+		return;
+
 	if (get_uclamp_fork_reset(p, true))
 		inc_adpf_counter(p, rq);
 
@@ -2856,6 +2859,9 @@ void rvh_enqueue_task_fair_pixel_mod(void *data, struct rq *rq, struct task_stru
 
 void rvh_dequeue_task_fair_pixel_mod(void *data, struct rq *rq, struct task_struct *p, int flags)
 {
+	if (!static_branch_unlikely(&enqueue_dequeue_ready))
+		return;
+
 	if (get_uclamp_fork_reset(p, true))
 		dec_adpf_counter(p, rq);
 
